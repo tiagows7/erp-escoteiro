@@ -1,0 +1,16 @@
+cadastros
+     Empresa
+     Produtos
+     Pessoas    
+
+tebelas
+    UF 
+    Cidade
+    ----------------
+    formas e pagamento
+    ------------------
+    contas a receber
+    ----------------
+    contas a pagar
+    ------------
+    financeiro 
