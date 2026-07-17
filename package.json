@@ -1,0 +1,31 @@
+{
+  "name": "erp-escoteiro",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "export:firebird": "node scripts/export-firebird.mjs",
+    "import:firebird": "node scripts/import-firebird-to-supabase.mjs",
+    "import:firebird:dry": "node scripts/import-firebird-to-supabase.mjs --dry",
+    "cleanup:operational": "node scripts/cleanup-imported-operational.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.50.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.2",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.5.2",
+    "node-firebird": "^2.9.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5"
+  }
+}
