@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import {
-  NAV_ITEMS,
+  navItemsForProfile,
   type NavGroupItem,
   type NavLinkItem,
 } from '@/config/navigation'
@@ -16,6 +16,21 @@ function groupHasVisibleChild(
   )
 }
 
+function navLinkActive(pathname: string, search: string, to: string) {
+  const [path, query = ''] = to.split('?')
+  if (pathname !== path && !(path !== '/' && pathname.startsWith(`${path}/`))) {
+    // redirect /portal-transparencia → /transparencia/:slug
+    if (path === '/portal-transparencia') {
+      if (!pathname.startsWith('/transparencia/')) return false
+      if (!query) return true
+      return search.includes(query) || search === `?${query}`
+    }
+    return false
+  }
+  if (!query) return path === '/' ? pathname === '/' : true
+  return search.includes(query) || search === `?${query}`
+}
+
 export function AppLayout() {
   const { profile, empresa, roleLabel, hasPermission, isSuperAdmin, signOut } =
     useAuth()
@@ -23,8 +38,10 @@ export function AppLayout() {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
   const [menuOpen, setMenuOpen] = useState(false)
 
+  const allItems = useMemo(() => navItemsForProfile(profile), [profile])
+
   const items = useMemo(() => {
-    return NAV_ITEMS.filter((item) => {
+    return allItems.filter((item) => {
       if (item.type === 'link') {
         return !item.permission || hasPermission(item.permission)
       }
@@ -33,23 +50,21 @@ export function AppLayout() {
       }
       return groupHasVisibleChild(item, hasPermission)
     })
-  }, [hasPermission])
+  }, [allItems, hasPermission])
 
   useEffect(() => {
     setOpenGroups((prev) => {
       const next = { ...prev }
-      for (const item of NAV_ITEMS) {
+      for (const item of allItems) {
         if (item.type !== 'group') continue
-        const childActive = item.children.some(
-          (child) =>
-            location.pathname === child.to ||
-            location.pathname.startsWith(`${child.to}/`),
+        const childActive = item.children.some((child) =>
+          navLinkActive(location.pathname, location.search, child.to),
         )
         if (childActive) next[item.id] = true
       }
       return next
     })
-  }, [location.pathname])
+  }, [allItems, location.pathname, location.search])
 
   useEffect(() => {
     setMenuOpen(false)
@@ -136,8 +151,16 @@ export function AppLayout() {
                   key={item.to}
                   to={item.to}
                   end={item.end}
-                  className={({ isActive }) =>
-                    `nav-link${isActive ? ' active' : ''}`
+                  className={() =>
+                    `nav-link${
+                      navLinkActive(
+                        location.pathname,
+                        location.search,
+                        item.to,
+                      )
+                        ? ' active'
+                        : ''
+                    }`
                   }
                 >
                   {item.label}
@@ -146,10 +169,8 @@ export function AppLayout() {
             }
 
             const open = !!openGroups[item.id]
-            const childActive = item.children.some(
-              (child) =>
-                location.pathname === child.to ||
-                location.pathname.startsWith(`${child.to}/`),
+            const childActive = item.children.some((child) =>
+              navLinkActive(location.pathname, location.search, child.to),
             )
             const visibleChildren = item.children.filter(
               (child) => !child.permission || hasPermission(child.permission),
@@ -178,8 +199,16 @@ export function AppLayout() {
                         key={child.to}
                         to={child.to}
                         end={child.end}
-                        className={({ isActive }) =>
-                          `nav-link nav-sublink${isActive ? ' active' : ''}`
+                        className={() =>
+                          `nav-link nav-sublink${
+                            navLinkActive(
+                              location.pathname,
+                              location.search,
+                              child.to,
+                            )
+                              ? ' active'
+                              : ''
+                          }`
                         }
                       >
                         {child.label}

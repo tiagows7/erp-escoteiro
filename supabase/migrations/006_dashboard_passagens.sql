@@ -74,12 +74,19 @@ as $$
     from public.associados a
     where a.empresa_id = public.current_empresa_id()
       and coalesce(a.ativo, true) = true
-      and a.categoria = 2
+      and exists (
+        select 1 from public.categoria c
+        where c.categoria_id = a.categoria
+          and upper(c.nome) like '%BENEFICI%'
+      )
       and a.data_nascimento is not null
   )
   select
     l.ramo_id,
-    r.nome::text as ramo_nome,
+    case
+      when r.ramo_id = 3 then U&'S\00CANIOR'::text
+      else r.nome::text
+    end as ramo_nome,
     l.meses_ini as ano_ini,
     l.meses_fim as ano_fim,
     (
@@ -133,7 +140,11 @@ as $$
     from public.associados a
     where a.empresa_id = public.current_empresa_id()
       and coalesce(a.ativo, true) = true
-      and a.categoria = 2
+      and exists (
+        select 1 from public.categoria c
+        where c.categoria_id = a.categoria
+          and upper(c.nome) like '%BENEFICI%'
+      )
       and a.data_nascimento is not null
   )
   select

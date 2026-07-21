@@ -3,7 +3,8 @@ import type { AppRole } from '@/lib/roles'
 
 export type CreateUsuarioInput = {
   nome: string
-  email: string
+  email?: string
+  registro?: string | null
   password: string
   role: AppRole
   ativo: boolean
@@ -22,6 +23,23 @@ export type CreateUsuarioResult = {
     role: string
     ativo: boolean
   }
+}
+
+function normalizeRegistro(value: string | null | undefined): string | null {
+  const digits = (value ?? '').replace(/\D/g, '').slice(0, 20)
+  return digits || null
+}
+
+/** E-mail real ou sintetico a partir do registro (Auth exige e-mail). */
+export function authEmailFromLogin(
+  email: string | null | undefined,
+  registro: string | null | undefined,
+): string | null {
+  const e = (email ?? '').trim().toLowerCase()
+  if (e.includes('@')) return e
+  const reg = normalizeRegistro(registro)
+  if (reg) return `r${reg}@usuarios.local`
+  return null
 }
 
 function roleToTipo(role: AppRole): string {
@@ -45,7 +63,14 @@ export async function createUsuario(
   input: CreateUsuarioInput,
 ): Promise<CreateUsuarioResult> {
   const viaFunction = await createViaEdgeFunction(input)
-  if (viaFunction.ok || !shouldFallback(viaFunction.error)) {
+  // Login por registro usa e-mail sintetico: signUp dispara e-mail e estoura rate limit.
+  // So usa fallback quando a function nao esta disponivel E ha e-mail real.
+  const hasRealEmail = (input.email ?? '').includes('@')
+  if (
+    viaFunction.ok ||
+    !hasRealEmail ||
+    !shouldFallback(viaFunction.error)
+  ) {
     return viaFunction
   }
   return createViaSignUpFallback(input)
@@ -71,13 +96,27 @@ async function createViaEdgeFunction(
   })
 
   if (error) {
-    return { ok: false, error: error.message }
+    // Tenta extrair mensagem do body da function (ex.: 400 com { error })
+    const fromBody = await readFunctionsError(error)
+    return { ok: false, error: fromBody || error.message }
   }
   if (data?.error) {
     return { ok: false, error: String(data.error) }
   }
 
   return { ok: true, profile: data.profile }
+}
+
+async function readFunctionsError(error: unknown): Promise<string | null> {
+  const ctx = (error as { context?: Response })?.context
+  if (!ctx || typeof ctx.json !== 'function') return null
+  try {
+    const body = await ctx.json()
+    if (body?.error) return String(body.error)
+  } catch {
+    /* ignore */
+  }
+  return null
 }
 
 async function createViaSignUpFallback(
@@ -102,7 +141,19 @@ async function createViaSignUpFallback(
     }
   }
 
-  const email = input.email.trim().toLowerCase()
+  const email =
+    authEmailFromLogin(input.email, input.registro) ??
+    input.email?.trim().toLowerCase() ??
+    ''
+  const registro = normalizeRegistro(input.registro)
+
+  if (!email) {
+    return {
+      ok: false,
+      error: 'Informe o e-mail ou o número de registro.',
+    }
+  }
+
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email,
     password: input.password,
@@ -119,7 +170,7 @@ async function createViaSignUpFallback(
       ok: false,
       error:
         signUpError?.message ??
-        'Falha ao criar usuário. Verifique se o e-mail já existe.',
+        'Falha ao criar usuário. Verifique se o e-mail/registro já existe.',
     }
   }
 
@@ -130,7 +181,8 @@ async function createViaSignUpFallback(
       empresa_id: me.empresa_id,
       nome: input.nome.trim(),
       email,
-      username: email.split('@')[0],
+      username: registro ?? email.split('@')[0],
+      registro,
       role: input.role,
       tipo: roleToTipo(input.role),
       ativo: input.ativo,

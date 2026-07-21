@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -11,6 +12,7 @@ import {
   RECEITA_ORIGEM,
   TITULO_SITUACAO,
 } from '@/lib/receitas'
+import { isRamoFinanceiroScoped } from '@/lib/roles'
 
 type TipoMensalidade = {
   tipomensalidade_id: number
@@ -29,10 +31,11 @@ type PreviewRow = {
 }
 
 export function GeraMensalidadePage() {
-  const { empresa, hasPermission } = useAuth()
+  const { empresa, profile, hasPermission } = useAuth()
   const canWrite = hasPermission('financeiro.write')
   const empresaId = empresa?.id
   const toast = useToast()
+  const ramoScoped = isRamoFinanceiroScoped(profile)
 
   const [competencia, setCompetencia] = useState(currentCompetenciaInput())
   const [tipoFiltro, setTipoFiltro] = useState('')
@@ -221,6 +224,19 @@ export function GeraMensalidadePage() {
       `${inserted} receita(s) criada(s) com sucesso.`,
     )
     void carregarPreview()
+  }
+
+  if (ramoScoped) {
+    return (
+      <section className="panel">
+        <AlertMessage tone="error" title="Acesso restrito">
+          Usuários vinculados a um ramo não podem gerar mensalidades do grupo.
+        </AlertMessage>
+        <Link className="btn btn-soft" to="/receitas/inclusao">
+          Voltar às receitas
+        </Link>
+      </section>
+    )
   }
 
   if (!empresaId) {

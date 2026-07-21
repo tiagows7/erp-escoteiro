@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
 
-const EMAIL_KEY = 'erp-escoteiro:last-email'
+const LOGIN_KEY = 'erp-escoteiro:last-login'
 
 function mapAuthError(message: string): string {
   const lower = message.toLowerCase()
@@ -12,7 +12,10 @@ function mapAuthError(message: string): string {
     lower.includes('invalid_credentials') ||
     lower.includes('email not confirmed')
   ) {
-    return 'E-mail ou senha incorretos.'
+    return 'E-mail/registro ou senha incorretos.'
+  }
+  if (lower.includes('registro não encontrado') || lower.includes('registro nao encontrado')) {
+    return message
   }
   if (lower.includes('email rate limit') || lower.includes('too many requests')) {
     return 'Muitas tentativas. Aguarde um momento e tente de novo.'
@@ -23,20 +26,20 @@ function mapAuthError(message: string): string {
   if (lower.includes('invalid api key') || lower.includes('jwt')) {
     return 'Configuração do sistema inválida. Contate o administrador.'
   }
-  return 'Não foi possível entrar. Tente novamente.'
+  return message || 'Não foi possível entrar. Tente novamente.'
 }
 
 export function LoginPage() {
   const { session, loading, signIn } = useAuth()
-  const [email, setEmail] = useState('')
+  const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    const saved = localStorage.getItem(EMAIL_KEY)
-    if (saved) setEmail(saved)
+    const saved = localStorage.getItem(LOGIN_KEY)
+    if (saved) setLogin(saved)
   }, [])
 
   if (!loading && session) {
@@ -48,8 +51,8 @@ export function LoginPage() {
     setSubmitting(true)
     setError(null)
 
-    const trimmedEmail = email.trim()
-    const result = await signIn(trimmedEmail, password)
+    const trimmedLogin = login.trim()
+    const result = await signIn(trimmedLogin, password)
 
     if (result.error) {
       setError(mapAuthError(result.error))
@@ -57,7 +60,7 @@ export function LoginPage() {
       return
     }
 
-    localStorage.setItem(EMAIL_KEY, trimmedEmail)
+    localStorage.setItem(LOGIN_KEY, trimmedLogin)
     setSubmitting(false)
   }
 
@@ -92,16 +95,18 @@ export function LoginPage() {
             ) : null}
 
             <div className="field">
-              <label htmlFor="email">E-mail</label>
+              <label htmlFor="login">E-mail ou nº de registro</label>
               <input
-                id="email"
+                id="login"
                 className="input"
-                type="email"
+                type="text"
                 autoComplete="username"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                inputMode="email"
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
                 disabled={submitting}
                 required
+                placeholder="ex.: 12345 ou nome@email.com"
               />
             </div>
 

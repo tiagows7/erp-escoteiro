@@ -39,6 +39,11 @@ import { ReceitaFormPage } from '@/pages/ReceitaFormPage'
 import { GeraMensalidadePage } from '@/pages/GeraMensalidadePage'
 import { ReceitasRecebimentoPage } from '@/pages/ReceitasRecebimentoPage'
 import { ReceitaRecebimentoFormPage } from '@/pages/ReceitaRecebimentoFormPage'
+import { PortalTransparenciaPage } from '@/pages/PortalTransparenciaPage'
+import { PortalRedirectPage } from '@/pages/PortalRedirectPage'
+import { AtividadesPage } from '@/pages/AtividadesPage'
+import { AtividadeFormPage } from '@/pages/AtividadeFormPage'
+import { AtividadeContasPage } from '@/pages/AtividadeContasPage'
 
 export default function App() {
   return (
@@ -47,6 +52,10 @@ export default function App() {
         <ToastProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/transparencia/:slug"
+            element={<PortalTransparenciaPage />}
+          />
           <Route
             element={
               <ProtectedRoute>
@@ -281,6 +290,30 @@ export default function App() {
             />
 
             <Route
+              path="atividades"
+              element={
+                <RequirePermission permission="atividades.view">
+                  <AtividadesPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="atividades/:id/contas"
+              element={
+                <RequirePermission permission="atividades.view">
+                  <AtividadeContasPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="atividades/:id"
+              element={
+                <RequirePermission permission="atividades.view">
+                  <AtividadeFormPage />
+                </RequirePermission>
+              }
+            />
+            <Route
               path="eventos"
               element={
                 <RequirePermission permission="eventos.view">
@@ -318,6 +351,15 @@ export default function App() {
               element={
                 <RequirePermission permission="grupos.write">
                   <GrupoFormPage />
+                </RequirePermission>
+              }
+            />
+
+            <Route
+              path="portal-transparencia"
+              element={
+                <RequirePermission permission="portal.view">
+                  <PortalRedirectPage />
                 </RequirePermission>
               }
             />

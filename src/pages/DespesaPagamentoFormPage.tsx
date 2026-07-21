@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -8,6 +8,16 @@ import {
   situacaoDespesaLabel,
   situacaoFromSaldo,
 } from '@/lib/despesas'
+import {
+  applyDespesaScope,
+  matchesFinanceiroScope,
+  resolveFinanceiroScope,
+} from '@/lib/financeiroScope'
+import {
+  atividadeLabel,
+  loadAtividadesLookup,
+  type AtividadeLookup,
+} from '@/lib/atividadesLookup'
 
 type TipoPagamento = {
   tipopagto_id: number
@@ -37,9 +47,10 @@ function formatDate(value: string | null) {
 export function DespesaPagamentoFormPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { empresa, hasPermission } = useAuth()
+  const { empresa, profile, hasPermission } = useAuth()
   const canWrite = hasPermission('financeiro.write')
   const empresaId = empresa?.id
+  const scope = useMemo(() => resolveFinanceiroScope(profile), [profile])
 
   const [despesa, setDespesa] = useState<{
     despesa_id: number
@@ -48,10 +59,14 @@ export function DespesaPagamentoFormPage() {
     despesa_saldo: number
     despesa_situacao: number | null
     despesa_vencimento: string | null
+    despesa_ramo: number | null
+    despesa_secao: number | null
     fornecedor_nome: string | null
   } | null>(null)
   const [historico, setHistorico] = useState<PagamentoRow[]>([])
   const [tipos, setTipos] = useState<TipoPagamento[]>([])
+  const [atividades, setAtividades] = useState<AtividadeLookup[]>([])
+  const [atividadeId, setAtividadeId] = useState('')
   const [valorPago, setValorPago] = useState('')
   const [dataPagamento, setDataPagamento] = useState(todayISO())
   const [tipopagtoId, setTipopagtoId] = useState('')
@@ -66,15 +81,17 @@ export function DespesaPagamentoFormPage() {
 
     void (async () => {
       setLoading(true)
-      const [d, t, h] = await Promise.all([
-        supabase
-          .from('despesas')
-          .select(
-            'despesa_id, despesa_finalidade, despesa_valor, despesa_saldo, despesa_situacao, despesa_vencimento, fornecedor_despesa(fordespesa_nome)',
-          )
-          .eq('despesa_id', Number(id))
-          .eq('empresa_id', empresaId)
-          .maybeSingle(),
+      let despesaQuery = supabase
+        .from('despesas')
+        .select(
+          'despesa_id, despesa_finalidade, despesa_valor, despesa_saldo, despesa_situacao, despesa_vencimento, despesa_ramo, despesa_secao, atividade_id, fornecedor_despesa(fordespesa_nome)',
+        )
+        .eq('despesa_id', Number(id))
+        .eq('empresa_id', empresaId)
+      despesaQuery = applyDespesaScope(despesaQuery, scope)
+
+      const [d, t, h, ativ] = await Promise.all([
+        despesaQuery.maybeSingle(),
         supabase
           .from('tipo_pagamento')
           .select('tipopagto_id, nome, quita')
@@ -88,12 +105,17 @@ export function DespesaPagamentoFormPage() {
           .eq('despesa_id', Number(id))
           .eq('empresa_id', empresaId)
           .order('data_pagamento', { ascending: false }),
+        loadAtividadesLookup(empresaId, { scope }),
       ])
 
       if (!mounted) return
 
       if (d.error || !d.data) {
-        setError(d.error?.message ?? 'Despesa não encontrada')
+        setError(
+          scope
+            ? 'Despesa não encontrada ou fora do seu ramo/seção.'
+            : (d.error?.message ?? 'Despesa não encontrada'),
+        )
         setDespesa(null)
         setLoading(false)
         return
@@ -106,7 +128,19 @@ export function DespesaPagamentoFormPage() {
         despesa_saldo: number | null
         despesa_situacao: number | null
         despesa_vencimento: string | null
+        despesa_ramo: number | null
+        despesa_secao: number | null
+        atividade_id: number | null
         fornecedor_despesa: { fordespesa_nome: string | null } | null
+      }
+
+      if (
+        !matchesFinanceiroScope(scope, row.despesa_ramo, row.despesa_secao)
+      ) {
+        setError('Esta despesa não pertence ao seu ramo/seção.')
+        setDespesa(null)
+        setLoading(false)
+        return
       }
 
       const saldo = Number(row.despesa_saldo ?? 0)
@@ -117,11 +151,15 @@ export function DespesaPagamentoFormPage() {
         despesa_saldo: saldo,
         despesa_situacao: row.despesa_situacao,
         despesa_vencimento: row.despesa_vencimento,
+        despesa_ramo: row.despesa_ramo,
+        despesa_secao: row.despesa_secao,
         fornecedor_nome: row.fornecedor_despesa?.fordespesa_nome ?? null,
       })
+      setAtividadeId(row.atividade_id?.toString() ?? '')
       setValorPago(saldo > 0 ? String(saldo) : '')
       setTipos((t.data as TipoPagamento[]) ?? [])
       setHistorico((h.data as unknown as PagamentoRow[]) ?? [])
+      setAtividades(ativ.data)
       setError(null)
       setLoading(false)
     })()
@@ -129,7 +167,19 @@ export function DespesaPagamentoFormPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, id])
+  }, [empresaId, id, scope])
+
+  const atividadesFiltradas = useMemo(() => {
+    if (!despesa) return atividades
+    let list = atividades
+    if (despesa.despesa_ramo != null) {
+      list = list.filter((a) => a.ramo === despesa.despesa_ramo)
+    }
+    if (despesa.despesa_secao != null) {
+      list = list.filter((a) => a.secao === despesa.despesa_secao)
+    }
+    return list
+  }, [atividades, despesa])
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
@@ -173,6 +223,7 @@ export function DespesaPagamentoFormPage() {
       .update({
         despesa_saldo: newSaldo,
         despesa_situacao: situacaoFromSaldo(despesa.despesa_valor, newSaldo),
+        atividade_id: atividadeId ? Number(atividadeId) : null,
       })
       .eq('despesa_id', despesa.despesa_id)
       .eq('empresa_id', empresaId)
@@ -258,6 +309,28 @@ export function DespesaPagamentoFormPage() {
               {formatMoney(despesa.despesa_saldo)}
             </p>
           </div>
+          <div className="field field-span-2">
+            <label>Atividade</label>
+            <p className="muted" style={{ margin: 0 }}>
+              {atividadeId
+                ? atividadeLabel(
+                    atividadesFiltradas.find(
+                      (a) => a.atividade_id === Number(atividadeId),
+                    ) ??
+                      atividades.find(
+                        (a) => a.atividade_id === Number(atividadeId),
+                      ) ?? {
+                        atividade_id: Number(atividadeId),
+                        descricao: `Atividade #${atividadeId}`,
+                        local: null,
+                        ramo: null,
+                        secao: null,
+                        valor: 0,
+                      },
+                  )
+                : '—'}
+            </p>
+          </div>
         </div>
       </section>
 
@@ -270,6 +343,23 @@ export function DespesaPagamentoFormPage() {
           ) : null}
 
           <div className="form-grid">
+            <div className="field field-span-2">
+              <label htmlFor="atividade_id">Atividade</label>
+              <select
+                id="atividade_id"
+                className="select"
+                value={atividadeId}
+                onChange={(e) => setAtividadeId(e.target.value)}
+                disabled={disabled}
+              >
+                <option value="">Nenhuma</option>
+                {atividadesFiltradas.map((a) => (
+                  <option key={a.atividade_id} value={a.atividade_id}>
+                    {atividadeLabel(a)}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="field">
               <label htmlFor="valorPago">Valor do pagamento</label>
               <input

@@ -349,6 +349,9 @@ button {
 .stat-card {
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   padding: 1.1rem 1.15rem;
   border-radius: var(--radius);
   background: var(--bg-elevated);
@@ -380,6 +383,57 @@ button {
   font-size: 2rem;
   color: var(--forest);
   letter-spacing: -0.03em;
+}
+
+.stat-card-button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  appearance: none;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.stat-card-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(20, 40, 30, 0.12);
+}
+
+.stat-card-button:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+
+.stat-card-hint {
+  display: block;
+  margin-top: 0.45rem;
+  font-style: normal;
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+  opacity: 0.85;
+}
+
+.stat-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  width: 100%;
+}
+
+.stat-card-ver {
+  flex: 0 0 auto;
+  margin-top: 0;
+  min-height: 1.7rem;
+  height: 1.7rem;
+  padding: 0 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
+  width: auto;
 }
 
 .stat-card-total {
@@ -486,7 +540,295 @@ button {
 }
 
 .passagem-panel {
-  margin-top: 0.25rem;
+  margin-top: 0;
+}
+
+.associado-atividades-panel {
+  margin-bottom: 1rem;
+}
+
+.associado-atividades-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.85rem;
+}
+
+.associado-atividade-card {
+  margin: 0;
+  padding: 1rem 1.05rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: linear-gradient(160deg, #fff 0%, #f5f8fc 100%);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.associado-atividade-card h4 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.associado-atividade-meta {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--ink-muted);
+}
+
+.associado-atividade-valor {
+  margin: 0.15rem 0 0.35rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.associado-atividade-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+.associado-atividade-actions .btn {
+  padding: 0.45rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.associado-atividade-status {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.3rem 0.55rem;
+  border-radius: 8px;
+}
+
+.associado-atividade-status.is-ok {
+  background: #e5f4ea;
+  color: #1b6b3a;
+}
+
+.associado-atividade-status.is-paid {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.staff-atividades-panel {
+  margin-bottom: 1rem;
+}
+
+.staff-atividades-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.staff-atividade-card {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.staff-atividade-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.staff-atividade-head h4 {
+  margin: 0;
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+}
+
+.staff-atividade-meta {
+  margin: 0.3rem 0 0;
+  font-size: 0.88rem;
+  color: var(--ink-muted);
+}
+
+.staff-atividade-total {
+  text-align: right;
+}
+
+.staff-atividade-total span {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ink-muted);
+}
+
+.staff-atividade-total strong {
+  font-size: 1.35rem;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+
+.staff-atividade-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.staff-atividade-actions .btn {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+.staff-atividade-dialog {
+  width: min(40rem, 96vw);
+}
+
+.staff-atividade-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.85rem;
+}
+
+.staff-atividade-popup-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(55vh, 28rem);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.staff-pessoa-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #f7f9fc;
+}
+
+.staff-pessoa-item.is-confirmado {
+  background: #e8f6ee;
+  border-color: #b7dfc5;
+}
+
+.staff-pessoa-item.is-pago {
+  background: #e8f0fb;
+  border-color: #b7cce8;
+}
+
+.staff-pessoa-item.is-confirmado.is-pago {
+  background: linear-gradient(90deg, #e8f6ee 0%, #e8f0fb 100%);
+  border-color: #9ec3d8;
+}
+
+.staff-pessoa-nome {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.staff-pessoa-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.staff-pessoa-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.staff-pessoa-chip.is-confirmado {
+  background: #1b6b3a;
+  color: #fff;
+}
+
+.staff-pessoa-chip.is-pago {
+  background: var(--accent);
+  color: #fff;
+}
+
+@media (max-width: 700px) {
+  .staff-atividade-total {
+    text-align: left;
+  }
+}
+
+.dashboard-destaques {
+  display: grid;
+  grid-template-columns: minmax(160px, 200px) 1fr;
+  gap: 0.85rem;
+  align-items: stretch;
+  margin-bottom: 0.25rem;
+}
+
+.aniversario-saudacao {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  background:
+    linear-gradient(135deg, #fff8eb 0%, #eef4fb 55%, #f7fafc 100%);
+  animation: rise 420ms ease both;
+}
+
+.aniversario-saudacao-img {
+  width: 96px;
+  min-width: 96px;
+  height: auto;
+  display: block;
+  border-radius: 10px;
+}
+
+.aniversario-saudacao h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+}
+
+.aniversario-saudacao p {
+  margin: 0.3rem 0 0;
+  color: var(--ink-muted);
+  font-size: 0.95rem;
+}
+
+@media (max-width: 640px) {
+  .aniversario-saudacao {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
+.dashboard-destaques-solo {
+  grid-template-columns: minmax(180px, 280px);
+}
+
+.dashboard-destaques > .panel {
+  margin: 0;
+  height: 100%;
 }
 
 .passagem-header {
@@ -494,57 +836,60 @@ button {
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
 }
 
 .passagem-header h3 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1rem;
   letter-spacing: -0.02em;
 }
 
 .passagem-header .muted {
-  margin: 0.35rem 0 0;
+  margin: 0.2rem 0 0;
   max-width: 42rem;
+  font-size: 0.82rem;
 }
 
 .passagem-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.65rem;
 }
 
 .passagem-card {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.35rem;
   margin: 0;
+  padding: 0.75rem 0.8rem !important;
 }
 
 .passagem-card-top {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .passagem-card-top span {
   margin-bottom: 0;
+  font-size: 0.78rem;
 }
 
 .passagem-card-top strong {
-  font-size: 1.85rem;
+  font-size: 1.45rem;
 }
 
 .passagem-meta {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   color: var(--ink-muted);
   position: relative;
   z-index: 1;
   white-space: pre-line;
-  line-height: 1.35;
+  line-height: 1.3;
 }
 
 .passagem-card .btn {
@@ -552,6 +897,145 @@ button {
   align-self: flex-start;
   position: relative;
   z-index: 1;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.8rem;
+}
+
+.aniversario-panel .aniversario-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.55rem 0.6rem 0.65rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(135deg, #f7fafc 0%, #eef4fb 55%, #fff8eb 100%);
+}
+
+.aniversario-card-img {
+  width: 100%;
+  max-width: 120px;
+  height: auto;
+  min-height: 0;
+  display: block;
+  border-radius: 10px;
+}
+
+.aniversario-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+.aniversario-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+}
+
+.aniversario-card-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.aniversario-card-count {
+  font-size: 1.65rem;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+}
+
+.aniversario-card-meta {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+
+.aniversario-card-row .btn {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.aniversario-dialog {
+  width: min(56rem, 96vw);
+}
+
+.aniversario-table td {
+  vertical-align: middle;
+}
+
+.aniversario-table .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.65rem;
+  height: 1.65rem;
+  padding: 0 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
+  width: auto;
+}
+
+.aniversario-dia {
+  display: inline-flex;
+  min-width: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.aniversario-hoje {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.aniversario-hoje-badge {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--accent);
+  vertical-align: middle;
+}
+
+@media (max-width: 900px) {
+  .dashboard-destaques {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-destaques-solo {
+    grid-template-columns: 1fr;
+  }
+
+  .aniversario-panel .aniversario-card {
+    flex-direction: row;
+    text-align: left;
+    align-items: center;
+  }
+
+  .aniversario-card-img {
+    max-width: 110px;
+  }
+
+  .aniversario-card-body {
+    align-items: flex-start;
+  }
 }
 
 .passagem-dialog {
@@ -748,6 +1232,89 @@ table.data tbody tr:hover {
   color: #8a6d1b;
   border: 1px solid #e6d59a;
   align-self: center;
+}
+
+.atividade-contas-resumo {
+  margin-bottom: 1rem;
+}
+
+.atividades-row-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.atividades-row-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.65rem;
+  height: 1.65rem;
+  padding: 0 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 6px;
+  width: auto;
+}
+
+.atividade-contas-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.atividade-contas-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.atividade-contas-grid strong,
+.atividade-contas-saldo strong {
+  font-size: 1.15rem;
+}
+
+.atividade-contas-saldo {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  padding-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.atividade-contas-saldo > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.atividade-contas-saldo p {
+  margin: 0;
+  font-weight: 700;
+}
+
+.atividade-contas-saldo--ok strong,
+.atividade-contas-saldo--ok p {
+  color: var(--forest);
+}
+
+.atividade-contas-saldo--deficit strong,
+.atividade-contas-saldo--deficit p {
+  color: #b02a37;
+}
+
+.atividade-contas-saldo--zero strong,
+.atividade-contas-saldo--zero p {
+  color: var(--ink);
+}
+
+@media (max-width: 800px) {
+  .atividade-contas-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .placeholder-panel h3 {
@@ -1825,6 +2392,193 @@ table.data tbody tr:hover {
 
   .login-card {
     padding: 1.1rem;
+  }
+}
+
+/* ---- Portal da Transparência (público) ---- */
+.portal-page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background:
+    radial-gradient(1200px 500px at 10% -10%, #d9efe3 0%, transparent 55%),
+    radial-gradient(900px 420px at 95% 0%, #cfe0f5 0%, transparent 50%),
+    linear-gradient(180deg, #f3f7f4 0%, #e8eef2 100%);
+  color: #1c2a24;
+}
+
+.portal-sky {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.55) 0 1px, transparent 2px),
+    radial-gradient(circle at 72% 14%, rgba(255, 255, 255, 0.4) 0 1px, transparent 2px);
+  opacity: 0.7;
+}
+
+.portal-top,
+.portal-main,
+.portal-foot {
+  position: relative;
+  z-index: 1;
+}
+
+.portal-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem clamp(1rem, 4vw, 2.5rem);
+  border-bottom: 1px solid rgba(28, 42, 36, 0.08);
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(8px);
+}
+
+.portal-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.portal-brand img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(20, 40, 30, 0.08);
+}
+
+.portal-eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #3d6b55;
+  font-weight: 650;
+}
+
+.portal-brand h1 {
+  margin: 0.15rem 0 0;
+  font-size: clamp(1.2rem, 2.4vw, 1.75rem);
+  line-height: 1.2;
+  font-family: 'Segoe UI', 'Trebuchet MS', sans-serif;
+}
+
+.portal-contact {
+  margin: 0.25rem 0 0;
+  color: #5a6b62;
+  font-size: 0.9rem;
+}
+
+.portal-main {
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  padding: 1.25rem clamp(1rem, 4vw, 1.5rem) 2rem;
+  display: grid;
+  gap: 1rem;
+  flex: 1;
+}
+
+.portal-panel {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.portal-year-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #3d4f46;
+}
+
+.portal-year-label .select {
+  min-width: 6.5rem;
+}
+
+.portal-caixa-tabs {
+  margin: 0.85rem 0 0.35rem;
+}
+
+.portal-caixa-atual {
+  margin: 0.85rem 0 0;
+  color: #5a6b62;
+  font-size: 0.92rem;
+}
+
+.portal-caixa-atual strong {
+  color: #1c2a24;
+}
+
+.portal-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+
+.portal-stat {
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  background: #f7faf8;
+  border: 1px solid rgba(28, 42, 36, 0.08);
+  display: grid;
+  gap: 0.25rem;
+}
+
+.portal-stat span {
+  font-size: 0.82rem;
+  color: #5a6b62;
+}
+
+.portal-stat strong {
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+}
+
+.portal-stat small {
+  color: #6b7c73;
+  font-size: 0.82rem;
+}
+
+.portal-stat-receita {
+  background: linear-gradient(160deg, #e8f6ee, #f7faf8);
+}
+
+.portal-stat-despesa {
+  background: linear-gradient(160deg, #f8ecec, #f7faf8);
+}
+
+.portal-stat-saldo {
+  background: linear-gradient(160deg, #eaf0f8, #f7faf8);
+}
+
+.portal-stat .is-pos {
+  color: #1f6b45;
+}
+
+.portal-stat .is-neg {
+  color: #9b2c2c;
+}
+
+.portal-foot {
+  text-align: center;
+  padding: 1rem;
+  color: #6b7c73;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 800px) {
+  .portal-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .portal-stats {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -9,8 +9,8 @@ import {
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import {
-  can,
-  canAny,
+  canForProfile,
+  canAnyForProfile,
   normalizeRole,
   ROLE_LABELS,
   type AppRole,
@@ -29,7 +29,10 @@ type AuthState = {
   isSuperAdmin: boolean
   hasPermission: (permission: Permission) => boolean
   hasAnyPermission: (permissions: Permission[]) => boolean
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>
+  signIn: (
+    login: string,
+    password: string,
+  ) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
 }
 
@@ -52,6 +55,10 @@ function mapProfile(row: Record<string, unknown>): Profile {
     codigo_ramo: (row.codigo_ramo as number | null) ?? null,
     codigo_secao: (row.codigo_secao as number | null) ?? null,
     codigo_secao_nome: (row.codigo_secao_nome as number | null) ?? null,
+    registro:
+      row.registro != null && String(row.registro).trim()
+        ? String(row.registro).trim()
+        : null,
   }
 }
 
@@ -131,8 +138,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+  async function signIn(login: string, password: string) {
+    const trimmed = login.trim()
+    if (!trimmed) {
+      return { error: 'Informe o e-mail ou o número de registro.' }
+    }
+
+    let email = trimmed
+    if (!trimmed.includes('@')) {
+      const { data, error: lookupError } = await supabase.rpc(
+        'resolve_login_email',
+        { p_login: trimmed },
+      )
+      if (lookupError) {
+        return { error: lookupError.message }
+      }
+      if (!data || typeof data !== 'string') {
+        return {
+          error:
+            'Registro não encontrado. Verifique o número ou use o e-mail.',
+        }
+      }
+      email = data
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.toLowerCase(),
+      password,
+    })
     return { error: error?.message ?? null }
   }
 
@@ -154,8 +187,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roleLabel: role ? ROLE_LABELS[role] : null,
       loading,
       isSuperAdmin: role === 'super_admin',
-      hasPermission: (permission) => can(role, permission),
-      hasAnyPermission: (permissions) => canAny(role, permissions),
+      hasPermission: (permission) => canForProfile(role, profile, permission),
+      hasAnyPermission: (permissions) =>
+        canAnyForProfile(role, profile, permissions),
       signIn,
       signOut,
     }),

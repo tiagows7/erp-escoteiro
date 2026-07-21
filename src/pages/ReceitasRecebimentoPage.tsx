@@ -11,6 +11,10 @@ import {
   situacaoTituloLabel,
   TITULO_SITUACAO,
 } from '@/lib/receitas'
+import {
+  applyReceitaScope,
+  resolveFinanceiroScope,
+} from '@/lib/financeiroScope'
 
 type ReceitaRow = {
   receita_id: number
@@ -22,6 +26,7 @@ type ReceitaRow = {
   receita_saldo: number | null
   receita_situacao: number | null
   associados: { nome: string | null } | null
+  atividades: { descricao: string | null } | null
 }
 
 function formatDate(value: string | null) {
@@ -32,9 +37,10 @@ function formatDate(value: string | null) {
 }
 
 export function ReceitasRecebimentoPage() {
-  const { empresa, hasPermission } = useAuth()
+  const { empresa, profile, hasPermission } = useAuth()
   const canWrite = hasPermission('financeiro.write')
   const empresaId = empresa?.id
+  const scope = useMemo(() => resolveFinanceiroScope(profile), [profile])
   const flashTick = useFlashSuccess()
 
   const [rows, setRows] = useState<ReceitaRow[]>([])
@@ -52,10 +58,10 @@ export function ReceitasRecebimentoPage() {
     let mounted = true
     void (async () => {
       setLoading(true)
-      const { data, error: queryError } = await supabase
+      let query = supabase
         .from('receitas')
         .select(
-          'receita_id, receita_descricao, receita_origem, receita_vencimento, receita_competencia, receita_valor, receita_saldo, receita_situacao, associados(nome)',
+          'receita_id, receita_descricao, receita_origem, receita_vencimento, receita_competencia, receita_valor, receita_saldo, receita_situacao, associados(nome), atividades(descricao)',
         )
         .eq('empresa_id', empresaId)
         .in('receita_situacao', [
@@ -65,6 +71,10 @@ export function ReceitasRecebimentoPage() {
         .gt('receita_saldo', 0)
         .order('receita_vencimento')
         .limit(500)
+
+      query = applyReceitaScope(query, scope)
+
+      const { data, error: queryError } = await query
 
       if (!mounted) return
       if (queryError) {
@@ -80,7 +90,7 @@ export function ReceitasRecebimentoPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, flashTick])
+  }, [empresaId, flashTick, scope])
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
@@ -88,6 +98,7 @@ export function ReceitasRecebimentoPage() {
     return rows.filter(
       (r) =>
         (r.receita_descricao ?? '').toLowerCase().includes(term) ||
+        (r.atividades?.descricao ?? '').toLowerCase().includes(term) ||
         (r.associados?.nome ?? '').toLowerCase().includes(term),
     )
   }, [rows, q])
@@ -114,6 +125,7 @@ export function ReceitasRecebimentoPage() {
           <h2>Recebimento</h2>
           <p>
             Baixa de receitas em aberto — <strong>{empresa?.nome}</strong>
+            {scope ? ' — somente seu ramo/seção' : ''}
           </p>
         </div>
         <div className="badge">{formatMoney(totalSaldo)} em aberto</div>
@@ -153,6 +165,7 @@ export function ReceitasRecebimentoPage() {
                   <th></th>
                   <th>Vencimento</th>
                   <th>Descrição</th>
+                  <th>Atividade</th>
                   <th>Associado</th>
                   <th>Origem</th>
                   <th>Competência</th>
@@ -182,6 +195,7 @@ export function ReceitasRecebimentoPage() {
                     </td>
                     <td>{formatDate(row.receita_vencimento)}</td>
                     <td>{row.receita_descricao || '—'}</td>
+                    <td>{row.atividades?.descricao || '—'}</td>
                     <td>{row.associados?.nome || '—'}</td>
                     <td>
                       {row.receita_origem === RECEITA_ORIGEM.MENSALIDADE

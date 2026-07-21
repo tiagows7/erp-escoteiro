@@ -34,8 +34,11 @@ export const PERMISSIONS = [
   'estoque.write',
   'financeiro.view',
   'financeiro.write',
+  'portal.view',
   'usuarios.view',
   'usuarios.write',
+  'atividades.view',
+  'atividades.write',
   'eventos.view',
   'eventos.write',
   'vendas.view',
@@ -62,8 +65,11 @@ const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
     'estoque.write',
     'financeiro.view',
     'financeiro.write',
+    'portal.view',
     'usuarios.view',
     'usuarios.write',
+    'atividades.view',
+    'atividades.write',
     'eventos.view',
     'eventos.write',
     'vendas.view',
@@ -79,6 +85,8 @@ const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
     'estoque.view',
     'financeiro.view',
     'financeiro.write',
+    'portal.view',
+    'atividades.view',
     'vendas.view',
     'vendas.write',
   ],
@@ -90,6 +98,9 @@ const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
     'estrutura.write',
     'estoque.view',
     'estoque.write',
+    'portal.view',
+    'atividades.view',
+    'atividades.write',
     'eventos.view',
     'eventos.write',
     'projetos.view',
@@ -101,6 +112,9 @@ const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
     'associados.write',
     'estrutura.view',
     'estoque.view',
+    'portal.view',
+    'atividades.view',
+    'atividades.write',
     'eventos.view',
   ],
   leitura: [
@@ -109,6 +123,8 @@ const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
     'estrutura.view',
     'estoque.view',
     'financeiro.view',
+    'portal.view',
+    'atividades.view',
     'eventos.view',
     'vendas.view',
     'projetos.view',
@@ -157,4 +173,85 @@ export function canAny(
   permissions: Permission[],
 ): boolean {
   return permissions.some((permission) => can(role, permission))
+}
+
+/** Login de associado (importação / nº de registro): acesso limitado. */
+export function isAssociadoLogin(profile: {
+  registro?: string | null
+} | null | undefined): boolean {
+  return !!(profile?.registro && String(profile.registro).trim())
+}
+
+/** Login por e-mail com ramo: financeiro só do próprio ramo/seção. */
+export function isRamoFinanceiroScoped(profile: {
+  registro?: string | null
+  codigo_ramo?: number | null
+} | null | undefined): boolean {
+  if (isAssociadoLogin(profile)) return false
+  const ramo = profile?.codigo_ramo
+  return ramo != null && ramo >= 1 && ramo <= 4
+}
+
+/** Ramo do usuário staff (e-mail) para filtrar consultas; null = vê todos. */
+export function staffRamoScope(profile: {
+  registro?: string | null
+  codigo_ramo?: number | null
+} | null | undefined): number | null {
+  if (!isRamoFinanceiroScoped(profile)) return null
+  return profile!.codigo_ramo ?? null
+}
+
+export function financeiroScopeFromProfile(profile: {
+  codigo_ramo?: number | null
+  codigo_secao?: number | null
+} | null | undefined): { ramo: number; secao: number | null } | null {
+  const ramo = profile?.codigo_ramo
+  if (ramo == null || ramo < 1 || ramo > 4) return null
+  const secao = profile?.codigo_secao
+  return {
+    ramo,
+    secao: secao != null && secao > 0 ? secao : null,
+  }
+}
+
+const ASSOCIADO_PERMISSIONS: Permission[] = [
+  'dashboard.view',
+  'portal.view',
+  'atividades.view',
+]
+
+const RAMO_FINANCEIRO_PERMISSIONS: Permission[] = [
+  'financeiro.view',
+  'financeiro.write',
+]
+
+export function canForProfile(
+  role: AppRole | null | undefined,
+  profile: {
+    registro?: string | null
+    codigo_ramo?: number | null
+  } | null | undefined,
+  permission: Permission,
+): boolean {
+  if (isAssociadoLogin(profile)) {
+    return ASSOCIADO_PERMISSIONS.includes(permission)
+  }
+  if (
+    isRamoFinanceiroScoped(profile) &&
+    RAMO_FINANCEIRO_PERMISSIONS.includes(permission)
+  ) {
+    return true
+  }
+  return can(role, permission)
+}
+
+export function canAnyForProfile(
+  role: AppRole | null | undefined,
+  profile: {
+    registro?: string | null
+    codigo_ramo?: number | null
+  } | null | undefined,
+  permissions: Permission[],
+): boolean {
+  return permissions.some((p) => canForProfile(role, profile, p))
 }

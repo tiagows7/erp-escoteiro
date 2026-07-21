@@ -1,6 +1,4 @@
--- Card "Diretoria" (ramo_id = 5) passa a ser "VOLUNTÁRIOS":
--- associados ativos que NÃO são beneficiários (categoria <> 2)
--- OU têm idade maior que 22 anos.
+-- Ver 013_dashboard_voluntarios_fix.sql (logica atual do card Voluntarios).
 
 create or replace function public.dashboard_contagem_ramos()
 returns table (ramo_id integer, ramo_nome text, total bigint)
@@ -12,7 +10,7 @@ as $$
   select
     r.ramo_id,
     case
-      when r.ramo_id = 5 then 'VOLUNTÁRIOS'::text
+      when r.ramo_id = 5 then U&'VOLUNT\00C1RIOS'::text
       else r.nome::text
     end as ramo_nome,
     case
@@ -22,8 +20,16 @@ as $$
         where a.empresa_id = public.current_empresa_id()
           and coalesce(a.ativo, true) = true
           and (
-            coalesce(a.categoria, -1) <> 2
-            or public._idade_anos(a.data_nascimento) > 22
+            public._idade_anos(a.data_nascimento) > 22
+            or (
+              a.categoria is not null
+              and not exists (
+                select 1
+                from public.categoria c
+                where c.categoria_id = a.categoria
+                  and upper(c.nome) like '%BENEFICI%'
+              )
+            )
           )
       )
       else (

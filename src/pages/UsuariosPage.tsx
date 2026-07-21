@@ -12,6 +12,7 @@ type UsuarioRow = {
   nome: string
   email: string | null
   username: string | null
+  registro: string | null
   role: AppRole
   ativo: boolean | null
 }
@@ -42,7 +43,7 @@ export function UsuariosPage() {
       setLoading(true)
       const { data, error: queryError } = await supabase
         .from('profiles')
-        .select('id, nome, email, username, role, ativo')
+        .select('id, nome, email, username, registro, role, ativo')
         .eq('empresa_id', empresaId)
         .order('nome')
 
@@ -74,6 +75,7 @@ export function UsuariosPage() {
         r.nome.toLowerCase().includes(term) ||
         (r.email ?? '').toLowerCase().includes(term) ||
         (r.username ?? '').toLowerCase().includes(term) ||
+        (r.registro ?? '').includes(term) ||
         (ROLE_LABELS[r.role] ?? r.role).toLowerCase().includes(term),
     )
   }, [rows, q, filtroAtivo])
@@ -152,6 +154,7 @@ export function UsuariosPage() {
                 <tr>
                   <th></th>
                   <th>Nome</th>
+                  <th>Registro</th>
                   <th>E-mail</th>
                   <th>Papel</th>
                   <th>Status</th>
@@ -169,7 +172,12 @@ export function UsuariosPage() {
                       </Link>
                     </td>
                     <td>{row.nome}</td>
-                    <td>{row.email || row.username || '—'}</td>
+                    <td>{row.registro || '—'}</td>
+                    <td>
+                      {row.email?.endsWith('@usuarios.local')
+                        ? '—'
+                        : row.email || row.username || '—'}
+                    </td>
                     <td>{ROLE_LABELS[row.role] ?? row.role}</td>
                     <td>
                       {row.ativo === false ? (

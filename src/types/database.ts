@@ -49,6 +49,7 @@ export type Profile = {
   codigo_ramo: number | null
   codigo_secao: number | null
   codigo_secao_nome: number | null
+  registro: string | null
 }
 
 export type Empresa = {
@@ -92,6 +93,60 @@ export type DashboardDetalhePassagem = {
   meses: number
 }
 
+export type DashboardDetalheRamo = {
+  associado_id: number
+  nome: string
+  registro: number | null
+  data_nascimento: string | null
+  anos: number
+  meses: number
+  secao_nome: string | null
+}
+
+export type DashboardAniversariante = {
+  associado_id: number
+  nome: string
+  registro: number | null
+  data_nascimento: string | null
+  dia: number
+  idade: number
+  ramo_nome: string | null
+  secao_nome: string | null
+  eh_hoje: boolean
+}
+
+export type Atividade = {
+  atividade_id: number
+  empresa_id: number
+  ramo: number | null
+  secao: number | null
+  patrulha_matilha: number | null
+  descricao: string
+  local: string | null
+  valor: number
+  created_at: string | null
+}
+
+export type AtividadeConfirmacao = {
+  confirmacao_id: number
+  empresa_id: number
+  atividade_id: number
+  associado_id: number
+  confirmado_em: string
+  created_at: string | null
+}
+
+export type AtividadePagamento = {
+  pagamento_id: number
+  empresa_id: number
+  atividade_id: number
+  associado_id: number
+  valor: number
+  pago_em: string
+  created_at: string | null
+  receita_id: number | null
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -103,6 +158,11 @@ export type Database = {
       profiles: { Row: Profile; Insert: Partial<Profile>; Update: Partial<Profile> }
       empresa: { Row: Empresa; Insert: Partial<Empresa>; Update: Partial<Empresa> }
       ramos: { Row: Ramo; Insert: Partial<Ramo>; Update: Partial<Ramo> }
+      atividades: {
+        Row: Atividade
+        Insert: Partial<Atividade>
+        Update: Partial<Atividade>
+      }
     }
     Functions: {
       dashboard_contagem_ramos: {
@@ -116,6 +176,14 @@ export type Database = {
       dashboard_detalhe_passagem: {
         Args: { p_ramo: number }
         Returns: DashboardDetalhePassagem[]
+      }
+      dashboard_detalhe_ramo: {
+        Args: { p_ramo: number }
+        Returns: DashboardDetalheRamo[]
+      }
+      dashboard_aniversariantes_mes: {
+        Args: { p_mes?: number }
+        Returns: DashboardAniversariante[]
       }
     }
   }

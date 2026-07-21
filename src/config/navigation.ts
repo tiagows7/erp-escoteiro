@@ -1,4 +1,6 @@
 import type { Permission } from '@/lib/roles'
+import { isAssociadoLogin, isRamoFinanceiroScoped } from '@/lib/roles'
+import type { Profile } from '@/types/database'
 
 export type NavLinkItem = {
   type: 'link'
@@ -30,6 +32,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Dashboard',
     end: true,
     permission: 'dashboard.view',
+  },
+  {
+    type: 'link',
+    to: '/portal-transparencia',
+    label: 'Portal da Transparência',
+    permission: 'portal.view',
   },
   {
     type: 'group',
@@ -86,32 +94,33 @@ export const NAV_ITEMS: NavItem[] = [
       },
     ],
   },
-  {
-    type: 'group',
-    id: 'estoque',
-    label: 'Estoque',
-    anyOf: ['estoque.view'],
-    children: [
-      {
-        type: 'link',
-        to: '/estoque/grupos-produtos',
-        label: 'Grupo de Produtos',
-        permission: 'estoque.view',
-      },
-      {
-        type: 'link',
-        to: '/estoque/produtos',
-        label: 'Produtos',
-        permission: 'estoque.view',
-      },
-      {
-        type: 'link',
-        to: '/estoque/entrada',
-        label: 'Entrada de Estoque',
-        permission: 'estoque.view',
-      },
-    ],
-  },
+  // Estoque oculto por enquanto
+  // {
+  //   type: 'group',
+  //   id: 'estoque',
+  //   label: 'Estoque',
+  //   anyOf: ['estoque.view'],
+  //   children: [
+  //     {
+  //       type: 'link',
+  //       to: '/estoque/grupos-produtos',
+  //       label: 'Grupo de Produtos',
+  //       permission: 'estoque.view',
+  //     },
+  //     {
+  //       type: 'link',
+  //       to: '/estoque/produtos',
+  //       label: 'Produtos',
+  //       permission: 'estoque.view',
+  //     },
+  //     {
+  //       type: 'link',
+  //       to: '/estoque/entrada',
+  //       label: 'Entrada de Estoque',
+  //       permission: 'estoque.view',
+  //     },
+  //   ],
+  // },
   {
     type: 'group',
     id: 'despesas',
@@ -160,22 +169,30 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     type: 'link',
+    to: '/atividades',
+    label: 'Atividades',
+    permission: 'atividades.view',
+  },
+  {
+    type: 'link',
     to: '/eventos',
     label: 'Eventos',
     permission: 'eventos.view',
   },
-  {
-    type: 'link',
-    to: '/vendas',
-    label: 'Vendas',
-    permission: 'vendas.view',
-  },
-  {
-    type: 'link',
-    to: '/projetos',
-    label: 'Projetos',
-    permission: 'projetos.view',
-  },
+  // Vendas oculto por enquanto
+  // {
+  //   type: 'link',
+  //   to: '/vendas',
+  //   label: 'Vendas',
+  //   permission: 'vendas.view',
+  // },
+  // Projetos oculto por enquanto
+  // {
+  //   type: 'link',
+  //   to: '/projetos',
+  //   label: 'Projetos',
+  //   permission: 'projetos.view',
+  // },
   {
     type: 'link',
     to: '/grupos',
@@ -183,3 +200,45 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'grupos.write',
   },
 ]
+
+/** Menu do associado (login por registro): dashboard + atividades + portal. */
+export function navItemsForProfile(
+  profile: Pick<Profile, 'registro' | 'codigo_ramo'> | null,
+): NavItem[] {
+  if (isAssociadoLogin(profile)) {
+    return [
+      {
+        type: 'link',
+        to: '/',
+        label: 'Dashboard',
+        end: true,
+        permission: 'dashboard.view',
+      },
+      {
+        type: 'link',
+        to: '/atividades',
+        label: 'Atividades',
+        permission: 'atividades.view',
+      },
+      {
+        type: 'link',
+        to: '/portal-transparencia',
+        label: 'Portal da Transparência',
+        permission: 'portal.view',
+      },
+    ]
+  }
+
+  if (!isRamoFinanceiroScoped(profile)) return NAV_ITEMS
+
+  // Login e-mail com ramo: financeiro sem gera mensalidade (só próprio ramo/seção).
+  return NAV_ITEMS.map((item) => {
+    if (item.type !== 'group' || item.id !== 'receitas') return item
+    return {
+      ...item,
+      children: item.children.filter(
+        (child) => child.to !== '/receitas/gera-mensalidade',
+      ),
+    }
+  })
+}

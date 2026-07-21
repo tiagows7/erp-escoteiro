@@ -11,6 +11,15 @@ import {
   situacaoFromSaldo,
 } from '@/lib/despesas'
 import { isNotaImage, uploadDespesaNota } from '@/lib/uploadDespesaNota'
+import {
+  matchesFinanceiroScope,
+  resolveFinanceiroScope,
+} from '@/lib/financeiroScope'
+import {
+  atividadeLabel,
+  loadAtividadesLookup,
+  type AtividadeLookup,
+} from '@/lib/atividadesLookup'
 import type { Ramo } from '@/types/database'
 
 type Lookup = { id: number; nome: string; ramo?: number | null; secao?: number | null }
@@ -20,6 +29,7 @@ const emptyForm = {
   despesa_ramo: '',
   despesa_secao: '',
   despesa_secaonome: '',
+  atividade_id: '',
   despesa_numeronota: '',
   despesa_emissao: '',
   despesa_vencimento: '',
@@ -44,9 +54,10 @@ export function DespesaFormPage() {
   const { id } = useParams()
   const isNew = !id || id === 'novo'
   const navigate = useNavigate()
-  const { empresa, hasPermission } = useAuth()
+  const { empresa, profile, hasPermission } = useAuth()
   const canWrite = hasPermission('financeiro.write')
   const empresaId = empresa?.id
+  const scope = useMemo(() => resolveFinanceiroScope(profile), [profile])
   const toast = useToast()
 
   const [form, setForm] = useState({
@@ -61,12 +72,23 @@ export function DespesaFormPage() {
   const [secoes, setSecoes] = useState<Lookup[]>([])
   const [patrulhas, setPatrulhas] = useState<Lookup[]>([])
   const [fornecedores, setFornecedores] = useState<Lookup[]>([])
+  const [atividades, setAtividades] = useState<AtividadeLookup[]>([])
   const [documentoUrl, setDocumentoUrl] = useState<string | null>(null)
   const [notaFile, setNotaFile] = useState<File | null>(null)
   const [notaPreview, setNotaPreview] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
+
+  useEffect(() => {
+    if (!scope || !isNew) return
+    setForm((prev) => ({
+      ...prev,
+      despesa_ramo: String(scope.ramo),
+      despesa_secao:
+        scope.secao != null ? String(scope.secao) : prev.despesa_secao,
+    }))
+  }, [scope, isNew])
 
   useEffect(() => {
     if (!empresaId) return
@@ -134,6 +156,24 @@ export function DespesaFormPage() {
     return list
   }, [patrulhas, form.despesa_ramo, form.despesa_secao])
 
+  const atividadesFiltradas = useMemo(() => {
+    let list = atividades
+    if (form.despesa_ramo) {
+      list = list.filter((a) => a.ramo === Number(form.despesa_ramo))
+    }
+    if (form.despesa_secao) {
+      list = list.filter((a) => a.secao === Number(form.despesa_secao))
+    }
+    return list
+  }, [atividades, form.despesa_ramo, form.despesa_secao])
+
+  useEffect(() => {
+    if (!empresaId) return
+    void loadAtividadesLookup(empresaId, { scope }).then((res) => {
+      if (!res.error) setAtividades(res.data)
+    })
+  }, [empresaId, scope])
+
   useEffect(() => {
     if (isNew || !empresaId) return
     let mounted = true
@@ -142,7 +182,7 @@ export function DespesaFormPage() {
       const { data, error: loadError } = await supabase
         .from('despesas')
         .select(
-          'despesa_id, despesa_fornecedor, despesa_ramo, despesa_secao, despesa_secaonome, despesa_numeronota, despesa_emissao, despesa_vencimento, despesa_valor, despesa_saldo, despesa_situacao, despesa_finalidade, despesa_documento',
+          'despesa_id, despesa_fornecedor, despesa_ramo, despesa_secao, despesa_secaonome, atividade_id, despesa_numeronota, despesa_emissao, despesa_vencimento, despesa_valor, despesa_saldo, despesa_situacao, despesa_finalidade, despesa_documento',
         )
         .eq('despesa_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -155,6 +195,18 @@ export function DespesaFormPage() {
         return
       }
 
+      if (
+        !matchesFinanceiroScope(
+          scope,
+          data.despesa_ramo as number | null,
+          data.despesa_secao as number | null,
+        )
+      ) {
+        setError('Esta despesa não pertence ao seu ramo/seção.')
+        setLoading(false)
+        return
+      }
+
       const valorNum = Number(data.despesa_valor ?? 0)
       const saldoNum = Number(data.despesa_saldo ?? 0)
 
@@ -163,6 +215,7 @@ export function DespesaFormPage() {
         despesa_ramo: data.despesa_ramo?.toString() ?? '',
         despesa_secao: data.despesa_secao?.toString() ?? '',
         despesa_secaonome: data.despesa_secaonome?.toString() ?? '',
+        atividade_id: data.atividade_id?.toString() ?? '',
         despesa_numeronota: data.despesa_numeronota ?? '',
         despesa_emissao: data.despesa_emissao?.slice(0, 10) ?? '',
         despesa_vencimento: data.despesa_vencimento?.slice(0, 10) ?? '',
@@ -181,7 +234,7 @@ export function DespesaFormPage() {
     return () => {
       mounted = false
     }
-  }, [id, isNew, empresaId])
+  }, [id, isNew, empresaId, scope])
 
   function update<K extends keyof typeof emptyForm>(
     key: K,
@@ -222,6 +275,10 @@ export function DespesaFormPage() {
       return
     }
 
+    const ramoPayload = scope ? scope.ramo : numOrNull(form.despesa_ramo)
+    const secaoPayload =
+      scope?.secao != null ? scope.secao : numOrNull(form.despesa_secao)
+
     setSaving(true)
     setError(null)
 
@@ -231,9 +288,10 @@ export function DespesaFormPage() {
         .insert({
           empresa_id: empresaId,
           despesa_fornecedor: numOrNull(form.despesa_fornecedor),
-          despesa_ramo: numOrNull(form.despesa_ramo),
-          despesa_secao: numOrNull(form.despesa_secao),
+          despesa_ramo: ramoPayload,
+          despesa_secao: secaoPayload,
           despesa_secaonome: numOrNull(form.despesa_secaonome),
+          atividade_id: numOrNull(form.atividade_id),
           despesa_numeronota: strOrNull(form.despesa_numeronota),
           despesa_emissao: strOrNull(form.despesa_emissao),
           despesa_vencimento: strOrNull(form.despesa_vencimento),
@@ -275,9 +333,10 @@ export function DespesaFormPage() {
         .from('despesas')
         .update({
           despesa_fornecedor: numOrNull(form.despesa_fornecedor),
-          despesa_ramo: numOrNull(form.despesa_ramo),
-          despesa_secao: numOrNull(form.despesa_secao),
+          despesa_ramo: ramoPayload,
+          despesa_secao: secaoPayload,
           despesa_secaonome: numOrNull(form.despesa_secaonome),
+          atividade_id: numOrNull(form.atividade_id),
           despesa_numeronota: strOrNull(form.despesa_numeronota),
           despesa_emissao: strOrNull(form.despesa_emissao),
           despesa_vencimento: strOrNull(form.despesa_vencimento),
@@ -423,8 +482,9 @@ export function DespesaFormPage() {
                 update('despesa_ramo', e.target.value)
                 update('despesa_secao', '')
                 update('despesa_secaonome', '')
+                update('atividade_id', '')
               }}
-              disabled={disabled || isPaid}
+              disabled={disabled || isPaid || !!scope}
             >
               <option value="">Selecione</option>
               {ramos.map((ramo) => (
@@ -444,8 +504,9 @@ export function DespesaFormPage() {
               onChange={(e) => {
                 update('despesa_secao', e.target.value)
                 update('despesa_secaonome', '')
+                update('atividade_id', '')
               }}
-              disabled={disabled || isPaid}
+              disabled={disabled || isPaid || (scope != null && scope.secao != null)}
             >
               <option value="">Selecione</option>
               {secoesFiltradas.map((secao) => (
@@ -469,6 +530,34 @@ export function DespesaFormPage() {
               {patrulhasFiltradas.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field field-span-2">
+            <label htmlFor="atividade_id">Atividade</label>
+            <select
+              id="atividade_id"
+              className="select"
+              value={form.atividade_id}
+              onChange={(e) => {
+                const value = e.target.value
+                update('atividade_id', value)
+                if (!value) return
+                const ativ = atividades.find(
+                  (a) => a.atividade_id === Number(value),
+                )
+                if (!ativ || scope) return
+                if (ativ.ramo != null) update('despesa_ramo', String(ativ.ramo))
+                if (ativ.secao != null) update('despesa_secao', String(ativ.secao))
+              }}
+              disabled={disabled || isPaid}
+            >
+              <option value="">Nenhuma</option>
+              {atividadesFiltradas.map((a) => (
+                <option key={a.atividade_id} value={a.atividade_id}>
+                  {atividadeLabel(a)}
                 </option>
               ))}
             </select>

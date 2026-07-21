@@ -8,6 +8,7 @@ export type CreateGrupoInput = {
     email?: string
     telefone?: string
     ativo: boolean
+    portal_transparencia?: boolean
   }
   admin: {
     nome: string
@@ -138,6 +139,7 @@ async function createViaSignUpFallback(
       email: input.grupo.email?.trim() || null,
       telefone: input.grupo.telefone?.trim() || null,
       ativo: input.grupo.ativo,
+      portal_transparencia: input.grupo.portal_transparencia !== false,
     })
     .select('id, nome, slug')
     .single()

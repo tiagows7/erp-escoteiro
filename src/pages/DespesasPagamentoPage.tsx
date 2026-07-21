@@ -9,6 +9,10 @@ import {
   formatMoney,
   situacaoDespesaLabel,
 } from '@/lib/despesas'
+import {
+  applyDespesaScope,
+  resolveFinanceiroScope,
+} from '@/lib/financeiroScope'
 
 type DespesaRow = {
   despesa_id: number
@@ -19,6 +23,7 @@ type DespesaRow = {
   despesa_situacao: number | null
   despesa_ramo: number | null
   fornecedor_despesa: { fordespesa_nome: string | null } | null
+  atividades: { descricao: string | null } | null
 }
 
 type Lookup = { id: number; nome: string }
@@ -31,9 +36,10 @@ function formatDate(value: string | null) {
 }
 
 export function DespesasPagamentoPage() {
-  const { empresa, hasPermission } = useAuth()
+  const { empresa, profile, hasPermission } = useAuth()
   const canWrite = hasPermission('financeiro.write')
   const empresaId = empresa?.id
+  const scope = useMemo(() => resolveFinanceiroScope(profile), [profile])
   const flashTick = useFlashSuccess()
 
   const [rows, setRows] = useState<DespesaRow[]>([])
@@ -71,7 +77,7 @@ export function DespesasPagamentoPage() {
       let query = supabase
         .from('despesas')
         .select(
-          'despesa_id, despesa_finalidade, despesa_vencimento, despesa_valor, despesa_saldo, despesa_situacao, despesa_ramo, fornecedor_despesa(fordespesa_nome)',
+          'despesa_id, despesa_finalidade, despesa_vencimento, despesa_valor, despesa_saldo, despesa_situacao, despesa_ramo, fornecedor_despesa(fordespesa_nome), atividades(descricao)',
         )
         .eq('empresa_id', empresaId)
         .in('despesa_situacao', [
@@ -82,7 +88,10 @@ export function DespesasPagamentoPage() {
         .order('despesa_vencimento')
         .limit(500)
 
-      if (filtroRamo) query = query.eq('despesa_ramo', Number(filtroRamo))
+      query = applyDespesaScope(query, scope)
+      if (!scope && filtroRamo) {
+        query = query.eq('despesa_ramo', Number(filtroRamo))
+      }
 
       const { data, error: queryError } = await query
       if (!mounted) return
@@ -100,7 +109,7 @@ export function DespesasPagamentoPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, filtroRamo, flashTick])
+  }, [empresaId, filtroRamo, flashTick, scope])
 
   const ramoMap = useMemo(
     () => new Map(ramos.map((r) => [r.id, r.nome])),
@@ -113,6 +122,7 @@ export function DespesasPagamentoPage() {
     return rows.filter(
       (r) =>
         (r.despesa_finalidade ?? '').toLowerCase().includes(term) ||
+        (r.atividades?.descricao ?? '').toLowerCase().includes(term) ||
         (r.fornecedor_despesa?.fordespesa_nome ?? '')
           .toLowerCase()
           .includes(term),
@@ -141,6 +151,7 @@ export function DespesasPagamentoPage() {
           <h2>Pagamento de Despesas</h2>
           <p>
             Baixa de títulos em aberto — <strong>{empresa?.nome}</strong>
+            {scope ? ' — somente seu ramo/seção' : ''}
           </p>
         </div>
         <div className="badge">{formatMoney(totalSaldo)} em aberto</div>
@@ -154,18 +165,20 @@ export function DespesasPagamentoPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
-          <select
-            className="select"
-            value={filtroRamo}
-            onChange={(e) => setFiltroRamo(e.target.value)}
-          >
-            <option value="">Todos os ramos</option>
-            {ramos.map((ramo) => (
-              <option key={ramo.id} value={ramo.id}>
-                {ramo.nome}
-              </option>
-            ))}
-          </select>
+          {!scope ? (
+            <select
+              className="select"
+              value={filtroRamo}
+              onChange={(e) => setFiltroRamo(e.target.value)}
+            >
+              <option value="">Todos os ramos</option>
+              {ramos.map((ramo) => (
+                <option key={ramo.id} value={ramo.id}>
+                  {ramo.nome}
+                </option>
+              ))}
+            </select>
+          ) : null}
         </div>
 
         {error ? (
@@ -193,6 +206,7 @@ export function DespesasPagamentoPage() {
                   <th>Vencimento</th>
                   <th>Fornecedor</th>
                   <th>Finalidade</th>
+                  <th>Atividade</th>
                   <th>Ramo</th>
                   <th>Valor</th>
                   <th>Saldo</th>
@@ -224,6 +238,7 @@ export function DespesasPagamentoPage() {
                       {row.fornecedor_despesa?.fordespesa_nome || '—'}
                     </td>
                     <td>{row.despesa_finalidade || '—'}</td>
+                    <td>{row.atividades?.descricao || '—'}</td>
                     <td>
                       {(row.despesa_ramo && ramoMap.get(row.despesa_ramo)) ||
                         '—'}

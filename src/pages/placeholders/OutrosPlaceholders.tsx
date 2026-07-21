@@ -1,5 +1,20 @@
 import { PlaceholderPage } from '@/pages/PlaceholderPage'
 
+export function AtividadesPage() {
+  return (
+    <PlaceholderPage
+      title="Atividades"
+      description="Atividades semanais e programação do grupo"
+      delphiUnit="Atividades"
+      planned={[
+        'Listagem de atividades',
+        'Cadastro por ramo e seção',
+        'Controle de presença',
+      ]}
+    />
+  )
+}
+
 export function EventosPage() {
   return (
     <PlaceholderPage

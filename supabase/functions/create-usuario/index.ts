@@ -16,7 +16,8 @@ const GROUP_ROLES = [
 
 type Payload = {
   nome: string
-  email: string
+  email?: string
+  registro?: string | null
   password: string
   role: string
   ativo?: boolean
@@ -80,13 +81,20 @@ Deno.serve(async (req) => {
 
     const body = (await req.json()) as Payload
     const nome = body.nome?.trim()
-    const email = body.email?.trim().toLowerCase()
+    const registro = (body.registro ?? '').replace(/\D/g, '').slice(0, 20) || null
+    let email = body.email?.trim().toLowerCase() || ''
+    if (!email.includes('@') && registro) {
+      email = `r${registro}@usuarios.local`
+    }
     const password = body.password ?? ''
     const role = body.role?.trim()
 
     if (!nome || !email || password.length < 6) {
       return json(
-        { error: 'Informe nome, e-mail e senha (mín. 6 caracteres).' },
+        {
+          error:
+            'Informe nome, e-mail ou nº de registro, e senha (mín. 6 caracteres).',
+        },
         400,
       )
     }
@@ -128,7 +136,8 @@ Deno.serve(async (req) => {
         empresa_id: empresaId,
         nome,
         email,
-        username: email.split('@')[0],
+        username: registro ?? email.split('@')[0],
+        registro,
         role,
         tipo: roleToTipo(role),
         ativo: body.ativo !== false,
@@ -136,7 +145,7 @@ Deno.serve(async (req) => {
         codigo_secao: body.codigo_secao ?? null,
         codigo_secao_nome: body.codigo_secao_nome ?? null,
       })
-      .select('id, nome, email, role, ativo')
+      .select('id, nome, email, role, ativo, registro')
       .single()
 
     if (profileError || !profile) {

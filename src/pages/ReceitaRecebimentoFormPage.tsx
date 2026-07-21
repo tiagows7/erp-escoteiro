@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -8,6 +8,16 @@ import {
   situacaoFromSaldo,
   situacaoTituloLabel,
 } from '@/lib/receitas'
+import {
+  applyReceitaScope,
+  matchesFinanceiroScope,
+  resolveFinanceiroScope,
+} from '@/lib/financeiroScope'
+import {
+  atividadeLabel,
+  loadAtividadesLookup,
+  type AtividadeLookup,
+} from '@/lib/atividadesLookup'
 
 type TipoPagamento = {
   tipopagto_id: number
@@ -37,9 +47,10 @@ function formatDate(value: string | null) {
 export function ReceitaRecebimentoFormPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { empresa, hasPermission } = useAuth()
+  const { empresa, profile, hasPermission } = useAuth()
   const canWrite = hasPermission('financeiro.write')
   const empresaId = empresa?.id
+  const scope = useMemo(() => resolveFinanceiroScope(profile), [profile])
 
   const [receita, setReceita] = useState<{
     receita_id: number
@@ -48,10 +59,14 @@ export function ReceitaRecebimentoFormPage() {
     receita_saldo: number
     receita_situacao: number | null
     receita_vencimento: string | null
+    receita_ramo: number | null
+    receita_secao: number | null
     associado_nome: string | null
   } | null>(null)
   const [historico, setHistorico] = useState<PagamentoRow[]>([])
   const [tipos, setTipos] = useState<TipoPagamento[]>([])
+  const [atividades, setAtividades] = useState<AtividadeLookup[]>([])
+  const [atividadeId, setAtividadeId] = useState('')
   const [valorPago, setValorPago] = useState('')
   const [dataPagamento, setDataPagamento] = useState(todayISO())
   const [tipopagtoId, setTipopagtoId] = useState('')
@@ -66,15 +81,17 @@ export function ReceitaRecebimentoFormPage() {
 
     void (async () => {
       setLoading(true)
-      const [d, t, h] = await Promise.all([
-        supabase
-          .from('receitas')
-          .select(
-            'receita_id, receita_descricao, receita_valor, receita_saldo, receita_situacao, receita_vencimento, associados(nome)',
-          )
-          .eq('receita_id', Number(id))
-          .eq('empresa_id', empresaId)
-          .maybeSingle(),
+      let receitaQuery = supabase
+        .from('receitas')
+        .select(
+          'receita_id, receita_descricao, receita_valor, receita_saldo, receita_situacao, receita_vencimento, receita_ramo, receita_secao, atividade_id, associados(nome)',
+        )
+        .eq('receita_id', Number(id))
+        .eq('empresa_id', empresaId)
+      receitaQuery = applyReceitaScope(receitaQuery, scope)
+
+      const [d, t, h, ativ] = await Promise.all([
+        receitaQuery.maybeSingle(),
         supabase
           .from('tipo_pagamento')
           .select('tipopagto_id, nome, quita')
@@ -88,12 +105,17 @@ export function ReceitaRecebimentoFormPage() {
           .eq('receita_id', Number(id))
           .eq('empresa_id', empresaId)
           .order('data_pagamento', { ascending: false }),
+        loadAtividadesLookup(empresaId, { scope }),
       ])
 
       if (!mounted) return
 
       if (d.error || !d.data) {
-        setError(d.error?.message ?? 'Receita não encontrada')
+        setError(
+          scope
+            ? 'Receita não encontrada ou fora do seu ramo/seção.'
+            : (d.error?.message ?? 'Receita não encontrada'),
+        )
         setReceita(null)
         setLoading(false)
         return
@@ -106,7 +128,19 @@ export function ReceitaRecebimentoFormPage() {
         receita_saldo: number | null
         receita_situacao: number | null
         receita_vencimento: string | null
+        receita_ramo: number | null
+        receita_secao: number | null
+        atividade_id: number | null
         associados: { nome: string | null } | null
+      }
+
+      if (
+        !matchesFinanceiroScope(scope, row.receita_ramo, row.receita_secao)
+      ) {
+        setError('Esta receita não pertence ao seu ramo/seção.')
+        setReceita(null)
+        setLoading(false)
+        return
       }
 
       const saldo = Number(row.receita_saldo ?? 0)
@@ -117,11 +151,15 @@ export function ReceitaRecebimentoFormPage() {
         receita_saldo: saldo,
         receita_situacao: row.receita_situacao,
         receita_vencimento: row.receita_vencimento,
+        receita_ramo: row.receita_ramo,
+        receita_secao: row.receita_secao,
         associado_nome: row.associados?.nome ?? null,
       })
+      setAtividadeId(row.atividade_id?.toString() ?? '')
       setValorPago(saldo > 0 ? String(saldo) : '')
       setTipos((t.data as TipoPagamento[]) ?? [])
       setHistorico((h.data as unknown as PagamentoRow[]) ?? [])
+      setAtividades(ativ.data)
       setError(null)
       setLoading(false)
     })()
@@ -129,7 +167,19 @@ export function ReceitaRecebimentoFormPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, id])
+  }, [empresaId, id, scope])
+
+  const atividadesFiltradas = useMemo(() => {
+    if (!receita) return atividades
+    let list = atividades
+    if (receita.receita_ramo != null) {
+      list = list.filter((a) => a.ramo === receita.receita_ramo)
+    }
+    if (receita.receita_secao != null) {
+      list = list.filter((a) => a.secao === receita.receita_secao)
+    }
+    return list
+  }, [atividades, receita])
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
@@ -176,6 +226,7 @@ export function ReceitaRecebimentoFormPage() {
       .update({
         receita_saldo: newSaldo,
         receita_situacao: situacaoFromSaldo(receita.receita_valor, newSaldo),
+        atividade_id: atividadeId ? Number(atividadeId) : null,
       })
       .eq('receita_id', receita.receita_id)
       .eq('empresa_id', empresaId)
@@ -261,6 +312,28 @@ export function ReceitaRecebimentoFormPage() {
               {formatMoney(receita.receita_saldo)}
             </p>
           </div>
+          <div className="field field-span-2">
+            <label>Atividade</label>
+            <p className="muted" style={{ margin: 0 }}>
+              {atividadeId
+                ? atividadeLabel(
+                    atividadesFiltradas.find(
+                      (a) => a.atividade_id === Number(atividadeId),
+                    ) ??
+                      atividades.find(
+                        (a) => a.atividade_id === Number(atividadeId),
+                      ) ?? {
+                        atividade_id: Number(atividadeId),
+                        descricao: `Atividade #${atividadeId}`,
+                        local: null,
+                        ramo: null,
+                        secao: null,
+                        valor: 0,
+                      },
+                  )
+                : '—'}
+            </p>
+          </div>
         </div>
       </section>
 
@@ -273,6 +346,23 @@ export function ReceitaRecebimentoFormPage() {
           ) : null}
 
           <div className="form-grid">
+            <div className="field field-span-2">
+              <label htmlFor="atividade_id">Atividade</label>
+              <select
+                id="atividade_id"
+                className="select"
+                value={atividadeId}
+                onChange={(e) => setAtividadeId(e.target.value)}
+                disabled={disabled}
+              >
+                <option value="">Nenhuma</option>
+                {atividadesFiltradas.map((a) => (
+                  <option key={a.atividade_id} value={a.atividade_id}>
+                    {atividadeLabel(a)}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="field">
               <label htmlFor="valorPago">Valor recebido</label>
               <input

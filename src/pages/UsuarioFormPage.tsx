@@ -25,6 +25,7 @@ type Lookup = { id: number; nome: string; ramo: number | null }
 const emptyForm = {
   nome: '',
   email: '',
+  registro: '',
   password: '',
   passwordConfirm: '',
   role: 'escotista' as AppRole,
@@ -99,7 +100,7 @@ export function UsuarioFormPage() {
       const { data, error: loadError } = await supabase
         .from('profiles')
         .select(
-          'id, nome, email, username, role, ativo, codigo_ramo, codigo_secao',
+          'id, nome, email, username, registro, role, ativo, codigo_ramo, codigo_secao',
         )
         .eq('id', id)
         .eq('empresa_id', empresaId)
@@ -114,7 +115,11 @@ export function UsuarioFormPage() {
 
       setForm({
         nome: data.nome ?? '',
-        email: data.email || data.username || '',
+        email:
+          data.email?.endsWith('@usuarios.local')
+            ? ''
+            : data.email || data.username || '',
+        registro: data.registro ?? '',
         password: '',
         passwordConfirm: '',
         role: normalizeRole(data.role as string),
@@ -154,9 +159,10 @@ export function UsuarioFormPage() {
 
     if (isNew) {
       const email = form.email.trim().toLowerCase()
-      if (!email) {
+      const registro = form.registro.replace(/\D/g, '')
+      if (!email && !registro) {
         setSaving(false)
-        setError('Informe o e-mail de acesso.')
+        setError('Informe o e-mail ou o número de registro.')
         return
       }
       if (form.password.length < 6) {
@@ -172,7 +178,8 @@ export function UsuarioFormPage() {
 
       const result = await createUsuario({
         nome: form.nome.trim(),
-        email,
+        email: email || undefined,
+        registro: registro || null,
         password: form.password,
         role: form.role,
         ativo: form.ativo,
@@ -192,11 +199,14 @@ export function UsuarioFormPage() {
       return
     }
 
+    const registro = form.registro.replace(/\D/g, '') || null
     const { error: updateError } = await supabase
       .from('profiles')
       .update({
         nome: form.nome.trim(),
         email: form.email.trim().toLowerCase() || null,
+        registro,
+        username: registro || form.email.trim().toLowerCase().split('@')[0] || null,
         role: form.role,
         tipo: roleToTipo(form.role),
         ativo: form.ativo,
@@ -304,7 +314,7 @@ export function UsuarioFormPage() {
             />
           </div>
 
-          <div className="field field-span-2">
+          <div className="field">
             <label htmlFor="email">E-mail de acesso</label>
             <input
               id="email"
@@ -316,13 +326,40 @@ export function UsuarioFormPage() {
                 setForm((prev) => ({ ...prev, email: e.target.value }))
               }
               disabled={disabled || !isNew}
-              required={isNew}
+              required={isNew && !form.registro.trim()}
             />
             {!isNew ? (
               <span className="field-hint">
                 O e-mail de login não pode ser alterado por esta tela.
               </span>
-            ) : null}
+            ) : (
+              <span className="field-hint">
+                Opcional se informar o nº de registro.
+              </span>
+            )}
+          </div>
+
+          <div className="field">
+            <label htmlFor="registro">Nº de registro</label>
+            <input
+              id="registro"
+              className="input"
+              inputMode="numeric"
+              autoComplete="off"
+              value={form.registro}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  registro: e.target.value.replace(/\D/g, '').slice(0, 20),
+                }))
+              }
+              disabled={disabled}
+              required={isNew && !form.email.trim()}
+              placeholder="Ex.: 12345"
+            />
+            <span className="field-hint">
+              Pode ser usado no login no lugar do e-mail.
+            </span>
           </div>
 
           {isNew ? (
@@ -355,6 +392,9 @@ export function UsuarioFormPage() {
                     {showPassword ? 'Ocultar' : 'Mostrar'}
                   </button>
                 </div>
+                <span className="field-hint">
+                  Use esta senha no login com o e-mail ou o nº de registro.
+                </span>
               </div>
               <div className="field">
                 <label htmlFor="passwordConfirm">Confirmar senha</label>
@@ -401,7 +441,7 @@ export function UsuarioFormPage() {
           </div>
 
           <div className="field">
-            <label htmlFor="codigo_ramo">Ramo (opcional)</label>
+            <label htmlFor="codigo_ramo">Ramo (caixa no portal)</label>
             <select
               id="codigo_ramo"
               className="select"
@@ -415,13 +455,19 @@ export function UsuarioFormPage() {
               }
               disabled={disabled}
             >
-              <option value="">Todos / nenhum</option>
-              {ramos.map((ramo) => (
-                <option key={ramo.ramo_id} value={ramo.ramo_id}>
-                  {ramo.nome}
-                </option>
-              ))}
+              <option value="">Grupo inteiro (vê todos os caixas)</option>
+              {ramos
+                .filter((ramo) => ramo.ramo_id >= 1 && ramo.ramo_id <= 4)
+                .map((ramo) => (
+                  <option key={ramo.ramo_id} value={ramo.ramo_id}>
+                    {ramo.nome}
+                  </option>
+                ))}
             </select>
+            <span className="field-hint">
+              Com ramo definido, o portal mostra só o caixa do grupo e o deste
+              ramo.
+            </span>
           </div>
 
           <div className="field">

@@ -28,6 +28,7 @@ const emptyForm = {
   email: '',
   telefone: '',
   ativo: true,
+  portal_transparencia: true,
   logo_url: '' as string | null,
   adminNome: '',
   adminEmail: '',
@@ -60,7 +61,9 @@ export function GrupoFormPage() {
     void (async () => {
       const { data, error: loadError } = await supabase
         .from('empresa')
-        .select('id, nome, cnpj, email, slug, telefone, logo_url, ativo')
+        .select(
+          'id, nome, cnpj, email, slug, telefone, logo_url, ativo, portal_transparencia',
+        )
         .eq('id', Number(id))
         .maybeSingle()
 
@@ -79,6 +82,7 @@ export function GrupoFormPage() {
         email: data.email ?? '',
         telefone: data.telefone ?? '',
         ativo: data.ativo !== false,
+        portal_transparencia: data.portal_transparencia !== false,
         logo_url: data.logo_url,
       })
       setSlugManual(true)
@@ -164,6 +168,7 @@ export function GrupoFormPage() {
           email: form.email,
           telefone: form.telefone,
           ativo: form.ativo,
+          portal_transparencia: form.portal_transparencia,
         },
         admin: {
           nome: adminNome,
@@ -205,6 +210,7 @@ export function GrupoFormPage() {
         email: form.email.trim() || null,
         telefone: form.telefone.trim() || null,
         ativo: form.ativo,
+        portal_transparencia: form.portal_transparencia,
       })
       .eq('id', Number(id))
 
@@ -433,6 +439,40 @@ export function GrupoFormPage() {
           />
           Grupo ativo
         </label>
+
+        <label
+          style={{
+            display: 'inline-flex',
+            gap: '0.5rem',
+            alignItems: 'center',
+            margin: '0 0 1rem',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={form.portal_transparencia}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                portal_transparencia: e.target.checked,
+              }))
+            }
+            disabled={disabled}
+          />
+          Portal da transparência público
+        </label>
+        {!isNew && form.slug && form.portal_transparencia ? (
+          <p className="field-hint" style={{ marginTop: '-0.5rem' }}>
+            Link público:{' '}
+            <a
+              href={`/transparencia/${form.slug}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              /transparencia/{form.slug}
+            </a>
+          </p>
+        ) : null}
 
         <div className="field">
           <label htmlFor="grupo-logo">Logo do grupo</label>

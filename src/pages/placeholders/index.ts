@@ -4,4 +4,4 @@ export {
   EntradaEstoquePage,
 } from './EstoquePlaceholders'
 
-export { EventosPage, VendasPage, ProjetosPage } from './OutrosPlaceholders'
+export { AtividadesPage, EventosPage, VendasPage, ProjetosPage } from './OutrosPlaceholders'

@@ -191,7 +191,9 @@ export function AssociadosPage() {
     const confirmed = await toast.confirm({
       title: 'Importar Excel?',
       message:
-        'Deseja importar os associados deste arquivo?\n\nRegistros já existentes neste grupo serão atualizados.',
+        'Deseja importar os associados deste arquivo?\n\n' +
+        'Registros já existentes neste grupo serão atualizados.\n' +
+        'Também serão criados logins (nº registro / senha = data de nascimento sem barras).',
       confirmLabel: 'Sim, importar',
       cancelLabel: 'Não',
     })
@@ -212,15 +214,29 @@ export function AssociadosPage() {
       )
       setImportResult(result)
       setReloadToken((n) => n + 1)
-      if (result.failed.length === 0) {
+      const extra = [
+        result.createdLookups > 0
+          ? `${result.createdLookups} cadastro(s) auxiliar(es)`
+          : '',
+        result.createdUsers > 0
+          ? `${result.createdUsers} usuário(s) criado(s)`
+          : '',
+        result.usersFailed > 0
+          ? `${result.usersFailed} login(s) com falha`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(', ')
+      const extraMsg = extra ? ` ${extra}.` : ''
+      if (result.failed.length === 0 && result.usersFailed === 0) {
         toast.success(
           'Importação concluída',
-          `${result.inserted} novo(s) e ${result.updated} atualizado(s).`,
+          `${result.inserted} novo(s) e ${result.updated} atualizado(s).${extraMsg}`,
         )
       } else {
         toast.error(
           'Importação com pendências',
-          `${result.failed.length} linha(s) não importada(s).`,
+          `${result.failed.length} linha(s) / ${result.usersFailed} login(s) com falha.${extraMsg}`,
         )
       }
     } catch (err) {
@@ -378,17 +394,42 @@ export function AssociadosPage() {
 
         {importResult ? (
           <AlertMessage
-            tone={importResult.failed.length ? 'error' : 'success'}
+            tone={
+              importResult.failed.length || importResult.usersFailed
+                ? 'error'
+                : 'success'
+            }
             title="Importação concluída"
           >
             <p>
               {importResult.inserted} novo(s), {importResult.updated}{' '}
               atualizado(s)
+              {importResult.createdLookups
+                ? `, ${importResult.createdLookups} cadastro(s) auxiliar(es) criado(s)`
+                : ''}
+              {importResult.createdUsers
+                ? `, ${importResult.createdUsers} usuário(s) criado(s)`
+                : ''}
+              {importResult.usersSkipped
+                ? `, ${importResult.usersSkipped} login(s) já existente(s)/sem data`
+                : ''}
+              {importResult.usersFailed
+                ? `, ${importResult.usersFailed} login(s) com falha`
+                : ''}
               {importResult.failed.length
                 ? `, ${importResult.failed.length} com erro`
                 : ''}{' '}
               (de {importResult.total} linha(s)).
             </p>
+            {importResult.userErrors.length ? (
+              <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.1rem' }}>
+                {importResult.userErrors.map((item) => (
+                  <li key={`user-${item.nome}-${item.motivo}`}>
+                    Login {item.nome}: {item.motivo}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             {importResult.failed.length ? (
               <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.1rem' }}>
                 {importResult.failed.slice(0, 20).map((item) => (

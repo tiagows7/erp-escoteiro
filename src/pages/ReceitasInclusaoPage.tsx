@@ -12,6 +12,10 @@ import {
   situacaoTituloLabel,
   TITULO_SITUACAO,
 } from '@/lib/receitas'
+import {
+  applyReceitaScope,
+  resolveFinanceiroScope,
+} from '@/lib/financeiroScope'
 
 type ReceitaRow = {
   receita_id: number
@@ -25,6 +29,7 @@ type ReceitaRow = {
   receita_situacao: number | null
   receita_ramo: number | null
   associados: { nome: string | null } | null
+  atividades: { descricao: string | null } | null
 }
 
 type Lookup = { id: number; nome: string }
@@ -42,9 +47,10 @@ function origemLabel(origem: string | null) {
 }
 
 export function ReceitasInclusaoPage() {
-  const { empresa, hasPermission } = useAuth()
+  const { empresa, profile, hasPermission } = useAuth()
   const canWrite = hasPermission('financeiro.write')
   const empresaId = empresa?.id
+  const scope = useMemo(() => resolveFinanceiroScope(profile), [profile])
   const flashTick = useFlashSuccess()
 
   const [rows, setRows] = useState<ReceitaRow[]>([])
@@ -85,13 +91,16 @@ export function ReceitasInclusaoPage() {
       let query = supabase
         .from('receitas')
         .select(
-          'receita_id, receita_descricao, receita_origem, receita_emissao, receita_vencimento, receita_competencia, receita_valor, receita_saldo, receita_situacao, receita_ramo, associados(nome)',
+          'receita_id, receita_descricao, receita_origem, receita_emissao, receita_vencimento, receita_competencia, receita_valor, receita_saldo, receita_situacao, receita_ramo, associados(nome), atividades(descricao)',
         )
         .eq('empresa_id', empresaId)
         .order('receita_vencimento', { ascending: false })
         .limit(500)
 
-      if (filtroRamo) query = query.eq('receita_ramo', Number(filtroRamo))
+      query = applyReceitaScope(query, scope)
+      if (!scope && filtroRamo) {
+        query = query.eq('receita_ramo', Number(filtroRamo))
+      }
       if (filtroSituacao === 'abertos') {
         query = query.in('receita_situacao', [
           TITULO_SITUACAO.ABERTO,
@@ -118,7 +127,7 @@ export function ReceitasInclusaoPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, filtroRamo, filtroSituacao, flashTick])
+  }, [empresaId, filtroRamo, filtroSituacao, flashTick, scope])
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
@@ -126,6 +135,7 @@ export function ReceitasInclusaoPage() {
     return rows.filter(
       (r) =>
         (r.receita_descricao ?? '').toLowerCase().includes(term) ||
+        (r.atividades?.descricao ?? '').toLowerCase().includes(term) ||
         (r.associados?.nome ?? '').toLowerCase().includes(term),
     )
   }, [rows, q])
@@ -147,6 +157,7 @@ export function ReceitasInclusaoPage() {
           <h2>Inclusão de Receitas</h2>
           <p>
             Lançamentos do grupo <strong>{empresa?.nome}</strong>
+            {scope ? ' — somente seu ramo/seção' : ''}
           </p>
         </div>
         {canWrite ? (
@@ -168,18 +179,20 @@ export function ReceitasInclusaoPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
-          <select
-            className="select"
-            value={filtroRamo}
-            onChange={(e) => setFiltroRamo(e.target.value)}
-          >
-            <option value="">Todos os ramos</option>
-            {ramos.map((ramo) => (
-              <option key={ramo.id} value={ramo.id}>
-                {ramo.nome}
-              </option>
-            ))}
-          </select>
+          {!scope ? (
+            <select
+              className="select"
+              value={filtroRamo}
+              onChange={(e) => setFiltroRamo(e.target.value)}
+            >
+              <option value="">Todos os ramos</option>
+              {ramos.map((ramo) => (
+                <option key={ramo.id} value={ramo.id}>
+                  {ramo.nome}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <select
             className="select"
             value={filtroSituacao}
@@ -219,6 +232,7 @@ export function ReceitasInclusaoPage() {
                   <th></th>
                   <th>Vencimento</th>
                   <th>Descrição</th>
+                  <th>Atividade</th>
                   <th>Associado</th>
                   <th>Origem</th>
                   <th>Competência</th>
@@ -240,6 +254,7 @@ export function ReceitasInclusaoPage() {
                     </td>
                     <td>{formatDate(row.receita_vencimento)}</td>
                     <td>{row.receita_descricao || '—'}</td>
+                    <td>{row.atividades?.descricao || '—'}</td>
                     <td>{row.associados?.nome || '—'}</td>
                     <td>{origemLabel(row.receita_origem)}</td>
                     <td>{formatCompetencia(row.receita_competencia)}</td>
