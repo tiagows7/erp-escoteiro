@@ -625,6 +625,28 @@ button {
   gap: 0.55rem;
 }
 
+.receitas-receber-resumo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.35rem;
+}
+
+.associado-mensalidade-resumo.is-vencidas {
+  background: linear-gradient(160deg, #fff 0%, #fdf2f2 100%);
+  border-color: #e8c5c5;
+}
+
+.associado-mensalidade-resumo.is-vencidas strong {
+  color: var(--danger);
+}
+
+@media (max-width: 700px) {
+  .receitas-receber-resumo-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .associado-mensalidades-lista {
   display: grid;
   gap: 0.75rem;
@@ -1371,6 +1393,11 @@ table.data tbody tr:hover {
   color: var(--forest);
   font-size: 0.78rem;
   font-weight: 600;
+}
+
+.badge-danger {
+  background: #fde8e8;
+  color: var(--danger);
 }
 
 .badge-construction {

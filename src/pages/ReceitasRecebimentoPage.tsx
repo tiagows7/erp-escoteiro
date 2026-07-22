@@ -36,6 +36,94 @@ function formatDate(value: string | null) {
   return `${d}/${m}/${y}`
 }
 
+function todayISO(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function matchesBusca(row: ReceitaRow, term: string): boolean {
+  if (!term) return true
+  return (
+    (row.receita_descricao ?? '').toLowerCase().includes(term) ||
+    (row.atividades?.descricao ?? '').toLowerCase().includes(term) ||
+    (row.associados?.nome ?? '').toLowerCase().includes(term)
+  )
+}
+
+function totalSaldo(rows: ReceitaRow[]): number {
+  return rows.reduce((sum, r) => sum + Number(r.receita_saldo ?? 0), 0)
+}
+
+type TabelaProps = {
+  rows: ReceitaRow[]
+  canWrite: boolean
+  emptyMessage: string
+}
+
+function ReceitasTabela({ rows, canWrite, emptyMessage }: TabelaProps) {
+  if (rows.length === 0) {
+    return <div className="empty">{emptyMessage}</div>
+  }
+
+  return (
+    <div className="table-wrap">
+      <table className="data">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Vencimento</th>
+            <th>Descrição</th>
+            <th>Atividade</th>
+            <th>Associado</th>
+            <th>Origem</th>
+            <th>Competência</th>
+            <th>Saldo</th>
+            <th>Situação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.receita_id}>
+              <td>
+                {canWrite ? (
+                  <Link
+                    className="btn btn-primary"
+                    to={`/receitas/recebimento/${row.receita_id}`}
+                  >
+                    Receber
+                  </Link>
+                ) : (
+                  <Link
+                    className="btn btn-soft"
+                    to={`/receitas/inclusao/${row.receita_id}`}
+                  >
+                    Abrir
+                  </Link>
+                )}
+              </td>
+              <td>{formatDate(row.receita_vencimento)}</td>
+              <td>{row.receita_descricao || '—'}</td>
+              <td>{row.atividades?.descricao || '—'}</td>
+              <td>{row.associados?.nome || '—'}</td>
+              <td>
+                {row.receita_origem === RECEITA_ORIGEM.MENSALIDADE
+                  ? 'Mensalidade'
+                  : 'Avulsa'}
+              </td>
+              <td>{formatCompetencia(row.receita_competencia)}</td>
+              <td>{formatMoney(row.receita_saldo)}</td>
+              <td>{situacaoTituloLabel(row.receita_situacao)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export function ReceitasRecebimentoPage() {
   const { empresa, profile, hasPermission } = useAuth()
   const canWrite = hasPermission('financeiro.write')
@@ -92,21 +180,28 @@ export function ReceitasRecebimentoPage() {
     }
   }, [empresaId, flashTick, scope])
 
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase()
-    if (!term) return rows
-    return rows.filter(
-      (r) =>
-        (r.receita_descricao ?? '').toLowerCase().includes(term) ||
-        (r.atividades?.descricao ?? '').toLowerCase().includes(term) ||
-        (r.associados?.nome ?? '').toLowerCase().includes(term),
-    )
-  }, [rows, q])
+  const hoje = todayISO()
 
-  const totalSaldo = filtered.reduce(
-    (sum, r) => sum + Number(r.receita_saldo ?? 0),
-    0,
-  )
+  const { aVencer, vencidas } = useMemo(() => {
+    const term = q.trim().toLowerCase()
+    const filtradas = rows.filter((r) => matchesBusca(r, term))
+    const aVencerList: ReceitaRow[] = []
+    const vencidasList: ReceitaRow[] = []
+
+    for (const row of filtradas) {
+      const venc = row.receita_vencimento?.slice(0, 10) ?? null
+      if (venc && venc < hoje) {
+        vencidasList.push(row)
+      } else {
+        aVencerList.push(row)
+      }
+    }
+
+    return { aVencer: aVencerList, vencidas: vencidasList }
+  }, [rows, q, hoje])
+
+  const totalAVencer = totalSaldo(aVencer)
+  const totalVencidas = totalSaldo(vencidas)
 
   if (!empresaId) {
     return (
@@ -122,13 +217,12 @@ export function ReceitasRecebimentoPage() {
     <>
       <header className="page-header">
         <div>
-          <h2>Recebimento</h2>
+          <h2>Contas a receber</h2>
           <p>
             Baixa de receitas em aberto — <strong>{empresa?.nome}</strong>
             {scope ? ' — somente seu ramo/seção' : ''}
           </p>
         </div>
-        <div className="badge">{formatMoney(totalSaldo)} em aberto</div>
       </header>
 
       <section className="panel">
@@ -147,71 +241,73 @@ export function ReceitasRecebimentoPage() {
           </AlertMessage>
         ) : null}
 
-        <p className="field-hint" style={{ marginBottom: '0.75rem' }}>
-          {loading
-            ? 'Carregando…'
-            : `${filtered.length} receita(s) em aberto`}
-        </p>
-
         {loading ? (
           <div className="loading">Carregando receitas…</div>
-        ) : filtered.length === 0 ? (
-          <div className="empty">Nenhuma receita em aberto.</div>
         ) : (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>Vencimento</th>
-                  <th>Descrição</th>
-                  <th>Atividade</th>
-                  <th>Associado</th>
-                  <th>Origem</th>
-                  <th>Competência</th>
-                  <th>Saldo</th>
-                  <th>Situação</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row) => (
-                  <tr key={row.receita_id}>
-                    <td>
-                      {canWrite ? (
-                        <Link
-                          className="btn btn-primary"
-                          to={`/receitas/recebimento/${row.receita_id}`}
-                        >
-                          Receber
-                        </Link>
-                      ) : (
-                        <Link
-                          className="btn btn-soft"
-                          to={`/receitas/inclusao/${row.receita_id}`}
-                        >
-                          Abrir
-                        </Link>
-                      )}
-                    </td>
-                    <td>{formatDate(row.receita_vencimento)}</td>
-                    <td>{row.receita_descricao || '—'}</td>
-                    <td>{row.atividades?.descricao || '—'}</td>
-                    <td>{row.associados?.nome || '—'}</td>
-                    <td>
-                      {row.receita_origem === RECEITA_ORIGEM.MENSALIDADE
-                        ? 'Mensalidade'
-                        : 'Avulsa'}
-                    </td>
-                    <td>{formatCompetencia(row.receita_competencia)}</td>
-                    <td>{formatMoney(row.receita_saldo)}</td>
-                    <td>{situacaoTituloLabel(row.receita_situacao)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="receitas-receber-resumo-grid">
+            <article className="associado-mensalidade-resumo">
+              <div>
+                <span>A vencer / no prazo</span>
+                <strong>{aVencer.length}</strong>
+                <p className="muted">Total {formatMoney(totalAVencer)}</p>
+              </div>
+            </article>
+            <article className="associado-mensalidade-resumo is-vencidas">
+              <div>
+                <span>Vencidas</span>
+                <strong>{vencidas.length}</strong>
+                <p className="muted">Total {formatMoney(totalVencidas)}</p>
+              </div>
+            </article>
           </div>
         )}
       </section>
+
+      {!loading && !error ? (
+        <>
+          <section className="panel">
+            <div className="passagem-header">
+              <div>
+                <h3>Contas a receber</h3>
+                <p className="muted">
+                  Títulos em aberto com vencimento hoje ou futuro.
+                </p>
+              </div>
+              <div className="badge">{formatMoney(totalAVencer)}</div>
+            </div>
+            <p className="field-hint" style={{ marginBottom: '0.75rem' }}>
+              {aVencer.length} receita(s) no prazo
+            </p>
+            <ReceitasTabela
+              rows={aVencer}
+              canWrite={canWrite}
+              emptyMessage="Nenhuma conta a receber no prazo."
+            />
+          </section>
+
+          <section className="panel">
+            <div className="passagem-header">
+              <div>
+                <h3>Contas a receber vencidas</h3>
+                <p className="muted">
+                  Títulos em aberto com vencimento anterior a hoje.
+                </p>
+              </div>
+              <div className="badge badge-danger">
+                {formatMoney(totalVencidas)}
+              </div>
+            </div>
+            <p className="field-hint" style={{ marginBottom: '0.75rem' }}>
+              {vencidas.length} receita(s) vencida(s)
+            </p>
+            <ReceitasTabela
+              rows={vencidas}
+              canWrite={canWrite}
+              emptyMessage="Nenhuma conta a receber vencida."
+            />
+          </section>
+        </>
+      ) : null}
     </>
   )
 }

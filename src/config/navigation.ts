@@ -162,7 +162,7 @@ export const NAV_ITEMS: NavItem[] = [
       {
         type: 'link',
         to: '/receitas/recebimento',
-        label: 'Recebimento',
+        label: 'Contas a receber',
         permission: 'financeiro.view',
       },
     ],
