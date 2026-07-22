@@ -9,6 +9,7 @@ import { formatMoney } from '@/lib/despesas'
 import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
 import {
   atividadeVisivelPara,
+  filtroAtividadesRamoOuGrupo,
   type AssociadoAtividadeCtx,
 } from '@/lib/atividadeVisibilidade'
 import type { Atividade, Ramo } from '@/types/database'
@@ -88,11 +89,11 @@ export function AtividadesPage() {
           .order('created_at', { ascending: false })
 
         if (associadoLogin && assocCtx?.ramo != null) {
-          query = query.eq('ramo', assocCtx.ramo)
+          query = query.or(filtroAtividadesRamoOuGrupo(assocCtx.ramo))
         } else if (ramoScoped != null) {
-          query = query.eq('ramo', ramoScoped)
+          query = query.or(filtroAtividadesRamoOuGrupo(ramoScoped))
         } else if (filtroRamo) {
-          query = query.eq('ramo', Number(filtroRamo))
+          query = query.or(filtroAtividadesRamoOuGrupo(Number(filtroRamo)))
         }
 
         const [ramosRes, secoesRes, patrulhasRes, listRes] = await Promise.all([
@@ -182,7 +183,9 @@ export function AtividadesPage() {
             {associadoLogin
               ? 'Atividades do seu ramo/seção — consulte as contas'
               : 'Programação por ramo, seção e patrulha/matilha'}
-            {!associadoLogin && ramoScoped != null ? ' — somente seu ramo' : ''}
+            {!associadoLogin && ramoScoped != null
+              ? ' — seu ramo e atividades do grupo'
+              : ''}
           </p>
         </div>
         {canWrite && !associadoLogin ? (
@@ -273,7 +276,11 @@ export function AtividadesPage() {
                       </div>
                     </td>
                     <td>{row.descricao}</td>
-                    <td>{(row.ramo && ramoMap.get(row.ramo)) || '—'}</td>
+                    <td>
+                      {row.ramo == null && row.secao == null
+                        ? 'Grupo todo'
+                        : (row.ramo && ramoMap.get(row.ramo)) || '—'}
+                    </td>
                     <td>{(row.secao && secaoMap.get(row.secao)) || '—'}</td>
                     <td>
                       {(row.patrulha_matilha &&

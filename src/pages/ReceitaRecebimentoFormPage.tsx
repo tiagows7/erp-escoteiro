@@ -121,7 +121,7 @@ export function ReceitaRecebimentoFormPage() {
         return
       }
 
-      const row = d.data as {
+      const row = d.data as unknown as {
         receita_id: number
         receita_descricao: string | null
         receita_valor: number | null

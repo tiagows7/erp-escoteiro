@@ -33,8 +33,13 @@ export async function loadAtividadesLookup(
 
   const ramo = opts?.scope?.ramo ?? opts?.ramo ?? null
   const secao = opts?.scope?.secao ?? opts?.secao ?? null
-  if (ramo != null) query = query.eq('ramo', ramo)
-  if (secao != null) query = query.eq('secao', secao)
+  if (ramo != null) {
+    // Inclui atividades do grupo todo (sem ramo).
+    query = query.or(`ramo.eq.${ramo},ramo.is.null`)
+  }
+  if (secao != null) {
+    query = query.or(`secao.eq.${secao},secao.is.null`)
+  }
 
   const { data, error } = await query
   if (error) return { data: [], error: error.message }

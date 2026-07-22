@@ -7,12 +7,18 @@ import { AlertMessage } from '@/components/AlertMessage'
 import {
   competenciaToDate,
   currentCompetenciaInput,
+  formatCompetencia,
   formatMoney,
   lastDayOfCompetencia,
   RECEITA_ORIGEM,
   TITULO_SITUACAO,
 } from '@/lib/receitas'
 import { isRamoFinanceiroScoped } from '@/lib/roles'
+import {
+  mensagemCobrancaMensalidade,
+  normalizeWhatsAppPhone,
+  openWhatsApp,
+} from '@/lib/whatsapp'
 
 type TipoMensalidade = {
   tipomensalidade_id: number
@@ -23,11 +29,14 @@ type TipoMensalidade = {
 type PreviewRow = {
   associado_id: number
   nome: string
+  registro: number | null
   ramo: number | null
   tipomensalidade_id: number
   tipo_nome: string
   valor: number
   already: boolean
+  celular: string | null
+  responsavel_fonecelular: string | null
 }
 
 export function GeraMensalidadePage() {
@@ -45,6 +54,8 @@ export function GeraMensalidadePage() {
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
+  const [whatsQueue, setWhatsQueue] = useState<PreviewRow[]>([])
+  const [whatsIndex, setWhatsIndex] = useState(0)
 
   useEffect(() => {
     if (!empresaId) return
@@ -80,7 +91,7 @@ export function GeraMensalidadePage() {
     let associadosQuery = supabase
       .from('associados')
       .select(
-        'associado_id, nome, ramo, tipo_mensalidade, isento, ativo',
+        'associado_id, nome, registro, ramo, tipo_mensalidade, isento, ativo, celular, responsavel_fonecelular',
       )
       .eq('empresa_id', empresaId)
       .eq('ativo', true)
@@ -143,11 +154,15 @@ export function GeraMensalidadePage() {
       rows.push({
         associado_id: a.associado_id as number,
         nome: a.nome as string,
+        registro: (a.registro as number | null) ?? null,
         ramo: (a.ramo as number | null) ?? null,
         tipomensalidade_id: tipoId,
         tipo_nome: tipo.nome,
         valor,
         already: existentes.has(a.associado_id as number),
+        celular: (a.celular as string | null) ?? null,
+        responsavel_fonecelular:
+          (a.responsavel_fonecelular as string | null) ?? null,
       })
     }
 
@@ -223,7 +238,71 @@ export function GeraMensalidadePage() {
       'Mensalidades geradas',
       `${inserted} receita(s) criada(s) com sucesso.`,
     )
+
+    const comWhats = aGerar.filter((row) =>
+      normalizeWhatsAppPhone(row.responsavel_fonecelular || row.celular),
+    )
+    if (comWhats.length > 0) {
+      const enviar = await toast.confirm({
+        title: 'Enviar cobrança no WhatsApp?',
+        message: `${comWhats.length} associado(s) com telefone. Deseja abrir o WhatsApp um a um com a mensagem de cobrança?`,
+        confirmLabel: 'Sim, enviar',
+        cancelLabel: 'Agora não',
+      })
+      if (enviar) {
+        setWhatsQueue(comWhats)
+        setWhatsIndex(0)
+      }
+    }
+
     void carregarPreview()
+  }
+
+  function phoneOf(row: PreviewRow): string | null {
+    return row.responsavel_fonecelular || row.celular
+  }
+
+  function mensagemDaLinha(row: PreviewRow): string {
+    const compLabel = formatCompetencia(competenciaToDate(competencia))
+    return mensagemCobrancaMensalidade({
+      nomeGrupo: empresa?.nome,
+      nomeAssociado: row.nome,
+      registro: row.registro,
+      qtd: 1,
+      total: formatMoney(row.valor),
+      detalhes: [
+        `Competência ${compLabel}`,
+        `${row.tipo_nome}: ${formatMoney(row.valor)}`,
+      ],
+    })
+  }
+
+  function enviarWhatsLinha(row: PreviewRow) {
+    const phone = phoneOf(row)
+    if (!normalizeWhatsAppPhone(phone)) {
+      toast.error(
+        'Sem telefone',
+        'Cadastre o celular do associado ou do responsável.',
+      )
+      return
+    }
+    openWhatsApp({ phone, text: mensagemDaLinha(row) })
+  }
+
+  function enviarWhatsAtual() {
+    const row = whatsQueue[whatsIndex]
+    if (!row) return
+    openWhatsApp({ phone: phoneOf(row), text: mensagemDaLinha(row) })
+  }
+
+  function avancarWhatsQueue() {
+    if (whatsIndex + 1 >= whatsQueue.length) {
+      setWhatsQueue([])
+      setWhatsIndex(0)
+      toast.success('WhatsApp', 'Fila de envios concluída.')
+      return
+    }
+    setWhatsIndex((prev) => prev + 1)
   }
 
   if (ramoScoped) {
@@ -260,6 +339,59 @@ export function GeraMensalidadePage() {
           </p>
         </div>
       </header>
+
+      {whatsQueue.length > 0 ? (
+        <section className="panel gera-whats-panel">
+          <div className="passagem-header">
+            <div>
+              <h3>Cobrança no WhatsApp</h3>
+              <p className="muted">
+                {whatsIndex + 1} de {whatsQueue.length} — abra o WhatsApp, envie
+                a mensagem e avance para o próximo.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-soft"
+              onClick={() => {
+                setWhatsQueue([])
+                setWhatsIndex(0)
+              }}
+            >
+              Encerrar fila
+            </button>
+          </div>
+          <article className="associado-mensalidade-item">
+            <div>
+              <h4>{whatsQueue[whatsIndex]?.nome}</h4>
+              <p className="muted">
+                Reg. {whatsQueue[whatsIndex]?.registro ?? '—'} ·{' '}
+                {whatsQueue[whatsIndex]?.tipo_nome} ·{' '}
+                {formatMoney(whatsQueue[whatsIndex]?.valor)}
+              </p>
+              <p className="muted">
+                Tel. {phoneOf(whatsQueue[whatsIndex]!) || '—'}
+              </p>
+            </div>
+            <div className="associado-mensalidade-resumo-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => enviarWhatsAtual()}
+              >
+                Abrir WhatsApp
+              </button>
+              <button
+                type="button"
+                className="btn btn-soft"
+                onClick={() => avancarWhatsQueue()}
+              >
+                {whatsIndex + 1 >= whatsQueue.length ? 'Concluir' : 'Próximo'}
+              </button>
+            </div>
+          </article>
+        </section>
+      ) : null}
 
       <form className="panel" onSubmit={(e) => void onGerar(e)}>
         {error ? (
@@ -342,6 +474,7 @@ export function GeraMensalidadePage() {
                     <th>Tipo</th>
                     <th>Valor</th>
                     <th>Status</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -355,6 +488,20 @@ export function GeraMensalidadePage() {
                           <span className="badge">Já gerada</span>
                         ) : (
                           <span className="badge">Nova</span>
+                        )}
+                      </td>
+                      <td>
+                        {normalizeWhatsAppPhone(phoneOf(row)) ? (
+                          <button
+                            type="button"
+                            className="btn btn-soft"
+                            disabled={generating}
+                            onClick={() => enviarWhatsLinha(row)}
+                          >
+                            WhatsApp
+                          </button>
+                        ) : (
+                          <span className="muted">—</span>
                         )}
                       </td>
                     </tr>

@@ -6,7 +6,9 @@ import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { AniversarioIllustration } from '@/components/AniversarioIllustration'
 import { AssociadoAtividadesPanel } from '@/components/AssociadoAtividadesPanel'
+import { AssociadoMensalidadesPanel } from '@/components/AssociadoMensalidadesPanel'
 import { StaffAtividadesPanel } from '@/components/StaffAtividadesPanel'
+import { StaffMensalidadesAbertasPanel } from '@/components/StaffMensalidadesAbertasPanel'
 import { isAssociadoLogin } from '@/lib/roles'
 import type {
   DashboardAniversariante,
@@ -350,16 +352,9 @@ export function DashboardPage() {
       ) : null}
 
       {associadoView && empresaId && profile?.registro ? (
-        <AssociadoAtividadesPanel
+        <AssociadoMensalidadesPanel
           empresaId={empresaId}
           registro={profile.registro}
-        />
-      ) : null}
-
-      {!associadoView && empresaId ? (
-        <StaffAtividadesPanel
-          empresaId={empresaId}
-          codigoRamo={profile?.codigo_ramo ?? null}
         />
       ) : null}
 
@@ -393,6 +388,10 @@ export function DashboardPage() {
           </article>
         ))}
       </section>
+      ) : null}
+
+      {!associadoView && empresaId && ramoFiltro == null ? (
+        <StaffMensalidadesAbertasPanel empresaId={empresaId} />
       ) : null}
 
       <section
@@ -486,6 +485,20 @@ export function DashboardPage() {
           </div>
         ) : null}
       </section>
+
+      {associadoView && empresaId && profile?.registro ? (
+        <AssociadoAtividadesPanel
+          empresaId={empresaId}
+          registro={profile.registro}
+        />
+      ) : null}
+
+      {!associadoView && empresaId ? (
+        <StaffAtividadesPanel
+          empresaId={empresaId}
+          codigoRamo={profile?.codigo_ramo ?? null}
+        />
+      ) : null}
 
       {aniversarioOpen ? (
         <div

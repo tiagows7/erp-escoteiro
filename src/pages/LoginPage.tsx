@@ -42,6 +42,10 @@ export function LoginPage() {
     if (saved) setLogin(saved)
   }, [])
 
+  if (loading) {
+    return <div className="loading">Carregando sessão…</div>
+  }
+
   if (!loading && session) {
     return <Navigate to="/" replace />
   }

@@ -126,7 +126,11 @@ export function AtividadeContasPage() {
       }
 
       const ativ = a.data as Atividade
-      if (ramoScoped != null && ativ.ramo !== ramoScoped) {
+      if (
+        ramoScoped != null &&
+        ativ.ramo != null &&
+        ativ.ramo !== ramoScoped
+      ) {
         setError('Esta atividade não pertence ao seu ramo.')
         setAtividade(null)
         setReceitas([])

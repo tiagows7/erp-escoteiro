@@ -174,9 +174,10 @@ export function UsuariosPage() {
                     <td>{row.nome}</td>
                     <td>{row.registro || '—'}</td>
                     <td>
-                      {row.email?.endsWith('@usuarios.local')
-                        ? '—'
-                        : row.email || row.username || '—'}
+                      {row.email?.includes('@') &&
+                      !row.email.endsWith('@usuarios.local')
+                        ? row.email
+                        : '—'}
                     </td>
                     <td>{ROLE_LABELS[row.role] ?? row.role}</td>
                     <td>

@@ -1,0 +1,2 @@
+# Webhook do Sicredi não envia JWT do Supabase; a function valida auth no body das ações do app.
+verify_jwt = false

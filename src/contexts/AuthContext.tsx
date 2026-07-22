@@ -105,31 +105,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true
 
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted) return
-      setSession(data.session)
-      setUser(data.session?.user ?? null)
-      if (data.session?.user) {
-        const loaded = await loadProfile(data.session.user.id)
-        if (!mounted) return
-        setProfile(loaded.profile)
-        setEmpresa(loaded.empresa)
+    async function applySession(next: Session | null) {
+      setSession(next)
+      setUser(next?.user ?? null)
+
+      if (!next?.user) {
+        setProfile(null)
+        setEmpresa(null)
+        return
       }
+
+      const loaded = await loadProfile(next.user.id)
+      if (!mounted) return
+      setProfile(loaded.profile)
+      setEmpresa(loaded.empresa)
+    }
+
+    void supabase.auth.getSession().then(async ({ data }) => {
+      if (!mounted) return
+      await applySession(data.session)
+      if (!mounted) return
       setLoading(false)
     })
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
-      setSession(next)
-      setUser(next?.user ?? null)
-      if (next?.user) {
-        void loadProfile(next.user.id).then((loaded) => {
-          setProfile(loaded.profile)
-          setEmpresa(loaded.empresa)
-        })
-      } else {
-        setProfile(null)
-        setEmpresa(null)
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
+      // Refresh de token não precisa bloquear a UI.
+      if (event === 'TOKEN_REFRESHED') {
+        setSession(next)
+        setUser(next?.user ?? null)
+        return
       }
+
+      // Evita flash de "perfil inexistente" entre sessão e carga do profile.
+      setLoading(true)
+      void applySession(next).finally(() => {
+        if (mounted) setLoading(false)
+      })
     })
 
     return () => {

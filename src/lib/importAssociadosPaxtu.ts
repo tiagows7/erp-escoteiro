@@ -198,7 +198,6 @@ type LookupCache = {
 }
 
 async function ensureByNome(
-  client: SupabaseClient,
   cache: LookupCache,
   rawNome: Cell,
   maxLen: number,
@@ -295,7 +294,7 @@ export async function importAssociadosFromPaxtuExcel(
   }
 
   async function resolveCategoria(raw: Cell): Promise<number | null> {
-    return ensureByNome(client, catCache, raw, 50, async (nome) => {
+    return ensureByNome(catCache, raw, 50, async (nome) => {
       const { data, error } = await client
         .from('categoria')
         .insert({ nome })
@@ -307,7 +306,7 @@ export async function importAssociadosFromPaxtuExcel(
   }
 
   async function resolveFuncao(raw: Cell): Promise<number | null> {
-    return ensureByNome(client, funcaoCache, raw, 30, async (nome) => {
+    return ensureByNome(funcaoCache, raw, 30, async (nome) => {
       const { data, error } = await client
         .from('funcao')
         .insert({ nome })
@@ -332,7 +331,7 @@ export async function importAssociadosFromPaxtuExcel(
     raw: Cell,
     ramoId: number | null,
   ): Promise<number | null> {
-    return ensureByNome(client, secaoCache, raw, 80, async (nome) => {
+    return ensureByNome(secaoCache, raw, 80, async (nome) => {
       const { data, error } = await client
         .from('secao')
         .insert({
@@ -352,7 +351,7 @@ export async function importAssociadosFromPaxtuExcel(
     ramoId: number | null,
     secaoId: number | null,
   ): Promise<number | null> {
-    return ensureByNome(client, patrulhaCache, raw, 80, async (nome) => {
+    return ensureByNome(patrulhaCache, raw, 80, async (nome) => {
       const { data, error } = await client
         .from('secao_nome')
         .insert({

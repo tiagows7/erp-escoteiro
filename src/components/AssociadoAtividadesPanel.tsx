@@ -3,14 +3,13 @@ import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/contexts/ToastContext'
 import { formatMoney } from '@/lib/despesas'
-import {
-  registrarPagamentoAtividade,
-  removerPagamentoAtividade,
-} from '@/lib/atividadePagamento'
+import { removerPagamentoAtividade } from '@/lib/atividadePagamento'
 import {
   atividadeVisivelPara,
   type AssociadoAtividadeCtx,
 } from '@/lib/atividadeVisibilidade'
+import { PixSicrediCheckoutModal } from '@/components/PixSicrediCheckoutModal'
+import type { PixCreateInput } from '@/lib/pixSicredi'
 import type { Atividade } from '@/types/database'
 
 type AssociadoCtx = AssociadoAtividadeCtx & {
@@ -36,6 +35,9 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<number | null>(null)
+  const [pixInput, setPixInput] = useState<PixCreateInput | null>(null)
+  const [pixTitle, setPixTitle] = useState('Pagar atividade com PIX Sicredi')
+  const [showLista, setShowLista] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -155,29 +157,22 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
     await load()
   }
 
-  async function confirmarPagamento(item: AtividadeCardItem) {
+  function confirmarPagamento(item: AtividadeCardItem) {
     if (!associado || !item.confirmado || item.pago) return
-    setBusyId(item.atividade_id)
-
-    const result = await registrarPagamentoAtividade({
-      empresaId,
-      associadoId: associado.associado_id,
-      atividade: item,
-    })
-
-    setBusyId(null)
-
-    if (!result.ok) {
-      toast.error('Não foi possível registrar o pagamento', result.error)
+    const valor = Number(item.valor ?? 0)
+    if (!(valor > 0)) {
+      toast.error('Atividade sem valor', 'Não há valor a pagar nesta atividade.')
       return
     }
-    toast.success(
-      'Pagamento registrado',
-      result.receita_id
-        ? 'Conta a receber e recebimento PIX gerados.'
-        : undefined,
-    )
-    await load()
+    setPixTitle(item.descricao)
+    setPixInput({
+      empresaId,
+      tipo: 'atividade',
+      valor,
+      descricao: `Atividade: ${item.descricao}`,
+      associadoId: associado.associado_id,
+      atividadeId: item.atividade_id,
+    })
   }
 
   async function cancelarConfirmacao(item: AtividadeCardItem) {
@@ -228,19 +223,11 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
   }
 
   if (loading) {
-    return (
-      <section className="panel associado-atividades-panel">
-        <div className="loading">Carregando suas atividades…</div>
-      </section>
-    )
+    return null
   }
 
   if (error) {
-    return (
-      <section className="panel associado-atividades-panel">
-        <p className="muted">{error}</p>
-      </section>
-    )
+    return null
   }
 
   if (!associado) {
@@ -248,31 +235,43 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
   }
 
   if (items.length === 0) {
-    return (
-      <section className="panel associado-atividades-panel">
-        <div className="passagem-header">
-          <div>
-            <h3>Minhas atividades</h3>
-            <p className="muted">Nenhuma atividade disponível para você no momento.</p>
-          </div>
-        </div>
-      </section>
-    )
+    return null
   }
 
+  const totalValor = items.reduce((acc, item) => acc + Number(item.valor ?? 0), 0)
+
   return (
+    <>
     <section className="panel associado-atividades-panel">
       <div className="passagem-header">
         <div>
           <h3>Minhas atividades</h3>
           <p className="muted">
-            Confirme a participação e, em seguida, o pagamento.
+            Confirme a participação e pague via PIX Sicredi (baixa após
+            confirmação do banco).
           </p>
         </div>
-        <span className="badge">{items.length} atividade(s)</span>
       </div>
 
-      <div className="associado-atividades-grid">
+      <article className="associado-mensalidade-resumo">
+        <div>
+          <span>Atividades</span>
+          <strong>{items.length}</strong>
+          <p className="muted">Total {formatMoney(totalValor)}</p>
+        </div>
+        <div className="associado-mensalidade-resumo-actions">
+          <button
+            type="button"
+            className="btn btn-soft"
+            onClick={() => setShowLista((prev) => !prev)}
+          >
+            {showLista ? 'Ocultar lista' : 'Ver lista'}
+          </button>
+        </div>
+      </article>
+
+      {showLista ? (
+      <div className="associado-atividades-grid" style={{ marginTop: '0.9rem' }}>
         {items.map((item) => (
           <article key={item.atividade_id} className="associado-atividade-card">
             <h4>{item.descricao}</h4>
@@ -324,11 +323,9 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
                   type="button"
                   className="btn btn-accent"
                   disabled={busyId === item.atividade_id}
-                  onClick={() => void confirmarPagamento(item)}
+                  onClick={() => confirmarPagamento(item)}
                 >
-                  {busyId === item.atividade_id
-                    ? 'Registrando…'
-                    : 'Confirmar pagamento'}
+                  Pagar
                 </button>
               ) : null}
 
@@ -341,6 +338,18 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
           </article>
         ))}
       </div>
+      ) : null}
     </section>
+
+    <PixSicrediCheckoutModal
+      open={!!pixInput}
+      title={pixTitle}
+      input={pixInput}
+      onClose={() => setPixInput(null)}
+      onPaid={() => {
+        void load()
+      }}
+    />
+    </>
   )
 }

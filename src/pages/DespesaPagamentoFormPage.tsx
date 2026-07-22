@@ -121,7 +121,7 @@ export function DespesaPagamentoFormPage() {
         return
       }
 
-      const row = d.data as {
+      const row = d.data as unknown as {
         despesa_id: number
         despesa_finalidade: string | null
         despesa_valor: number | null

@@ -61,6 +61,26 @@ export type Empresa = {
   telefone: string | null
   logo_url: string | null
   ativo: boolean | null
+  sicredi_pix_client_id?: string | null
+  sicredi_pix_client_secret?: string | null
+  sicredi_pix_chave?: string | null
+  sicredi_pix_cert?: string | null
+  sicredi_pix_key?: string | null
+  sicredi_pix_base_url?: string | null
+  sicredi_pix_ativo?: boolean | null
+}
+
+export type EmpresaRamoPixSicredi = {
+  id: number
+  empresa_id: number
+  ramo_id: number
+  sicredi_pix_client_id: string | null
+  sicredi_pix_client_secret: string | null
+  sicredi_pix_chave: string | null
+  sicredi_pix_cert: string | null
+  sicredi_pix_key: string | null
+  sicredi_pix_base_url: string | null
+  sicredi_pix_ativo: boolean
 }
 
 export type Ramo = {

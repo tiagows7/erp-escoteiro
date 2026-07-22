@@ -202,3 +202,31 @@ async function createViaSignUpFallback(
 
   return { ok: true, profile: profile as CreateUsuarioResult['profile'] }
 }
+
+export type UpdateUsuarioSenhaResult = {
+  ok: boolean
+  error?: string
+}
+
+/** Altera a senha de um usuário já existente (via Edge Function com service role). */
+export async function updateUsuarioSenha(
+  userId: string,
+  password: string,
+): Promise<UpdateUsuarioSenhaResult> {
+  const { data, error } = await supabase.functions.invoke(
+    'update-usuario-senha',
+    {
+      body: { user_id: userId, password },
+    },
+  )
+
+  if (error) {
+    const fromBody = await readFunctionsError(error)
+    return { ok: false, error: fromBody || error.message }
+  }
+  if (data?.error) {
+    return { ok: false, error: String(data.error) }
+  }
+
+  return { ok: true }
+}

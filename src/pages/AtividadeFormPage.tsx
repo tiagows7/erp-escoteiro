@@ -134,7 +134,7 @@ export function AtividadeFormPage() {
         return
       }
 
-      if (ramoScoped != null && data.ramo !== ramoScoped) {
+      if (ramoScoped != null && data.ramo != null && data.ramo !== ramoScoped) {
         setError('Esta atividade não pertence ao seu ramo.')
         setLoading(false)
         return
@@ -182,12 +182,8 @@ export function AtividadeFormPage() {
       setError('Grupo escoteiro não carregado.')
       return
     }
-    if (!form.ramo) {
+    if (ramoScoped != null && !form.ramo) {
       setError('Selecione o ramo.')
-      return
-    }
-    if (!form.secao) {
-      setError('Selecione a seção.')
       return
     }
     if (!form.descricao.trim()) {
@@ -198,10 +194,17 @@ export function AtividadeFormPage() {
     setSaving(true)
     setError(null)
 
+    const ramoValue =
+      ramoScoped != null
+        ? ramoScoped
+        : form.ramo
+          ? Number(form.ramo)
+          : null
+
     const payload = {
       empresa_id: empresaId,
-      ramo: ramoScoped ?? Number(form.ramo),
-      secao: Number(form.secao),
+      ramo: ramoValue,
+      secao: form.secao ? Number(form.secao) : null,
       patrulha_matilha: form.patrulha_matilha
         ? Number(form.patrulha_matilha)
         : null,
@@ -320,121 +323,124 @@ export function AtividadeFormPage() {
       ) : null}
 
       <section className="panel">
-        <form className="form-grid" onSubmit={onSubmit}>
-          <div className="field">
-            <label htmlFor="ramo">Ramo</label>
-            <select
-              id="ramo"
-              className="select"
-              value={form.ramo}
-              onChange={(e) => update('ramo', e.target.value)}
-              disabled={!canWrite || ramoScoped != null}
-              required
-            >
-              <option value="">Selecione…</option>
-              {ramos
-                .filter((r) =>
-                  ramoScoped != null
-                    ? r.ramo_id === ramoScoped
-                    : r.ramo_id >= 1 && r.ramo_id <= 5,
-                )
-                .map((r) => (
-                  <option key={r.ramo_id} value={r.ramo_id}>
-                    {r.nome}
-                  </option>
-                ))}
-            </select>
-          </div>
-
-          <div className="field">
-            <label htmlFor="secao">Seção</label>
-            <select
-              id="secao"
-              className="select"
-              value={form.secao}
-              onChange={(e) => update('secao', e.target.value)}
-              disabled={!canWrite || !form.ramo}
-              required
-            >
-              <option value="">
-                {form.ramo ? 'Selecione…' : 'Selecione o ramo primeiro'}
-              </option>
-              {secoesDoRamo.map((s) => (
-                <option key={s.secao_id} value={s.secao_id}>
-                  {s.nome}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {temPatrulha ? (
+        <form onSubmit={onSubmit}>
+          <div className="form-grid form-grid-2">
             <div className="field">
-              <label htmlFor="patrulha_matilha">{labelUnidade}</label>
+              <label htmlFor="ramo">Ramo</label>
               <select
-                id="patrulha_matilha"
+                id="ramo"
                 className="select"
-                value={form.patrulha_matilha}
-                onChange={(e) => update('patrulha_matilha', e.target.value)}
-                disabled={!canWrite || !form.secao}
+                value={form.ramo}
+                onChange={(e) => update('ramo', e.target.value)}
+                disabled={!canWrite || ramoScoped != null}
               >
-                <option value="">Toda a seção (opcional)</option>
-                {patrulhasDaSecao.map((p) => (
-                  <option key={p.secaonome_id} value={p.secaonome_id}>
-                    {p.nome}
+                <option value="">Grupo todo (todos os ramos)</option>
+                {ramos
+                  .filter((r) =>
+                    ramoScoped != null
+                      ? r.ramo_id === ramoScoped
+                      : r.ramo_id >= 1 && r.ramo_id <= 5,
+                  )
+                  .map((r) => (
+                    <option key={r.ramo_id} value={r.ramo_id}>
+                      {r.nome}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="field">
+              <label htmlFor="secao">Seção</label>
+              <select
+                id="secao"
+                className="select"
+                value={form.secao}
+                onChange={(e) => update('secao', e.target.value)}
+                disabled={!canWrite || !form.ramo}
+              >
+                <option value="">
+                  {form.ramo
+                    ? 'Toda a seção / nenhuma'
+                    : 'Grupo todo (sem seção)'}
+                </option>
+                {secoesDoRamo.map((s) => (
+                  <option key={s.secao_id} value={s.secao_id}>
+                    {s.nome}
                   </option>
                 ))}
               </select>
             </div>
-          ) : null}
 
-          <div className="field field-span-2">
-            <label htmlFor="descricao">Descrição da atividade</label>
-            <input
-              id="descricao"
-              className="input"
-              value={form.descricao}
-              onChange={(e) => update('descricao', e.target.value)}
-              disabled={!canWrite}
-              maxLength={200}
-              required
-            />
+            {temPatrulha ? (
+              <div className="field">
+                <label htmlFor="patrulha_matilha">{labelUnidade}</label>
+                <select
+                  id="patrulha_matilha"
+                  className="select"
+                  value={form.patrulha_matilha}
+                  onChange={(e) => update('patrulha_matilha', e.target.value)}
+                  disabled={!canWrite || !form.secao}
+                >
+                  <option value="">Toda a seção (opcional)</option>
+                  {patrulhasDaSecao.map((p) => (
+                    <option key={p.secaonome_id} value={p.secaonome_id}>
+                      {p.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
+            <div className="field field-span-2">
+              <label htmlFor="descricao">Descrição da atividade</label>
+              <input
+                id="descricao"
+                className="input"
+                value={form.descricao}
+                onChange={(e) => update('descricao', e.target.value)}
+                disabled={!canWrite}
+                maxLength={200}
+                required
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="local">Local</label>
+              <input
+                id="local"
+                className="input"
+                value={form.local}
+                onChange={(e) => update('local', e.target.value)}
+                disabled={!canWrite}
+                maxLength={120}
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="valor">Valor da atividade</label>
+              <input
+                id="valor"
+                className="input"
+                inputMode="decimal"
+                value={form.valor}
+                onChange={(e) => update('valor', e.target.value)}
+                disabled={!canWrite}
+              />
+            </div>
           </div>
 
-          <div className="field">
-            <label htmlFor="local">Local</label>
-            <input
-              id="local"
-              className="input"
-              value={form.local}
-              onChange={(e) => update('local', e.target.value)}
-              disabled={!canWrite}
-              maxLength={120}
-            />
-          </div>
-
-          <div className="field">
-            <label htmlFor="valor">Valor da atividade</label>
-            <input
-              id="valor"
-              className="input"
-              inputMode="decimal"
-              value={form.valor}
-              onChange={(e) => update('valor', e.target.value)}
-              disabled={!canWrite}
-            />
-          </div>
-
-          {canWrite ? (
-            <div className="form-actions field-span-2">
+          <div className="form-actions">
+            {canWrite ? (
               <button type="submit" className="btn btn-primary" disabled={saving}>
                 {saving ? 'Salvando…' : 'Salvar'}
               </button>
-            </div>
-          ) : (
-            <p className="muted field-span-2">
-              Modo leitura — sem permissão para salvar.
-            </p>
-          )}
+            ) : (
+              <p className="muted">Modo leitura — sem permissão para salvar.</p>
+            )}
+            <Link className="btn btn-soft" to="/atividades">
+              Cancelar
+            </Link>
+          </div>
         </form>
       </section>
     </>

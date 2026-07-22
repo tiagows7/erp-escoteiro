@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
-import { createUsuario } from '@/lib/createUsuario'
+import { createUsuario, updateUsuarioSenha } from '@/lib/createUsuario'
 import {
   ROLE_LABELS,
   type AppRole,
@@ -113,12 +113,15 @@ export function UsuarioFormPage() {
         return
       }
 
+      const emailDb = (data.email ?? '').trim()
+      const emailReal =
+        emailDb.includes('@') && !emailDb.endsWith('@usuarios.local')
+          ? emailDb
+          : ''
+
       setForm({
         nome: data.nome ?? '',
-        email:
-          data.email?.endsWith('@usuarios.local')
-            ? ''
-            : data.email || data.username || '',
+        email: emailReal,
         registro: data.registro ?? '',
         password: '',
         passwordConfirm: '',
@@ -199,12 +202,26 @@ export function UsuarioFormPage() {
       return
     }
 
+    const wantsPasswordChange =
+      form.password.length > 0 || form.passwordConfirm.length > 0
+    if (wantsPasswordChange) {
+      if (form.password.length < 6) {
+        setSaving(false)
+        setError('A nova senha deve ter pelo menos 6 caracteres.')
+        return
+      }
+      if (form.password !== form.passwordConfirm) {
+        setSaving(false)
+        setError('A confirmação de senha não confere.')
+        return
+      }
+    }
+
     const registro = form.registro.replace(/\D/g, '') || null
     const { error: updateError } = await supabase
       .from('profiles')
       .update({
         nome: form.nome.trim(),
-        email: form.email.trim().toLowerCase() || null,
         registro,
         username: registro || form.email.trim().toLowerCase().split('@')[0] || null,
         role: form.role,
@@ -216,12 +233,25 @@ export function UsuarioFormPage() {
       .eq('id', id)
       .eq('empresa_id', empresaId)
 
-    setSaving(false)
     if (updateError) {
+      setSaving(false)
       setError(updateError.message)
       return
     }
 
+    if (wantsPasswordChange && id) {
+      const pwdResult = await updateUsuarioSenha(id, form.password)
+      if (!pwdResult.ok) {
+        setSaving(false)
+        setError(
+          pwdResult.error ??
+            'Perfil salvo, mas não foi possível alterar a senha.',
+        )
+        return
+      }
+    }
+
+    setSaving(false)
     navigate('/cadastros/usuarios', {
       state: { flashSuccess: 'Salvo com sucesso!' },
     })
@@ -299,7 +329,7 @@ export function UsuarioFormPage() {
           </AlertMessage>
         ) : null}
 
-        <div className="form-grid">
+        <div className="form-grid form-grid-2">
           <div className="field field-span-2">
             <label htmlFor="nome">Nome</label>
             <input
@@ -362,61 +392,65 @@ export function UsuarioFormPage() {
             </span>
           </div>
 
-          {isNew ? (
-            <>
-              <div className="field">
-                <label htmlFor="password">Senha</label>
-                <div className="password-field">
-                  <input
-                    id="password"
-                    className="input"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="new-password"
-                    value={form.password}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        password: e.target.value,
-                      }))
-                    }
-                    disabled={disabled}
-                    required
-                    minLength={6}
-                  />
-                  <button
-                    type="button"
-                    className="password-toggle"
-                    onClick={() => setShowPassword((prev) => !prev)}
-                    disabled={disabled}
-                  >
-                    {showPassword ? 'Ocultar' : 'Mostrar'}
-                  </button>
-                </div>
-                <span className="field-hint">
-                  Use esta senha no login com o e-mail ou o nº de registro.
-                </span>
-              </div>
-              <div className="field">
-                <label htmlFor="passwordConfirm">Confirmar senha</label>
-                <input
-                  id="passwordConfirm"
-                  className="input"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  value={form.passwordConfirm}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      passwordConfirm: e.target.value,
-                    }))
-                  }
-                  disabled={disabled}
-                  required
-                  minLength={6}
-                />
-              </div>
-            </>
-          ) : null}
+          <div className="field">
+            <label htmlFor="password">{isNew ? 'Senha' : 'Nova senha'}</label>
+            <div className="password-field">
+              <input
+                id="password"
+                className="input"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={form.password}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    password: e.target.value,
+                  }))
+                }
+                disabled={disabled}
+                required={isNew}
+                minLength={isNew ? 6 : undefined}
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword((prev) => !prev)}
+                disabled={disabled}
+              >
+                {showPassword ? 'Ocultar' : 'Mostrar'}
+              </button>
+            </div>
+            <span className="field-hint">
+              {isNew
+                ? 'Use esta senha no login com o e-mail ou o nº de registro.'
+                : 'Deixe em branco para manter a senha atual.'}
+            </span>
+          </div>
+
+          <div className="field">
+            <label htmlFor="passwordConfirm">Confirmar senha</label>
+            <input
+              id="passwordConfirm"
+              className="input"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="new-password"
+              value={form.passwordConfirm}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  passwordConfirm: e.target.value,
+                }))
+              }
+              disabled={disabled}
+              required={isNew}
+              minLength={isNew ? 6 : undefined}
+            />
+            {!isNew ? (
+              <span className="field-hint">
+                Preencha só se for alterar a senha.
+              </span>
+            ) : null}
+          </div>
 
           <div className="field">
             <label htmlFor="role">Papel</label>
@@ -438,10 +472,13 @@ export function UsuarioFormPage() {
                 </option>
               ))}
             </select>
+            <span className="field-hint">
+              Define o que o usuário pode ver e alterar no sistema.
+            </span>
           </div>
 
           <div className="field">
-            <label htmlFor="codigo_ramo">Ramo (caixa no portal)</label>
+            <label htmlFor="codigo_ramo">Ramo</label>
             <select
               id="codigo_ramo"
               className="select"
@@ -465,8 +502,7 @@ export function UsuarioFormPage() {
                 ))}
             </select>
             <span className="field-hint">
-              Com ramo definido, o portal mostra só o caixa do grupo e o deste
-              ramo.
+              Com ramo, o portal mostra só o caixa do grupo e deste ramo.
             </span>
           </div>
 

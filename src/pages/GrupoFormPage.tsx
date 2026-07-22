@@ -10,6 +10,14 @@ import {
 import { uploadGrupoLogo } from '@/lib/uploadGrupoLogo'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { SicrediPixFieldsForm } from '@/components/SicrediPixFieldsForm'
+import {
+  emptySicrediPixFields,
+  sicrediPixFromRow,
+  sicrediPixToDb,
+  type SicrediPixFields,
+} from '@/lib/sicrediPixFields'
+import type { Ramo } from '@/types/database'
 
 function slugify(value: string): string {
   return value
@@ -45,6 +53,13 @@ export function GrupoFormPage() {
   const toast = useToast()
 
   const [form, setForm] = useState(emptyForm)
+  const [sicrediGrupo, setSicrediGrupo] = useState<SicrediPixFields>(
+    emptySicrediPixFields(),
+  )
+  const [ramos, setRamos] = useState<Ramo[]>([])
+  const [sicrediRamos, setSicrediRamos] = useState<
+    Record<number, SicrediPixFields>
+  >({})
   const [slugManual, setSlugManual] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
@@ -55,25 +70,54 @@ export function GrupoFormPage() {
   const logoInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    void supabase
+      .from('ramos')
+      .select('ramo_id, nome, idade_inicio, idade_fim')
+      .order('ramo_id')
+      .then(({ data }) => {
+        const list = ((data as Ramo[]) ?? []).filter(
+          (r) => r.ramo_id >= 1 && r.ramo_id <= 5,
+        )
+        setRamos(list)
+        setSicrediRamos((prev) => {
+          const next = { ...prev }
+          for (const r of list) {
+            if (!next[r.ramo_id]) next[r.ramo_id] = emptySicrediPixFields()
+          }
+          return next
+        })
+      })
+  }, [])
+
+  useEffect(() => {
     if (isNew) return
     let mounted = true
 
     void (async () => {
-      const { data, error: loadError } = await supabase
-        .from('empresa')
-        .select(
-          'id, nome, cnpj, email, slug, telefone, logo_url, ativo, portal_transparencia',
-        )
-        .eq('id', Number(id))
-        .maybeSingle()
+      const [empresaRes, ramoPixRes] = await Promise.all([
+        supabase
+          .from('empresa')
+          .select(
+            'id, nome, cnpj, email, slug, telefone, logo_url, ativo, portal_transparencia, sicredi_pix_client_id, sicredi_pix_client_secret, sicredi_pix_chave, sicredi_pix_cert, sicredi_pix_key, sicredi_pix_base_url, sicredi_pix_ativo',
+          )
+          .eq('id', Number(id))
+          .maybeSingle(),
+        supabase
+          .from('empresa_ramo_pix_sicredi')
+          .select(
+            'ramo_id, sicredi_pix_client_id, sicredi_pix_client_secret, sicredi_pix_chave, sicredi_pix_cert, sicredi_pix_key, sicredi_pix_base_url, sicredi_pix_ativo',
+          )
+          .eq('empresa_id', Number(id)),
+      ])
 
       if (!mounted) return
-      if (loadError || !data) {
-        setError(loadError?.message ?? 'Grupo não encontrado')
+      if (empresaRes.error || !empresaRes.data) {
+        setError(empresaRes.error?.message ?? 'Grupo não encontrado')
         setLoading(false)
         return
       }
 
+      const data = empresaRes.data
       setForm({
         ...emptyForm,
         nome: data.nome ?? '',
@@ -85,15 +129,27 @@ export function GrupoFormPage() {
         portal_transparencia: data.portal_transparencia !== false,
         logo_url: data.logo_url,
       })
+      setSicrediGrupo(sicrediPixFromRow(data))
       setSlugManual(true)
       setLogoPreview(data.logo_url)
+
+      const ramoMap: Record<number, SicrediPixFields> = {}
+      for (const r of ramos) {
+        ramoMap[r.ramo_id] = emptySicrediPixFields()
+      }
+      for (const row of ramoPixRes.data ?? []) {
+        ramoMap[row.ramo_id as number] = sicrediPixFromRow(
+          row as SicrediPixFields,
+        )
+      }
+      setSicrediRamos(ramoMap)
       setLoading(false)
     })()
 
     return () => {
       mounted = false
     }
-  }, [id, isNew])
+  }, [id, isNew, ramos])
 
   function updateNome(nome: string) {
     setForm((prev) => ({
@@ -201,6 +257,7 @@ export function GrupoFormPage() {
       return
     }
 
+    const empresaId = Number(id)
     const { error: updateError } = await supabase
       .from('empresa')
       .update({
@@ -211,8 +268,9 @@ export function GrupoFormPage() {
         telefone: form.telefone.trim() || null,
         ativo: form.ativo,
         portal_transparencia: form.portal_transparencia,
+        ...sicrediPixToDb(sicrediGrupo),
       })
-      .eq('id', Number(id))
+      .eq('id', empresaId)
 
     if (updateError) {
       setSaving(false)
@@ -220,8 +278,30 @@ export function GrupoFormPage() {
       return
     }
 
+    for (const ramo of ramos) {
+      const fields = sicrediRamos[ramo.ramo_id] ?? emptySicrediPixFields()
+      const { error: ramoError } = await supabase
+        .from('empresa_ramo_pix_sicredi')
+        .upsert(
+          {
+            empresa_id: empresaId,
+            ramo_id: ramo.ramo_id,
+            ...sicrediPixToDb(fields),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'empresa_id,ramo_id' },
+        )
+      if (ramoError) {
+        setSaving(false)
+        setError(
+          `Grupo salvo, mas falhou PIX do ramo ${ramo.nome}: ${ramoError.message}`,
+        )
+        return
+      }
+    }
+
     if (logoFile) {
-      const logoOk = await uploadGrupoLogo(Number(id), logoFile)
+      const logoOk = await uploadGrupoLogo(empresaId, logoFile)
       if ('error' in logoOk) {
         setSaving(false)
         setError(`Grupo atualizado, mas o logo falhou: ${logoOk.error}`)
@@ -472,6 +552,45 @@ export function GrupoFormPage() {
               /transparencia/{form.slug}
             </a>
           </p>
+        ) : null}
+
+        {!isNew ? (
+          <>
+            <p className="form-section-title">PIX Sicredi — mensalidades</p>
+            <p className="field-hint" style={{ marginBottom: '0.85rem' }}>
+              Credenciais do caixa do grupo. Usadas no pagamento de mensalidades
+              pelos associados.
+            </p>
+            <SicrediPixFieldsForm
+              idPrefix="grupo-sicredi"
+              value={sicrediGrupo}
+              onChange={setSicrediGrupo}
+              disabled={disabled}
+            />
+
+            <p className="form-section-title">PIX Sicredi — atividades por ramo</p>
+            <p className="field-hint" style={{ marginBottom: '0.85rem' }}>
+              Cada ramo usa sua própria chave PIX no pagamento de atividades.
+            </p>
+            {ramos.map((ramo) => (
+              <div key={ramo.ramo_id} className="sicredi-ramo-block">
+                <h4>{ramo.nome}</h4>
+                <SicrediPixFieldsForm
+                  idPrefix={`ramo-${ramo.ramo_id}-sicredi`}
+                  value={
+                    sicrediRamos[ramo.ramo_id] ?? emptySicrediPixFields()
+                  }
+                  onChange={(next) =>
+                    setSicrediRamos((prev) => ({
+                      ...prev,
+                      [ramo.ramo_id]: next,
+                    }))
+                  }
+                  disabled={disabled}
+                />
+              </div>
+            ))}
+          </>
         ) : null}
 
         <div className="field">

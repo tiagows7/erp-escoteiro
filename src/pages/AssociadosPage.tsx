@@ -87,6 +87,8 @@ export function AssociadosPage() {
     null,
   )
   const [reloadToken, setReloadToken] = useState(0)
+  const [page, setPage] = useState(1)
+  const pageSize = 20
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -123,6 +125,10 @@ export function AssociadosPage() {
   }, [patrulhas, filtroRamo, filtroSecao])
 
   useEffect(() => {
+    setPage(1)
+  }, [q, filtroRamo, filtroSecao, filtroPatrulha, filtroAtivo])
+
+  useEffect(() => {
     if (!empresaId) {
       setRows([])
       setLoading(false)
@@ -136,7 +142,7 @@ export function AssociadosPage() {
         let query = supabase
           .from('associados')
           .select(
-            'associado_id, registro, registro_identificador, nome, data_nascimento, celular, email, ativo, ramo, secao, patrulha_matilha, empresa_id',
+            'associado_id, registro, registro_identificador, nome, data_nascimento, celular, responsavel_fonecelular, email, ativo, ramo, secao, patrulha_matilha, empresa_id',
           )
           .eq('empresa_id', empresaId)
           .order('nome')
@@ -250,6 +256,13 @@ export function AssociadosPage() {
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
+  const pageSafe = Math.min(page, totalPages)
+  const pageRows = useMemo(() => {
+    const start = (pageSafe - 1) * pageSize
+    return rows.slice(start, start + pageSize)
+  }, [rows, pageSafe, pageSize])
 
   const ramoMap = useMemo(
     () => new Map(ramos.map((item) => [item.ramo_id, item.nome])),
@@ -446,7 +459,13 @@ export function AssociadosPage() {
         ) : null}
 
         <p className="field-hint" style={{ marginBottom: '0.75rem' }}>
-          {loading ? 'Carregando…' : `${rows.length} associado(s) encontrado(s)`}
+          {loading
+            ? 'Carregando…'
+            : `${rows.length} associado(s) encontrado(s)${
+                rows.length > pageSize
+                  ? ` · página ${pageSafe} de ${totalPages}`
+                  : ''
+              }`}
         </p>
 
         {loading ? (
@@ -454,57 +473,85 @@ export function AssociadosPage() {
         ) : rows.length === 0 ? (
           <div className="empty">Nenhum associado encontrado neste grupo.</div>
         ) : (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>Registro</th>
-                  <th>Nome</th>
-                  <th>Idade</th>
-                  <th>Ramo</th>
-                  <th>Seção</th>
-                  <th>Patrulha</th>
-                  <th>Contato</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.associado_id}>
-                    <td>
-                      <Link
-                        className="btn btn-soft"
-                        to={`/associados/${row.associado_id}`}
-                      >
-                        Abrir
-                      </Link>
-                    </td>
-                    <td>
-                      {row.registro}
-                      {row.registro_identificador
-                        ? `-${row.registro_identificador}`
-                        : ''}
-                    </td>
-                    <td>
-                      {row.nome}{' '}
-                      {row.ativo === false ? (
-                        <span className="badge">Inativo</span>
-                      ) : null}
-                    </td>
-                    <td>{idadeFromNascimento(row.data_nascimento)}</td>
-                    <td>{(row.ramo && ramoMap.get(row.ramo)) || '—'}</td>
-                    <td>{(row.secao && secaoMap.get(row.secao)) || '—'}</td>
-                    <td>
-                      {(row.patrulha_matilha &&
-                        patrulhaMap.get(row.patrulha_matilha)) ||
-                        '—'}
-                    </td>
-                    <td>{row.celular || row.email || '—'}</td>
+          <>
+            <div className="table-wrap">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Registro</th>
+                    <th>Nome</th>
+                    <th>Idade</th>
+                    <th>Ramo</th>
+                    <th>Seção</th>
+                    <th>Patrulha</th>
+                    <th>Contato</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {pageRows.map((row) => (
+                    <tr key={row.associado_id}>
+                      <td>
+                        <Link
+                          className="btn btn-soft"
+                          to={`/associados/${row.associado_id}`}
+                        >
+                          Abrir
+                        </Link>
+                      </td>
+                      <td>
+                        {row.registro}
+                        {row.registro_identificador
+                          ? `-${row.registro_identificador}`
+                          : ''}
+                      </td>
+                      <td>
+                        {row.nome}{' '}
+                        {row.ativo === false ? (
+                          <span className="badge">Inativo</span>
+                        ) : null}
+                      </td>
+                      <td>{idadeFromNascimento(row.data_nascimento)}</td>
+                      <td>{(row.ramo && ramoMap.get(row.ramo)) || '—'}</td>
+                      <td>{(row.secao && secaoMap.get(row.secao)) || '—'}</td>
+                      <td>
+                        {(row.patrulha_matilha &&
+                          patrulhaMap.get(row.patrulha_matilha)) ||
+                          '—'}
+                      </td>
+                      <td>{row.celular || row.email || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {totalPages > 1 ? (
+              <div className="pagination">
+                <button
+                  type="button"
+                  className="btn btn-soft"
+                  disabled={pageSafe <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Anterior
+                </button>
+                <span className="pagination-info">
+                  Página {pageSafe} de {totalPages}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-soft"
+                  disabled={pageSafe >= totalPages}
+                  onClick={() =>
+                    setPage((p) => Math.min(totalPages, p + 1))
+                  }
+                >
+                  Próxima
+                </button>
+              </div>
+            ) : null}
+          </>
         )}
       </section>
     </>
