@@ -81,6 +81,43 @@ function formatDate(value: string | null) {
   return `${d}/${m}/${y}`
 }
 
+function idadeAnosMeses(isoDate: string | null | undefined): {
+  anos: number
+  meses: number
+} | null {
+  if (!isoDate) return null
+  const [y, m, d] = isoDate.slice(0, 10).split('-').map(Number)
+  if (!y || !m || !d) return null
+  const nasc = new Date(y, m - 1, d)
+  const hoje = new Date()
+  let anos = hoje.getFullYear() - nasc.getFullYear()
+  let meses = hoje.getMonth() - nasc.getMonth()
+  if (hoje.getDate() < nasc.getDate()) meses -= 1
+  if (meses < 0) {
+    anos -= 1
+    meses += 12
+  }
+  return { anos: Math.max(0, anos), meses: Math.max(0, meses) }
+}
+
+function categoriaEhBeneficiario(nome: string | null | undefined): boolean {
+  return (nome ?? '').toUpperCase().includes('BENEFICI')
+}
+
+/** Mesma regra do card Voluntários no SQL do dashboard. */
+function associadoEhVoluntario(opts: {
+  data_nascimento: string | null
+  categoria_id: number | null
+  categoria_nome: string | null
+}): boolean {
+  const idade = idadeAnosMeses(opts.data_nascimento)
+  if (idade != null && idade.anos > 22) return true
+  if (opts.categoria_id != null && !categoriaEhBeneficiario(opts.categoria_nome)) {
+    return true
+  }
+  return false
+}
+
 function passagemLimiteLabel(ramoId: number): string {
   switch (ramoId) {
     case 1:
@@ -197,11 +234,61 @@ export function DashboardPage() {
         const ramosAll = (contagem.data as DashboardRamo[]) ?? []
         const passagensAll = (passagem.data as DashboardPassagemRamo[]) ?? []
         setError(null)
-        setRamos(
-          ramoFiltro != null
-            ? ramosAll.filter((r) => r.ramo_id === ramoFiltro)
-            : ramosAll,
-        )
+
+        if (ramoFiltro != null && ramoFiltro >= 1 && ramoFiltro <= 4) {
+          const ramoCard = ramosAll.find((r) => r.ramo_id === ramoFiltro)
+          const [{ data: assocRamo }, { data: categorias }] = await Promise.all([
+            supabase
+              .from('associados')
+              .select('associado_id, data_nascimento, categoria')
+              .eq('empresa_id', empresaId!)
+              .eq('ramo', ramoFiltro)
+              .eq('ativo', true),
+            supabase.from('categoria').select('categoria_id, nome'),
+          ])
+
+          if (!mounted) return
+
+          const catNomeById = new Map(
+            ((categorias ?? []) as { categoria_id: number; nome: string }[]).map(
+              (c) => [c.categoria_id, c.nome],
+            ),
+          )
+
+          type AssocVol = {
+            associado_id: number
+            data_nascimento: string | null
+            categoria: number | null
+          }
+
+          const voluntariosCount = ((assocRamo as AssocVol[] | null) ?? []).filter(
+            (a) =>
+              associadoEhVoluntario({
+                data_nascimento: a.data_nascimento,
+                categoria_id: a.categoria,
+                categoria_nome:
+                  a.categoria != null
+                    ? (catNomeById.get(a.categoria) ?? null)
+                    : null,
+              }),
+          ).length
+
+          const cards: DashboardRamo[] = []
+          if (ramoCard) cards.push(ramoCard)
+          cards.push({
+            ramo_id: 5,
+            ramo_nome: 'VOLUNTÁRIOS',
+            total: voluntariosCount,
+          })
+          setRamos(cards)
+        } else {
+          setRamos(
+            ramoFiltro != null
+              ? ramosAll.filter((r) => r.ramo_id === ramoFiltro)
+              : ramosAll,
+          )
+        }
+
         setPassagens(
           ramoFiltro != null
             ? passagensAll.filter((p) => p.ramo_id === ramoFiltro)
@@ -267,6 +354,85 @@ export function DashboardPage() {
     setListaLoading(true)
     setListaError(null)
     setListaRows([])
+
+    // Login com ramo 1-4: card Voluntários lista só voluntários daquele ramo.
+    if (item.ramo_id === 5 && ramoFiltro != null && ramoFiltro <= 4) {
+      const [assocRes, catRes, secaoRes] = await Promise.all([
+        supabase
+          .from('associados')
+          .select(
+            'associado_id, nome, registro, data_nascimento, categoria, secao',
+          )
+          .eq('empresa_id', empresaId!)
+          .eq('ramo', ramoFiltro)
+          .eq('ativo', true)
+          .order('nome', { ascending: true }),
+        supabase.from('categoria').select('categoria_id, nome'),
+        supabase
+          .from('secao')
+          .select('secao_id, nome')
+          .eq('empresa_id', empresaId!),
+      ])
+
+      if (assocRes.error || catRes.error || secaoRes.error) {
+        setListaError(
+          assocRes.error?.message ??
+            catRes.error?.message ??
+            secaoRes.error?.message ??
+            'Erro ao carregar voluntários',
+        )
+        setListaRows([])
+        setListaLoading(false)
+        return
+      }
+
+      const catNomeById = new Map(
+        ((catRes.data ?? []) as { categoria_id: number; nome: string }[]).map(
+          (c) => [c.categoria_id, c.nome],
+        ),
+      )
+      const secaoNomeById = new Map(
+        ((secaoRes.data ?? []) as { secao_id: number; nome: string }[]).map(
+          (s) => [s.secao_id, s.nome],
+        ),
+      )
+
+      type AssocRow = {
+        associado_id: number
+        nome: string
+        registro: number | null
+        data_nascimento: string | null
+        categoria: number | null
+        secao: number | null
+      }
+
+      const rows = ((assocRes.data as AssocRow[] | null) ?? [])
+        .filter((a) =>
+          associadoEhVoluntario({
+            data_nascimento: a.data_nascimento,
+            categoria_id: a.categoria,
+            categoria_nome:
+              a.categoria != null ? (catNomeById.get(a.categoria) ?? null) : null,
+          }),
+        )
+        .map((a): DashboardDetalheRamo => {
+          const idade = idadeAnosMeses(a.data_nascimento)
+          return {
+            associado_id: a.associado_id,
+            nome: a.nome,
+            registro: a.registro,
+            data_nascimento: a.data_nascimento,
+            anos: idade?.anos ?? 0,
+            meses: idade?.meses ?? 0,
+            secao_nome:
+              a.secao != null ? (secaoNomeById.get(a.secao) ?? null) : null,
+          }
+        })
+
+      setListaRows(rows)
+      setListaLoading(false)
+      return
+    }
 
     const { data, error: rpcError } = await supabase.rpc(
       'dashboard_detalhe_ramo',
@@ -602,7 +768,9 @@ export function DashboardPage() {
                 </h3>
                 <p className="muted">
                   {listaRamo.ramo_id === 5
-                    ? 'Voluntários ativos do grupo'
+                    ? ramoFiltro != null && ramoFiltro <= 4
+                      ? 'Voluntários ativos deste ramo'
+                      : 'Voluntários ativos do grupo'
                     : 'Beneficiários ativos deste ramo'}
                 </p>
               </div>
