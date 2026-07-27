@@ -34,6 +34,8 @@ import { DespesasInclusaoPage } from '@/pages/DespesasInclusaoPage'
 import { DespesaFormPage } from '@/pages/DespesaFormPage'
 import { DespesasPagamentoPage } from '@/pages/DespesasPagamentoPage'
 import { DespesaPagamentoFormPage } from '@/pages/DespesaPagamentoFormPage'
+import { DespesasRelatorioPage } from '@/pages/DespesasRelatorioPage'
+import { GrupoMeuRedirectPage } from '@/pages/GrupoMeuRedirectPage'
 import { ReceitasInclusaoPage } from '@/pages/ReceitasInclusaoPage'
 import { ReceitaFormPage } from '@/pages/ReceitaFormPage'
 import { GeraMensalidadePage } from '@/pages/GeraMensalidadePage'
@@ -91,7 +93,7 @@ export default function App() {
             <Route
               path="secoes"
               element={
-                <RequirePermission permission="estrutura.view">
+                <RequirePermission permission="estrutura.view" grupoAdmin>
                   <SecoesPage />
                 </RequirePermission>
               }
@@ -99,7 +101,7 @@ export default function App() {
             <Route
               path="secoes/:id"
               element={
-                <RequirePermission permission="estrutura.view">
+                <RequirePermission permission="estrutura.view" grupoAdmin>
                   <SecaoFormPage />
                 </RequirePermission>
               }
@@ -107,7 +109,7 @@ export default function App() {
             <Route
               path="patrulhas"
               element={
-                <RequirePermission permission="estrutura.view">
+                <RequirePermission permission="estrutura.view" grupoAdmin>
                   <PatrulhasPage />
                 </RequirePermission>
               }
@@ -115,7 +117,7 @@ export default function App() {
             <Route
               path="patrulhas/:id"
               element={
-                <RequirePermission permission="estrutura.view">
+                <RequirePermission permission="estrutura.view" grupoAdmin>
                   <PatrulhaFormPage />
                 </RequirePermission>
               }
@@ -140,7 +142,7 @@ export default function App() {
             <Route
               path="cadastros/tipo-pagamento"
               element={
-                <RequirePermission permission="financeiro.view">
+                <RequirePermission permission="financeiro.view" grupoAdmin>
                   <TipoPagamentoPage />
                 </RequirePermission>
               }
@@ -148,7 +150,7 @@ export default function App() {
             <Route
               path="cadastros/tipo-pagamento/:id"
               element={
-                <RequirePermission permission="financeiro.view">
+                <RequirePermission permission="financeiro.view" grupoAdmin>
                   <TipoPagamentoFormPage />
                 </RequirePermission>
               }
@@ -156,7 +158,7 @@ export default function App() {
             <Route
               path="cadastros/tipo-mensalidade"
               element={
-                <RequirePermission permission="financeiro.view">
+                <RequirePermission permission="financeiro.view" grupoAdmin>
                   <TipoMensalidadePage />
                 </RequirePermission>
               }
@@ -164,7 +166,7 @@ export default function App() {
             <Route
               path="cadastros/tipo-mensalidade/:id"
               element={
-                <RequirePermission permission="financeiro.view">
+                <RequirePermission permission="financeiro.view" grupoAdmin>
                   <TipoMensalidadeFormPage />
                 </RequirePermission>
               }
@@ -247,6 +249,14 @@ export default function App() {
                 </RequirePermission>
               }
             />
+            <Route
+              path="despesas/relatorio"
+              element={
+                <RequirePermission permission="financeiro.view">
+                  <DespesasRelatorioPage />
+                </RequirePermission>
+              }
+            />
 
             <Route
               path="receitas/inclusao"
@@ -269,6 +279,14 @@ export default function App() {
               element={
                 <RequirePermission permission="financeiro.view">
                   <GeraMensalidadePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="receitas/relatorio"
+              element={
+                <RequirePermission permission="financeiro.view">
+                  <ReceitasRecebimentoPage />
                 </RequirePermission>
               }
             />
@@ -347,9 +365,17 @@ export default function App() {
               }
             />
             <Route
+              path="grupos/meu"
+              element={
+                <RequirePermission permission="grupos.view">
+                  <GrupoMeuRedirectPage />
+                </RequirePermission>
+              }
+            />
+            <Route
               path="grupos/:id"
               element={
-                <RequirePermission permission="grupos.write">
+                <RequirePermission anyOf={['grupos.write', 'grupos.view']}>
                   <GrupoFormPage />
                 </RequirePermission>
               }

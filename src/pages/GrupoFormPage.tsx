@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import {
@@ -10,14 +10,20 @@ import {
 import { uploadGrupoLogo } from '@/lib/uploadGrupoLogo'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
-import { SicrediPixFieldsForm } from '@/components/SicrediPixFieldsForm'
+import { ContaBancariaModal } from '@/components/ContaBancariaModal'
+import { AddIcon } from '@/components/AddIcon'
 import {
-  emptySicrediPixFields,
-  sicrediPixFromRow,
-  sicrediPixToDb,
-  type SicrediPixFields,
-} from '@/lib/sicrediPixFields'
+  contaBancariaFromRow,
+  type ContaBancariaRow,
+} from '@/lib/contaBancariaFields'
+import { loadCidades, loadEstados } from '@/lib/brasilLocalidades'
 import type { Ramo } from '@/types/database'
+
+type SecaoOpt = {
+  secao_id: number
+  nome: string
+  ramo: number | null
+}
 
 function slugify(value: string): string {
   return value
@@ -35,6 +41,8 @@ const emptyForm = {
   cnpj: '',
   email: '',
   telefone: '',
+  estado: '',
+  cidade: '',
   ativo: true,
   portal_transparencia: true,
   logo_url: '' as string | null,
@@ -48,18 +56,31 @@ export function GrupoFormPage() {
   const { id } = useParams()
   const isNew = !id || id === 'novo'
   const navigate = useNavigate()
-  const { hasPermission } = useAuth()
-  const canWrite = hasPermission('grupos.write')
+  const { hasPermission, empresa, isSuperAdmin } = useAuth()
+  const canManagePlatform = isSuperAdmin || hasPermission('grupos.write')
+  const canEditOwn =
+    hasPermission('grupos.view') &&
+    !isNew &&
+    empresa?.id != null &&
+    Number(id) === empresa.id
+  const canWrite = canManagePlatform || canEditOwn
   const toast = useToast()
+  const backTo = canManagePlatform ? '/grupos' : '/'
 
   const [form, setForm] = useState(emptyForm)
-  const [sicrediGrupo, setSicrediGrupo] = useState<SicrediPixFields>(
-    emptySicrediPixFields(),
-  )
   const [ramos, setRamos] = useState<Ramo[]>([])
-  const [sicrediRamos, setSicrediRamos] = useState<
-    Record<number, SicrediPixFields>
-  >({})
+  const [secoes, setSecoes] = useState<SecaoOpt[]>([])
+  const [contasBancarias, setContasBancarias] = useState<ContaBancariaRow[]>([])
+  const [contasListaOpen, setContasListaOpen] = useState(false)
+  const [contaModalOpen, setContaModalOpen] = useState(false)
+  const [contaEditando, setContaEditando] = useState<ContaBancariaRow | null>(
+    null,
+  )
+  const [contaBusyId, setContaBusyId] = useState<number | null>(null)
+  const [estados, setEstados] = useState<{ codigo: string; nome: string }[]>(
+    [],
+  )
+  const [cidades, setCidades] = useState<{ id: number; nome: string }[]>([])
   const [slugManual, setSlugManual] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
@@ -79,35 +100,50 @@ export function GrupoFormPage() {
           (r) => r.ramo_id >= 1 && r.ramo_id <= 5,
         )
         setRamos(list)
-        setSicrediRamos((prev) => {
-          const next = { ...prev }
-          for (const r of list) {
-            if (!next[r.ramo_id]) next[r.ramo_id] = emptySicrediPixFields()
-          }
-          return next
-        })
       })
+
+    void loadEstados(supabase).then((list) => setEstados(list))
   }, [])
+
+  useEffect(() => {
+    if (!form.estado) {
+      setCidades([])
+      return
+    }
+    let mounted = true
+    void loadCidades(supabase, form.estado).then((list) => {
+      if (mounted) setCidades(list)
+    })
+    return () => {
+      mounted = false
+    }
+  }, [form.estado])
 
   useEffect(() => {
     if (isNew) return
     let mounted = true
 
     void (async () => {
-      const [empresaRes, ramoPixRes] = await Promise.all([
+      const [empresaRes, secoesRes, contasRes] = await Promise.all([
         supabase
           .from('empresa')
           .select(
-            'id, nome, cnpj, email, slug, telefone, logo_url, ativo, portal_transparencia, sicredi_pix_client_id, sicredi_pix_client_secret, sicredi_pix_chave, sicredi_pix_cert, sicredi_pix_key, sicredi_pix_base_url, sicredi_pix_ativo',
+            'id, nome, cnpj, email, slug, telefone, estado, cidade, logo_url, ativo, portal_transparencia',
           )
           .eq('id', Number(id))
           .maybeSingle(),
         supabase
-          .from('empresa_ramo_pix_sicredi')
+          .from('secao')
+          .select('secao_id, nome, ramo')
+          .eq('empresa_id', Number(id))
+          .order('nome', { ascending: true }),
+        supabase
+          .from('empresa_conta_bancaria')
           .select(
-            'ramo_id, sicredi_pix_client_id, sicredi_pix_client_secret, sicredi_pix_chave, sicredi_pix_cert, sicredi_pix_key, sicredi_pix_base_url, sicredi_pix_ativo',
+            'id, empresa_id, ramo_id, secao_id, descricao, banco_nome, agencia, conta, api_client_id, api_client_secret',
           )
-          .eq('empresa_id', Number(id)),
+          .eq('empresa_id', Number(id))
+          .order('id', { ascending: true }),
       ])
 
       if (!mounted) return
@@ -125,31 +161,41 @@ export function GrupoFormPage() {
         cnpj: data.cnpj ?? '',
         email: data.email ?? '',
         telefone: data.telefone ?? '',
+        estado: (data.estado as string | null) ?? '',
+        cidade:
+          data.cidade != null && data.cidade !== ''
+            ? String(data.cidade)
+            : '',
         ativo: data.ativo !== false,
         portal_transparencia: data.portal_transparencia !== false,
         logo_url: data.logo_url,
       })
-      setSicrediGrupo(sicrediPixFromRow(data))
-      setSlugManual(true)
       setLogoPreview(data.logo_url)
+      setSlugManual(true)
 
-      const ramoMap: Record<number, SicrediPixFields> = {}
-      for (const r of ramos) {
-        ramoMap[r.ramo_id] = emptySicrediPixFields()
+      const secoesList = (secoesRes.data as SecaoOpt[] | null) ?? []
+      setSecoes(secoesList)
+
+      if (contasRes.error) {
+        console.warn('Contas bancárias:', contasRes.error.message)
       }
-      for (const row of ramoPixRes.data ?? []) {
-        ramoMap[row.ramo_id as number] = sicrediPixFromRow(
-          row as SicrediPixFields,
-        )
-      }
-      setSicrediRamos(ramoMap)
+      setContasBancarias(
+        ((contasRes.data ?? []) as ContaBancariaRow[]).map((row) => ({
+          id: Number(row.id),
+          empresa_id: Number(row.empresa_id),
+          ramo_id: row.ramo_id != null ? Number(row.ramo_id) : null,
+          secao_id: row.secao_id != null ? Number(row.secao_id) : null,
+          ...contaBancariaFromRow(row),
+        })),
+      )
+
       setLoading(false)
     })()
 
     return () => {
       mounted = false
     }
-  }, [id, isNew, ramos])
+  }, [id, isNew])
 
   function updateNome(nome: string) {
     setForm((prev) => ({
@@ -170,7 +216,12 @@ export function GrupoFormPage() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     if (!canWrite) {
-      setError('Apenas super admin pode alterar grupos.')
+      setError('Você não tem permissão para alterar este grupo.')
+      return
+    }
+
+    if (isNew && !canManagePlatform) {
+      setError('Apenas super admin pode criar grupos.')
       return
     }
 
@@ -223,6 +274,8 @@ export function GrupoFormPage() {
           cnpj: form.cnpj,
           email: form.email,
           telefone: form.telefone,
+          estado: form.estado,
+          cidade: form.cidade,
           ativo: form.ativo,
           portal_transparencia: form.portal_transparencia,
         },
@@ -266,9 +319,10 @@ export function GrupoFormPage() {
         cnpj: form.cnpj.replace(/\D/g, '') || null,
         email: form.email.trim() || null,
         telefone: form.telefone.trim() || null,
+        estado: form.estado.trim().toUpperCase() || null,
+        cidade: form.cidade.trim() ? Number(form.cidade) : null,
         ativo: form.ativo,
         portal_transparencia: form.portal_transparencia,
-        ...sicrediPixToDb(sicrediGrupo),
       })
       .eq('id', empresaId)
 
@@ -276,28 +330,6 @@ export function GrupoFormPage() {
       setSaving(false)
       setError(mapEmpresaError(updateError.message, slug))
       return
-    }
-
-    for (const ramo of ramos) {
-      const fields = sicrediRamos[ramo.ramo_id] ?? emptySicrediPixFields()
-      const { error: ramoError } = await supabase
-        .from('empresa_ramo_pix_sicredi')
-        .upsert(
-          {
-            empresa_id: empresaId,
-            ramo_id: ramo.ramo_id,
-            ...sicrediPixToDb(fields),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'empresa_id,ramo_id' },
-        )
-      if (ramoError) {
-        setSaving(false)
-        setError(
-          `Grupo salvo, mas falhou PIX do ramo ${ramo.nome}: ${ramoError.message}`,
-        )
-        return
-      }
     }
 
     if (logoFile) {
@@ -310,13 +342,17 @@ export function GrupoFormPage() {
     }
 
     setSaving(false)
-    navigate('/grupos', {
-      state: { flashSuccess: 'Salvo com sucesso!' },
-    })
+    if (canManagePlatform) {
+      navigate('/grupos', {
+        state: { flashSuccess: 'Salvo com sucesso!' },
+      })
+    } else {
+      toast.success('Grupo atualizado com sucesso!')
+    }
   }
 
   async function onDelete() {
-    if (!canWrite || isNew) return
+    if (!canManagePlatform || isNew) return
     const ok = await toast.confirm({
       title: 'Excluir grupo?',
       message:
@@ -381,7 +417,7 @@ export function GrupoFormPage() {
   }
 
   async function onReativar() {
-    if (!canWrite || isNew) return
+    if (!canManagePlatform || isNew) return
     setSaving(true)
     setError(null)
     const { error: updateError } = await supabase
@@ -398,6 +434,51 @@ export function GrupoFormPage() {
     })
   }
 
+  const ramoMap = useMemo(
+    () => new Map(ramos.map((r) => [r.ramo_id, r.nome])),
+    [ramos],
+  )
+  const secaoMap = useMemo(
+    () => new Map(secoes.map((s) => [s.secao_id, s.nome])),
+    [secoes],
+  )
+
+  async function excluirContaBancaria(contaId: number) {
+    if (!canWrite) return
+    const ok = await toast.confirm({
+      title: 'Excluir conta bancária',
+      message: 'Esta ação não pode ser desfeita.',
+      confirmLabel: 'Excluir',
+      danger: true,
+    })
+    if (!ok) return
+    setContaBusyId(contaId)
+    const { error: delError } = await supabase
+      .from('empresa_conta_bancaria')
+      .delete()
+      .eq('id', contaId)
+    setContaBusyId(null)
+    if (delError) {
+      setError(delError.message)
+      return
+    }
+    setContasBancarias((prev) => prev.filter((c) => c.id !== contaId))
+    toast.success('Conta bancária excluída.')
+  }
+
+  if (!canManagePlatform && isNew) {
+    return <Navigate to="/grupos/meu" replace />
+  }
+
+  if (
+    !canManagePlatform &&
+    !isNew &&
+    empresa?.id != null &&
+    Number(id) !== empresa.id
+  ) {
+    return <Navigate to={`/grupos/${empresa.id}`} replace />
+  }
+
   if (loading) {
     return <div className="loading">Carregando grupo…</div>
   }
@@ -408,12 +489,35 @@ export function GrupoFormPage() {
     <>
       <header className="page-header">
         <div>
-          <h2>{isNew ? 'Novo grupo escoteiro' : 'Editar grupo escoteiro'}</h2>
-          <p>Somente super admin</p>
+          <h2>
+            {isNew
+              ? 'Novo grupo escoteiro'
+              : canManagePlatform
+                ? 'Editar grupo escoteiro'
+                : 'Meu grupo escoteiro'}
+          </h2>
+          <p>
+            {canManagePlatform
+              ? 'Cadastro da plataforma (super admin)'
+              : 'Dados e contas bancárias do seu grupo'}
+          </p>
         </div>
-        <Link className="btn btn-soft" to="/grupos">
-          Voltar
-        </Link>
+        <div className="page-header-actions actions-pair">
+          {!isNew && canWrite ? (
+            <button
+              type="button"
+              className="btn btn-primary btn-with-icon"
+              disabled={saving}
+              onClick={() => setContasListaOpen(true)}
+            >
+              <AddIcon />
+              Cadastrar banco
+            </button>
+          ) : null}
+          <Link className="btn btn-soft" to={backTo}>
+            Voltar
+          </Link>
+        </div>
       </header>
 
       <form className="panel" onSubmit={(e) => void onSubmit(e)}>
@@ -499,6 +603,56 @@ export function GrupoFormPage() {
               disabled={disabled}
             />
           </div>
+          <div className="field field-span-2 grupo-campo-localidade">
+            <label htmlFor="grupo-estado">Estado</label>
+            <select
+              id="grupo-estado"
+              className="select"
+              value={form.estado}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  estado: e.target.value,
+                  cidade: '',
+                }))
+              }
+              disabled={disabled}
+            >
+              <option value="">
+                {estados.length === 0 ? 'Carregando estados…' : 'Selecione'}
+              </option>
+              {estados.map((uf) => (
+                <option key={uf.codigo} value={uf.codigo}>
+                  {uf.codigo} — {uf.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field field-span-2 grupo-campo-localidade">
+            <label htmlFor="grupo-cidade">Cidade</label>
+            <select
+              id="grupo-cidade"
+              className="select"
+              value={form.cidade}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, cidade: e.target.value }))
+              }
+              disabled={disabled || !form.estado}
+            >
+              <option value="">
+                {!form.estado
+                  ? 'Selecione o estado'
+                  : cidades.length === 0
+                    ? 'Carregando cidades…'
+                    : 'Selecione'}
+              </option>
+              {cidades.map((cidade) => (
+                <option key={cidade.id} value={cidade.id}>
+                  {cidade.nome}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <label
@@ -552,45 +706,6 @@ export function GrupoFormPage() {
               /transparencia/{form.slug}
             </a>
           </p>
-        ) : null}
-
-        {!isNew ? (
-          <>
-            <p className="form-section-title">PIX Sicredi — mensalidades</p>
-            <p className="field-hint" style={{ marginBottom: '0.85rem' }}>
-              Credenciais do caixa do grupo. Usadas no pagamento de mensalidades
-              pelos associados.
-            </p>
-            <SicrediPixFieldsForm
-              idPrefix="grupo-sicredi"
-              value={sicrediGrupo}
-              onChange={setSicrediGrupo}
-              disabled={disabled}
-            />
-
-            <p className="form-section-title">PIX Sicredi — atividades por ramo</p>
-            <p className="field-hint" style={{ marginBottom: '0.85rem' }}>
-              Cada ramo usa sua própria chave PIX no pagamento de atividades.
-            </p>
-            {ramos.map((ramo) => (
-              <div key={ramo.ramo_id} className="sicredi-ramo-block">
-                <h4>{ramo.nome}</h4>
-                <SicrediPixFieldsForm
-                  idPrefix={`ramo-${ramo.ramo_id}-sicredi`}
-                  value={
-                    sicrediRamos[ramo.ramo_id] ?? emptySicrediPixFields()
-                  }
-                  onChange={(next) =>
-                    setSicrediRamos((prev) => ({
-                      ...prev,
-                      [ramo.ramo_id]: next,
-                    }))
-                  }
-                  disabled={disabled}
-                />
-              </div>
-            ))}
-          </>
         ) : null}
 
         <div className="field">
@@ -739,7 +854,7 @@ export function GrupoFormPage() {
                     : 'Salvando…'
                   : 'Salvar'}
               </button>
-              {!isNew && form.ativo === false ? (
+              {canManagePlatform && !isNew && form.ativo === false ? (
                 <button
                   type="button"
                   className="btn btn-soft"
@@ -749,7 +864,7 @@ export function GrupoFormPage() {
                   Reativar
                 </button>
               ) : null}
-              {!isNew ? (
+              {canManagePlatform && !isNew ? (
                 <button
                   type="button"
                   className="btn btn-danger"
@@ -763,11 +878,153 @@ export function GrupoFormPage() {
           ) : (
             <p className="muted">Modo leitura — sem permissão para salvar.</p>
           )}
-          <Link className="btn btn-soft" to="/grupos">
+          <Link className="btn btn-soft" to={backTo}>
             Cancelar
           </Link>
         </div>
       </form>
+
+      {contasListaOpen && !isNew ? (
+        <div
+          className="confirm-overlay"
+          role="presentation"
+          onClick={() => setContasListaOpen(false)}
+        >
+          <div
+            className="passagem-dialog conta-bancaria-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="contas-lista-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="passagem-dialog-header">
+              <div>
+                <h3 id="contas-lista-title">Contas bancárias</h3>
+                <p className="muted">
+                  Cadastre várias contas do grupo, do mesmo ramo ou seção.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-soft"
+                onClick={() => setContasListaOpen(false)}
+              >
+                Fechar
+              </button>
+            </header>
+
+            <div className="toolbar" style={{ marginBottom: '0.85rem' }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-with-icon"
+                disabled={disabled}
+                onClick={() => {
+                  setContaEditando(null)
+                  setContaModalOpen(true)
+                }}
+              >
+                <AddIcon />
+                Nova conta
+              </button>
+            </div>
+
+            {contasBancarias.length === 0 ? (
+              <div className="empty">Nenhuma conta bancária cadastrada.</div>
+            ) : (
+              <div className="table-wrap">
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>Descrição</th>
+                      <th>Banco</th>
+                      <th>Agência</th>
+                      <th>Conta</th>
+                      <th>Ramo / seção</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contasBancarias.map((conta) => (
+                      <tr key={conta.id}>
+                        <td>{conta.descricao || '—'}</td>
+                        <td>{conta.banco_nome || '—'}</td>
+                        <td>{conta.agencia || '—'}</td>
+                        <td>{conta.conta || '—'}</td>
+                        <td>{labelContaEscopo(conta, ramoMap, secaoMap)}</td>
+                        <td>
+                          <div className="atividades-row-actions">
+                            <button
+                              type="button"
+                              className="btn btn-soft"
+                              disabled={disabled || contaBusyId === conta.id}
+                              onClick={() => {
+                                setContaEditando(conta)
+                                setContaModalOpen(true)
+                              }}
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-danger"
+                              disabled={disabled || contaBusyId === conta.id}
+                              onClick={() => void excluirContaBancaria(conta.id)}
+                            >
+                              {contaBusyId === conta.id
+                                ? 'Excluindo…'
+                                : 'Excluir'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {contaModalOpen && !isNew && id ? (
+        <ContaBancariaModal
+          empresaId={Number(id)}
+          ramos={ramos}
+          secoes={secoes}
+          editing={contaEditando}
+          onClose={() => {
+            setContaModalOpen(false)
+            setContaEditando(null)
+          }}
+          onSaved={(row) => {
+            setContasBancarias((prev) => {
+              const idx = prev.findIndex((c) => c.id === row.id)
+              if (idx >= 0) {
+                const next = [...prev]
+                next[idx] = row
+                return next
+              }
+              return [...prev, row]
+            })
+            toast.success(
+              contaEditando ? 'Conta atualizada.' : 'Conta cadastrada.',
+            )
+          }}
+        />
+      ) : null}
     </>
   )
+}
+
+function labelContaEscopo(
+  conta: ContaBancariaRow,
+  ramoMap: Map<number, string>,
+  secaoMap: Map<number, string>,
+): string {
+  if (conta.ramo_id == null) return 'Grupo'
+  const parts: string[] = [ramoMap.get(conta.ramo_id) ?? `Ramo ${conta.ramo_id}`]
+  if (conta.secao_id != null) {
+    parts.push(secaoMap.get(conta.secao_id) ?? `Seção ${conta.secao_id}`)
+  }
+  return parts.join(' · ')
 }

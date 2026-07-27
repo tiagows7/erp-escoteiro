@@ -59,6 +59,8 @@ export type Empresa = {
   email: string | null
   slug: string | null
   telefone: string | null
+  estado: string | null
+  cidade: number | null
   logo_url: string | null
   ativo: boolean | null
   sicredi_pix_client_id?: string | null
@@ -81,6 +83,20 @@ export type EmpresaRamoPixSicredi = {
   sicredi_pix_key: string | null
   sicredi_pix_base_url: string | null
   sicredi_pix_ativo: boolean
+}
+
+/** Conta bancária do grupo (várias por empresa/ramo/seção). */
+export type EmpresaContaBancaria = {
+  id: number
+  empresa_id: number
+  ramo_id: number | null
+  secao_id: number | null
+  descricao: string | null
+  banco_nome: string | null
+  agencia: string | null
+  conta: string | null
+  api_client_id: string | null
+  api_client_secret: string | null
 }
 
 export type Ramo = {

@@ -13,7 +13,10 @@ type Payload = {
     cnpj?: string | null
     email?: string | null
     telefone?: string | null
+    estado?: string | null
+    cidade?: string | number | null
     ativo?: boolean
+    portal_transparencia?: boolean
   }
   admin: {
     nome: string
@@ -102,7 +105,12 @@ Deno.serve(async (req) => {
         cnpj: body.grupo.cnpj?.replace(/\D/g, '') || null,
         email: body.grupo.email?.trim() || null,
         telefone: body.grupo.telefone?.trim() || null,
+        estado: body.grupo.estado?.toString().trim().toUpperCase() || null,
+        cidade: body.grupo.cidade != null && String(body.grupo.cidade).trim()
+          ? Number(body.grupo.cidade)
+          : null,
         ativo: body.grupo.ativo !== false,
+        portal_transparencia: body.grupo.portal_transparencia !== false,
       })
       .select('id, nome, slug')
       .single()

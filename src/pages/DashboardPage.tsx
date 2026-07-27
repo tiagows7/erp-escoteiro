@@ -81,6 +81,28 @@ function formatDate(value: string | null) {
   return `${d}/${m}/${y}`
 }
 
+function statusValidadeRegistro(isoDate: string | null | undefined): {
+  label: string
+  tone: 'ok' | 'warn' | 'danger' | 'empty'
+} {
+  if (!isoDate) return { label: 'Não informada', tone: 'empty' }
+  const [y, m, d] = isoDate.slice(0, 10).split('-').map(Number)
+  if (!y || !m || !d) return { label: 'Não informada', tone: 'empty' }
+
+  const validade = new Date(y, m - 1, d)
+  const hoje = new Date()
+  hoje.setHours(0, 0, 0, 0)
+  validade.setHours(0, 0, 0, 0)
+
+  const diffDays = Math.round(
+    (validade.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
+  )
+
+  if (diffDays < 0) return { label: 'Vencida', tone: 'danger' }
+  if (diffDays <= 30) return { label: 'A vencer', tone: 'warn' }
+  return { label: 'Em dia', tone: 'ok' }
+}
+
 function idadeAnosMeses(isoDate: string | null | undefined): {
   anos: number
   meses: number
@@ -118,6 +140,21 @@ function associadoEhVoluntario(opts: {
   return false
 }
 
+/** Limites de passagem em meses totais (igual ao SQL do dashboard). */
+const PASSAGEM_LIMITES: Record<number, { mesesIni: number; mesesFim: number }> =
+  {
+    1: { mesesIni: 0, mesesFim: 126 },
+    2: { mesesIni: 126, mesesFim: 174 },
+    3: { mesesIni: 174, mesesFim: 210 },
+    4: { mesesIni: 210, mesesFim: 258 },
+  }
+
+function idadeMesesTotais(isoDate: string | null | undefined): number | null {
+  const idade = idadeAnosMeses(isoDate)
+  if (!idade) return null
+  return idade.anos * 12 + idade.meses
+}
+
 function passagemLimiteLabel(ramoId: number): string {
   switch (ramoId) {
     case 1:
@@ -145,6 +182,12 @@ export function DashboardPage() {
     const r = profile?.codigo_ramo
     return r != null && r >= 1 && r <= 5 ? r : null
   }, [associadoView, profile?.codigo_ramo])
+  /** Com ramo + seção: filtra totais/passagens pelos dois. */
+  const secaoFiltro = useMemo(() => {
+    if (associadoView || ramoFiltro == null) return null
+    const s = profile?.codigo_secao
+    return s != null && s > 0 ? s : null
+  }, [associadoView, ramoFiltro, profile?.codigo_secao])
   const [ramos, setRamos] = useState<DashboardRamo[]>([])
   const [passagens, setPassagens] = useState<DashboardPassagemRamo[]>([])
   const [aniversariantes, setAniversariantes] = useState<
@@ -156,6 +199,7 @@ export function DashboardPage() {
   const [mensagemAniversario, setMensagemAniversario] = useState<string | null>(
     null,
   )
+  const [validadeRegistro, setValidadeRegistro] = useState<string | null>(null)
 
   const [detalheRamo, setDetalheRamo] = useState<DashboardPassagemRamo | null>(
     null,
@@ -209,6 +253,9 @@ export function DashboardPage() {
       if (ramoFiltro != null) {
         totalQuery = totalQuery.eq('ramo', ramoFiltro)
       }
+      if (secaoFiltro != null) {
+        totalQuery = totalQuery.eq('secao', secaoFiltro)
+      }
 
       const [contagem, passagem, anivers, totalRes] = await Promise.all([
         supabase.rpc('dashboard_contagem_ramos'),
@@ -236,14 +283,18 @@ export function DashboardPage() {
         setError(null)
 
         if (ramoFiltro != null && ramoFiltro >= 1 && ramoFiltro <= 4) {
-          const ramoCard = ramosAll.find((r) => r.ramo_id === ramoFiltro)
+          let assocQuery = supabase
+            .from('associados')
+            .select('associado_id, data_nascimento, categoria')
+            .eq('empresa_id', empresaId!)
+            .eq('ramo', ramoFiltro)
+            .eq('ativo', true)
+          if (secaoFiltro != null) {
+            assocQuery = assocQuery.eq('secao', secaoFiltro)
+          }
+
           const [{ data: assocRamo }, { data: categorias }] = await Promise.all([
-            supabase
-              .from('associados')
-              .select('associado_id, data_nascimento, categoria')
-              .eq('empresa_id', empresaId!)
-              .eq('ramo', ramoFiltro)
-              .eq('ativo', true),
+            assocQuery,
             supabase.from('categoria').select('categoria_id, nome'),
           ])
 
@@ -261,39 +312,125 @@ export function DashboardPage() {
             categoria: number | null
           }
 
-          const voluntariosCount = ((assocRamo as AssocVol[] | null) ?? []).filter(
-            (a) =>
-              associadoEhVoluntario({
-                data_nascimento: a.data_nascimento,
-                categoria_id: a.categoria,
-                categoria_nome:
-                  a.categoria != null
-                    ? (catNomeById.get(a.categoria) ?? null)
-                    : null,
-              }),
+          const assocList = (assocRamo as AssocVol[] | null) ?? []
+          const beneficiariosCount = assocList.filter((a) => {
+            const catNome =
+              a.categoria != null
+                ? (catNomeById.get(a.categoria) ?? null)
+                : null
+            return categoriaEhBeneficiario(catNome)
+          }).length
+          const voluntariosCount = assocList.filter((a) =>
+            associadoEhVoluntario({
+              data_nascimento: a.data_nascimento,
+              categoria_id: a.categoria,
+              categoria_nome:
+                a.categoria != null
+                  ? (catNomeById.get(a.categoria) ?? null)
+                  : null,
+            }),
           ).length
 
+          const ramoCardBase = ramosAll.find((r) => r.ramo_id === ramoFiltro)
           const cards: DashboardRamo[] = []
-          if (ramoCard) cards.push(ramoCard)
+          if (ramoCardBase) {
+            cards.push({
+              ...ramoCardBase,
+              total:
+                secaoFiltro != null
+                  ? beneficiariosCount
+                  : Number(ramoCardBase.total ?? beneficiariosCount),
+            })
+          }
           cards.push({
             ramo_id: 5,
             ramo_nome: 'VOLUNTÁRIOS',
             total: voluntariosCount,
           })
           setRamos(cards)
+
+          // Passagens com seção: recalcula (saídas da seção; chegadas do ramo anterior).
+          if (secaoFiltro != null) {
+            const lim = PASSAGEM_LIMITES[ramoFiltro]
+            const passagemBase = passagensAll.find(
+              (p) => p.ramo_id === ramoFiltro,
+            )
+            if (lim && passagemBase) {
+              const [saidaRes, chegadaRes] = await Promise.all([
+                supabase
+                  .from('associados')
+                  .select('associado_id, data_nascimento, categoria')
+                  .eq('empresa_id', empresaId!)
+                  .eq('ramo', ramoFiltro)
+                  .eq('secao', secaoFiltro)
+                  .eq('ativo', true)
+                  .not('data_nascimento', 'is', null),
+                ramoFiltro > 1
+                  ? supabase
+                      .from('associados')
+                      .select('associado_id, data_nascimento, categoria')
+                      .eq('empresa_id', empresaId!)
+                      .eq('ramo', ramoFiltro - 1)
+                      .eq('ativo', true)
+                      .not('data_nascimento', 'is', null)
+                  : Promise.resolve({ data: [], error: null }),
+              ])
+
+              if (!mounted) return
+
+              type AssocPass = {
+                data_nascimento: string | null
+                categoria: number | null
+              }
+              const isBenef = (a: AssocPass) =>
+                categoriaEhBeneficiario(
+                  a.categoria != null
+                    ? (catNomeById.get(a.categoria) ?? null)
+                    : null,
+                )
+
+              const saidas = ((saidaRes.data as AssocPass[] | null) ?? []).filter(
+                (a) => {
+                  const m = idadeMesesTotais(a.data_nascimento)
+                  return isBenef(a) && m != null && m >= lim.mesesFim
+                },
+              ).length
+              const chegadas = (
+                (chegadaRes.data as AssocPass[] | null) ?? []
+              ).filter((a) => {
+                const m = idadeMesesTotais(a.data_nascimento)
+                return isBenef(a) && m != null && m >= lim.mesesIni
+              }).length
+
+              setPassagens([
+                {
+                  ...passagemBase,
+                  total_passagem: saidas + chegadas,
+                },
+              ])
+            } else {
+              setPassagens(
+                passagensAll.filter((p) => p.ramo_id === ramoFiltro),
+              )
+            }
+          } else {
+            setPassagens(
+              passagensAll.filter((p) => p.ramo_id === ramoFiltro),
+            )
+          }
         } else {
           setRamos(
             ramoFiltro != null
               ? ramosAll.filter((r) => r.ramo_id === ramoFiltro)
               : ramosAll,
           )
+          setPassagens(
+            ramoFiltro != null
+              ? passagensAll.filter((p) => p.ramo_id === ramoFiltro)
+              : passagensAll,
+          )
         }
 
-        setPassagens(
-          ramoFiltro != null
-            ? passagensAll.filter((p) => p.ramo_id === ramoFiltro)
-            : passagensAll,
-        )
         setAniversariantes(
           (anivers.data as DashboardAniversariante[]) ?? [],
         )
@@ -306,14 +443,15 @@ export function DashboardPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, associadoView, ramoFiltro])
+  }, [empresaId, associadoView, ramoFiltro, secaoFiltro])
 
-  // Login por registro: verifica aniversário na tabela associados
+  // Login por registro: validade do registro + aniversário
   useEffect(() => {
     let mounted = true
 
-    async function checkAniversario() {
+    async function loadAssociadoTopo() {
       setMensagemAniversario(null)
+      setValidadeRegistro(null)
       if (!associadoView || !profile?.registro || !empresaId) return
 
       const registroNum = Number(String(profile.registro).replace(/\D/g, ''))
@@ -321,12 +459,19 @@ export function DashboardPage() {
 
       const { data, error: queryError } = await supabase
         .from('associados')
-        .select('nome, data_nascimento')
+        .select('nome, data_nascimento, validade_registro')
         .eq('empresa_id', empresaId)
         .eq('registro', registroNum)
         .maybeSingle()
 
       if (!mounted || queryError || !data) return
+
+      setValidadeRegistro(
+        data.validade_registro
+          ? String(data.validade_registro).slice(0, 10)
+          : null,
+      )
+
       if (!isBirthdayToday(data.data_nascimento)) return
 
       const nome = primeiroNome(data.nome || profile.nome || '')
@@ -343,7 +488,7 @@ export function DashboardPage() {
       }
     }
 
-    void checkAniversario()
+    void loadAssociadoTopo()
     return () => {
       mounted = false
     }
@@ -355,18 +500,23 @@ export function DashboardPage() {
     setListaError(null)
     setListaRows([])
 
-    // Login com ramo 1-4: card Voluntários lista só voluntários daquele ramo.
+    // Login com ramo 1-4: card Voluntários lista só voluntários daquele ramo/seção.
     if (item.ramo_id === 5 && ramoFiltro != null && ramoFiltro <= 4) {
+      let assocQ = supabase
+        .from('associados')
+        .select(
+          'associado_id, nome, registro, data_nascimento, categoria, secao',
+        )
+        .eq('empresa_id', empresaId!)
+        .eq('ramo', ramoFiltro)
+        .eq('ativo', true)
+        .order('nome', { ascending: true })
+      if (secaoFiltro != null) {
+        assocQ = assocQ.eq('secao', secaoFiltro)
+      }
+
       const [assocRes, catRes, secaoRes] = await Promise.all([
-        supabase
-          .from('associados')
-          .select(
-            'associado_id, nome, registro, data_nascimento, categoria, secao',
-          )
-          .eq('empresa_id', empresaId!)
-          .eq('ramo', ramoFiltro)
-          .eq('ativo', true)
-          .order('nome', { ascending: true }),
+        assocQ,
         supabase.from('categoria').select('categoria_id, nome'),
         supabase
           .from('secao')
@@ -434,6 +584,93 @@ export function DashboardPage() {
       return
     }
 
+    // Beneficiários do ramo (+ seção, se houver no perfil).
+    if (
+      item.ramo_id >= 1 &&
+      item.ramo_id <= 4 &&
+      (secaoFiltro != null || (ramoFiltro != null && ramoFiltro === item.ramo_id))
+    ) {
+      let assocQ = supabase
+        .from('associados')
+        .select(
+          'associado_id, nome, registro, data_nascimento, categoria, secao',
+        )
+        .eq('empresa_id', empresaId!)
+        .eq('ramo', item.ramo_id)
+        .eq('ativo', true)
+        .order('nome', { ascending: true })
+      if (secaoFiltro != null && ramoFiltro === item.ramo_id) {
+        assocQ = assocQ.eq('secao', secaoFiltro)
+      }
+
+      const [assocRes, catRes, secaoRes] = await Promise.all([
+        assocQ,
+        supabase.from('categoria').select('categoria_id, nome'),
+        supabase
+          .from('secao')
+          .select('secao_id, nome')
+          .eq('empresa_id', empresaId!),
+      ])
+
+      if (assocRes.error || catRes.error || secaoRes.error) {
+        setListaError(
+          assocRes.error?.message ??
+            catRes.error?.message ??
+            secaoRes.error?.message ??
+            'Erro ao carregar associados',
+        )
+        setListaRows([])
+        setListaLoading(false)
+        return
+      }
+
+      const catNomeById = new Map(
+        ((catRes.data ?? []) as { categoria_id: number; nome: string }[]).map(
+          (c) => [c.categoria_id, c.nome],
+        ),
+      )
+      const secaoNomeById = new Map(
+        ((secaoRes.data ?? []) as { secao_id: number; nome: string }[]).map(
+          (s) => [s.secao_id, s.nome],
+        ),
+      )
+
+      type AssocRow = {
+        associado_id: number
+        nome: string
+        registro: number | null
+        data_nascimento: string | null
+        categoria: number | null
+        secao: number | null
+      }
+
+      const rows = ((assocRes.data as AssocRow[] | null) ?? [])
+        .filter((a) =>
+          categoriaEhBeneficiario(
+            a.categoria != null
+              ? (catNomeById.get(a.categoria) ?? null)
+              : null,
+          ),
+        )
+        .map((a): DashboardDetalheRamo => {
+          const idade = idadeAnosMeses(a.data_nascimento)
+          return {
+            associado_id: a.associado_id,
+            nome: a.nome,
+            registro: a.registro,
+            data_nascimento: a.data_nascimento,
+            anos: idade?.anos ?? 0,
+            meses: idade?.meses ?? 0,
+            secao_nome:
+              a.secao != null ? (secaoNomeById.get(a.secao) ?? null) : null,
+          }
+        })
+
+      setListaRows(rows)
+      setListaLoading(false)
+      return
+    }
+
     const { data, error: rpcError } = await supabase.rpc(
       'dashboard_detalhe_ramo',
       { p_ramo: item.ramo_id },
@@ -459,6 +696,98 @@ export function DashboardPage() {
     setDetalheLoading(true)
     setDetalheError(null)
     setDetalheRows([])
+
+    const lim = PASSAGEM_LIMITES[item.ramo_id]
+    if (secaoFiltro != null && lim && item.ramo_id === ramoFiltro) {
+      const [catRes, saidaRes, chegadaRes] = await Promise.all([
+        supabase.from('categoria').select('categoria_id, nome'),
+        supabase
+          .from('associados')
+          .select('associado_id, nome, data_nascimento, categoria')
+          .eq('empresa_id', empresaId!)
+          .eq('ramo', item.ramo_id)
+          .eq('secao', secaoFiltro)
+          .eq('ativo', true)
+          .not('data_nascimento', 'is', null)
+          .order('nome', { ascending: true }),
+        item.ramo_id > 1
+          ? supabase
+              .from('associados')
+              .select('associado_id, nome, data_nascimento, categoria')
+              .eq('empresa_id', empresaId!)
+              .eq('ramo', item.ramo_id - 1)
+              .eq('ativo', true)
+              .not('data_nascimento', 'is', null)
+              .order('nome', { ascending: true })
+          : Promise.resolve({ data: [], error: null }),
+      ])
+
+      if (saidaRes.error || chegadaRes.error || catRes.error) {
+        setDetalheError(
+          saidaRes.error?.message ??
+            chegadaRes.error?.message ??
+            catRes.error?.message ??
+            'Erro ao carregar passagens',
+        )
+        setDetalheRows([])
+        setDetalheLoading(false)
+        return
+      }
+
+      const catNomeById = new Map(
+        ((catRes.data ?? []) as { categoria_id: number; nome: string }[]).map(
+          (c) => [c.categoria_id, c.nome],
+        ),
+      )
+
+      type AssocPass = {
+        associado_id: number
+        nome: string
+        data_nascimento: string | null
+        categoria: number | null
+      }
+
+      const toRow = (
+        a: AssocPass,
+        tipo: 'chegada' | 'saida',
+      ): DashboardDetalhePassagem | null => {
+        if (
+          !categoriaEhBeneficiario(
+            a.categoria != null
+              ? (catNomeById.get(a.categoria) ?? null)
+              : null,
+          )
+        ) {
+          return null
+        }
+        const mesesTotais = idadeMesesTotais(a.data_nascimento)
+        if (mesesTotais == null) return null
+        if (tipo === 'saida' && mesesTotais < lim.mesesFim) return null
+        if (tipo === 'chegada' && mesesTotais < lim.mesesIni) return null
+        const idade = idadeAnosMeses(a.data_nascimento)
+        return {
+          tipo,
+          associado_id: a.associado_id,
+          nome: a.nome,
+          data_nascimento: a.data_nascimento,
+          anos: idade?.anos ?? 0,
+          meses: idade?.meses ?? 0,
+        }
+      }
+
+      const rows: DashboardDetalhePassagem[] = []
+      for (const a of (chegadaRes.data as AssocPass[] | null) ?? []) {
+        const row = toRow(a, 'chegada')
+        if (row) rows.push(row)
+      }
+      for (const a of (saidaRes.data as AssocPass[] | null) ?? []) {
+        const row = toRow(a, 'saida')
+        if (row) rows.push(row)
+      }
+      setDetalheRows(rows)
+      setDetalheLoading(false)
+      return
+    }
 
     const { data, error: rpcError } = await supabase.rpc(
       'dashboard_detalhe_passagem',
@@ -488,6 +817,11 @@ export function DashboardPage() {
   const chegadas = detalheRows.filter((r) => r.tipo === 'chegada')
   const saidas = detalheRows.filter((r) => r.tipo === 'saida')
 
+  const validadeStatus = useMemo(
+    () => statusValidadeRegistro(validadeRegistro),
+    [validadeRegistro],
+  )
+
   return (
     <>
       <header className="page-header">
@@ -500,6 +834,25 @@ export function DashboardPage() {
           </p>
         </div>
       </header>
+
+      {associadoView ? (
+        <section
+          className={`associado-validade-registro is-${validadeStatus.tone}`}
+          aria-live="polite"
+        >
+          <div>
+            <span>Validade do registro</span>
+            <strong>
+              {validadeRegistro
+                ? formatDate(validadeRegistro)
+                : 'Não informada'}
+            </strong>
+          </div>
+          <span className="associado-validade-badge">
+            {validadeStatus.label}
+          </span>
+        </section>
+      ) : null}
 
       {error ? (
         <AlertMessage tone="error" title="Não foi possível carregar">
@@ -528,7 +881,11 @@ export function DashboardPage() {
       <section className="stats-grid">
         <article className="stat-card stat-card-total">
           <span>
-            {ramoFiltro != null ? 'Total ativos do ramo' : 'Total ativos'}
+            {secaoFiltro != null
+              ? 'Total ativos do ramo/seção'
+              : ramoFiltro != null
+                ? 'Total ativos do ramo'
+                : 'Total ativos'}
           </span>
           <strong>{loading ? '—' : totalAtivos}</strong>
         </article>
@@ -663,6 +1020,7 @@ export function DashboardPage() {
         <StaffAtividadesPanel
           empresaId={empresaId}
           codigoRamo={profile?.codigo_ramo ?? null}
+          codigoSecao={profile?.codigo_secao ?? null}
         />
       ) : null}
 
@@ -769,9 +1127,13 @@ export function DashboardPage() {
                 <p className="muted">
                   {listaRamo.ramo_id === 5
                     ? ramoFiltro != null && ramoFiltro <= 4
-                      ? 'Voluntários ativos deste ramo'
+                      ? secaoFiltro != null
+                        ? 'Voluntários ativos deste ramo/seção'
+                        : 'Voluntários ativos deste ramo'
                       : 'Voluntários ativos do grupo'
-                    : 'Beneficiários ativos deste ramo'}
+                    : secaoFiltro != null
+                      ? 'Beneficiários ativos deste ramo/seção'
+                      : 'Beneficiários ativos deste ramo'}
                 </p>
               </div>
               <button

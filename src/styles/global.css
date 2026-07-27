@@ -584,6 +584,31 @@ button {
   font-size: 1.02rem;
 }
 
+.conta-bancaria-secoes {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.conta-bancaria-secao-block {
+  padding: 0.85rem 0.95rem;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: #fafbfa;
+}
+
+.conta-bancaria-secao-block h5 {
+  margin: 0 0 0.55rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.conta-bancaria-dialog {
+  width: min(640px, 100%);
+  max-height: min(90vh, 820px);
+  overflow: auto;
+}
+
 .associado-mensalidade-resumo {
   display: flex;
   flex-wrap: wrap;
@@ -632,6 +657,162 @@ button {
   margin-top: 0.35rem;
 }
 
+.despesas-relatorio-resumo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 0.35rem;
+}
+
+.despesas-relatorio-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-height: 7.5rem;
+  padding: 1.15rem 1.2rem 1.2rem;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  border-left-width: 5px;
+  box-shadow: var(--shadow);
+  animation: rise 420ms ease both;
+}
+
+.despesas-relatorio-card::before {
+  content: '';
+  position: absolute;
+  inset: auto -18% -45% auto;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.despesas-relatorio-card::after {
+  content: '';
+  position: absolute;
+  top: 0.95rem;
+  right: 0.95rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.despesas-relatorio-card-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.despesas-relatorio-card-value {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: clamp(1.35rem, 2.4vw, 1.85rem);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  font-weight: 700;
+}
+
+.despesas-relatorio-card-meta {
+  display: inline-flex;
+  align-items: center;
+  margin-top: auto;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.despesas-relatorio-card-emitidas {
+  border-left-color: #1a56b0;
+  background: linear-gradient(145deg, #eef4fc 0%, #f8fbff 55%, #ffffff 100%);
+  animation-delay: 40ms;
+}
+
+.despesas-relatorio-card-emitidas .despesas-relatorio-card-label {
+  color: #0d47a1;
+}
+
+.despesas-relatorio-card-emitidas .despesas-relatorio-card-value {
+  color: #1a56b0;
+}
+
+.despesas-relatorio-card-emitidas .despesas-relatorio-card-meta {
+  color: #1a56b0;
+  background: rgba(26, 86, 176, 0.1);
+}
+
+.despesas-relatorio-card-emitidas::before {
+  background: rgba(26, 86, 176, 0.12);
+}
+
+.despesas-relatorio-card-emitidas::after {
+  background: #1a56b0;
+  box-shadow: 0 0 0 4px rgba(26, 86, 176, 0.15);
+}
+
+.despesas-relatorio-card-pago {
+  border-left-color: #2f8f4e;
+  background: linear-gradient(145deg, #e8f6ec 0%, #f5fcf7 55%, #ffffff 100%);
+  animation-delay: 90ms;
+}
+
+.despesas-relatorio-card-pago .despesas-relatorio-card-label {
+  color: #1f5f35;
+}
+
+.despesas-relatorio-card-pago .despesas-relatorio-card-value {
+  color: #247a3f;
+}
+
+.despesas-relatorio-card-pago .despesas-relatorio-card-meta {
+  color: #247a3f;
+  background: rgba(47, 143, 78, 0.12);
+}
+
+.despesas-relatorio-card-pago::before {
+  background: rgba(47, 143, 78, 0.14);
+}
+
+.despesas-relatorio-card-pago::after {
+  background: #2f8f4e;
+  box-shadow: 0 0 0 4px rgba(47, 143, 78, 0.16);
+}
+
+.despesas-relatorio-card-aberto {
+  border-left-color: #c62828;
+  background: linear-gradient(145deg, #fdecea 0%, #fff6f5 55%, #ffffff 100%);
+  animation-delay: 140ms;
+}
+
+.despesas-relatorio-card-aberto .despesas-relatorio-card-label {
+  color: #8e1f1f;
+}
+
+.despesas-relatorio-card-aberto .despesas-relatorio-card-value {
+  color: #c62828;
+}
+
+.despesas-relatorio-card-aberto .despesas-relatorio-card-meta {
+  color: #c62828;
+  background: rgba(198, 40, 40, 0.1);
+}
+
+.despesas-relatorio-card-aberto::before {
+  background: rgba(198, 40, 40, 0.12);
+}
+
+.despesas-relatorio-card-aberto::after {
+  background: #c62828;
+  box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.14);
+}
+
 .associado-mensalidade-resumo.is-vencidas {
   background: linear-gradient(160deg, #fff 0%, #fdf2f2 100%);
   border-color: #e8c5c5;
@@ -639,6 +820,39 @@ button {
 
 .associado-mensalidade-resumo.is-vencidas strong {
   color: var(--danger);
+}
+
+.associado-mensalidade-resumo.is-pago {
+  background: linear-gradient(160deg, #fff 0%, #f0f7f1 100%);
+  border-color: #c5e0c9;
+}
+
+.associado-mensalidade-resumo.is-pago strong {
+  color: #2f6b3a;
+}
+
+.despesas-relatorio-cabecalho {
+  margin-bottom: 0.85rem;
+}
+
+.despesas-relatorio-cabecalho h2 {
+  margin: 0 0 0.25rem;
+}
+
+.despesas-relatorio-cabecalho p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+}
+
+.print-only {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .despesas-relatorio-resumo-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 700px) {
@@ -703,6 +917,24 @@ button {
   margin: 0;
   font-size: 0.88rem;
   color: var(--ink-muted);
+}
+
+.associado-atividade-escopo,
+.staff-atividade-escopo {
+  display: inline-flex;
+  align-items: center;
+  margin: 0.35rem 0 0;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1.2;
+  color: #0d47a1;
+  background: rgba(26, 86, 176, 0.1);
+}
+
+.staff-atividade-escopo {
+  margin-bottom: 0.1rem;
 }
 
 .associado-atividade-valor {
@@ -947,6 +1179,98 @@ button {
   gap: 0.85rem;
   align-items: stretch;
   margin-bottom: 0.25rem;
+}
+
+.associado-validade-registro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin: 0 0 1rem;
+  padding: 0.95rem 1.1rem;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: linear-gradient(145deg, #eef4fc 0%, #f8fbff 55%, #ffffff 100%);
+  box-shadow: var(--shadow);
+  animation: rise 420ms ease both;
+}
+
+.associado-validade-registro span {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.associado-validade-registro strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: clamp(1.25rem, 2.5vw, 1.65rem);
+  letter-spacing: -0.02em;
+  color: #1a56b0;
+}
+
+.associado-validade-badge {
+  display: inline-flex !important;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+  text-transform: none !important;
+  color: #1a56b0 !important;
+  background: rgba(26, 86, 176, 0.12);
+}
+
+.associado-validade-registro.is-ok {
+  border-color: #c5e0c9;
+  background: linear-gradient(145deg, #e8f6ec 0%, #f5fcf7 55%, #ffffff 100%);
+}
+
+.associado-validade-registro.is-ok strong {
+  color: #247a3f;
+}
+
+.associado-validade-registro.is-ok .associado-validade-badge {
+  color: #247a3f !important;
+  background: rgba(47, 143, 78, 0.14);
+}
+
+.associado-validade-registro.is-warn {
+  border-color: #e6d59a;
+  background: linear-gradient(145deg, #fff8db 0%, #fffdf5 55%, #ffffff 100%);
+}
+
+.associado-validade-registro.is-warn strong {
+  color: #8a6d00;
+}
+
+.associado-validade-registro.is-warn .associado-validade-badge {
+  color: #8a6d00 !important;
+  background: rgba(224, 176, 0, 0.18);
+}
+
+.associado-validade-registro.is-danger {
+  border-color: #e8c5c5;
+  background: linear-gradient(145deg, #fdecea 0%, #fff6f5 55%, #ffffff 100%);
+}
+
+.associado-validade-registro.is-danger strong {
+  color: #c62828;
+}
+
+.associado-validade-registro.is-danger .associado-validade-badge {
+  color: #c62828 !important;
+  background: rgba(198, 40, 40, 0.12);
+}
+
+.associado-validade-registro.is-empty strong {
+  color: var(--ink-muted);
+  font-size: 1.15rem;
 }
 
 .aniversario-saudacao {
@@ -2339,6 +2663,13 @@ table.data tbody tr:hover {
   grid-column: span 2;
 }
 
+.grupo-campo-localidade .select {
+  min-height: 2.75rem;
+  width: 100%;
+  max-width: 100%;
+  white-space: normal;
+}
+
 @media (max-width: 700px) {
   .form-grid-2 {
     grid-template-columns: 1fr;
@@ -2770,6 +3101,24 @@ table.data tbody tr:hover {
   margin: 0.85rem 0 0.35rem;
 }
 
+.portal-secao-tabs {
+  margin: 0.35rem 0 0.5rem;
+  flex-wrap: wrap;
+}
+
+.portal-secao-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 0.75rem;
+}
+
+.portal-secao-group h3 {
+  margin: 0 0 0.55rem;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+}
+
 .portal-caixa-atual {
   margin: 0.85rem 0 0;
   color: #5a6b62;
@@ -2865,5 +3214,53 @@ table.data tbody tr:hover {
 
   .data {
     min-width: 560px;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .sidebar,
+  .mobile-topbar,
+  .sidebar-backdrop,
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .app-shell {
+    display: block;
+  }
+
+  .main {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  .panel,
+  .despesas-relatorio-print {
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 0 1.25rem !important;
+  }
+
+  .despesas-relatorio-resumo-grid {
+    break-inside: avoid;
+  }
+
+  .table-wrap {
+    overflow: visible;
+  }
+
+  .data {
+    min-width: 0;
   }
 }

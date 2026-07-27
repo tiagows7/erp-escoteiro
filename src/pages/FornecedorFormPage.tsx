@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { loadCidades, loadEstados } from '@/lib/brasilLocalidades'
 
 type Lookup = { id: number; nome: string }
 
@@ -54,18 +55,7 @@ export function FornecedorFormPage() {
   const [loading, setLoading] = useState(!isNew)
 
   useEffect(() => {
-    void supabase
-      .from('estado')
-      .select('codigo, nome')
-      .order('nome')
-      .then(({ data }) =>
-        setEstados(
-          (data ?? []).map((row) => ({
-            codigo: String(row.codigo),
-            nome: row.nome as string,
-          })),
-        ),
-      )
+    void loadEstados(supabase).then((list) => setEstados(list))
   }, [])
 
   useEffect(() => {
@@ -73,20 +63,13 @@ export function FornecedorFormPage() {
       setCidades([])
       return
     }
-    void supabase
-      .from('cidade')
-      .select('codigo, nome')
-      .eq('uf', form.fordespesa_uf)
-      .order('nome')
-      .limit(1000)
-      .then(({ data }) =>
-        setCidades(
-          (data ?? []).map((row) => ({
-            id: row.codigo as number,
-            nome: row.nome as string,
-          })),
-        ),
-      )
+    let mounted = true
+    void loadCidades(supabase, form.fordespesa_uf).then((list) => {
+      if (mounted) setCidades(list)
+    })
+    return () => {
+      mounted = false
+    }
   }, [form.fordespesa_uf])
 
   useEffect(() => {

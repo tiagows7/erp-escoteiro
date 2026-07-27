@@ -198,7 +198,7 @@ export function AssociadosPage() {
       title: 'Importar Excel?',
       message:
         'Deseja importar os associados deste arquivo?\n\n' +
-        'Registros já existentes neste grupo serão atualizados.\n' +
+        'Registros já cadastrados neste grupo serão ignorados (não atualiza).\n' +
         'Também serão criados logins (nº registro / senha = data de nascimento sem barras).',
       confirmLabel: 'Sim, importar',
       cancelLabel: 'Não',
@@ -221,6 +221,9 @@ export function AssociadosPage() {
       setImportResult(result)
       setReloadToken((n) => n + 1)
       const extra = [
+        result.skipped > 0
+          ? `${result.skipped} já cadastrado(s) ignorado(s)`
+          : '',
         result.createdLookups > 0
           ? `${result.createdLookups} cadastro(s) auxiliar(es)`
           : '',
@@ -237,7 +240,11 @@ export function AssociadosPage() {
       if (result.failed.length === 0 && result.usersFailed === 0) {
         toast.success(
           'Importação concluída',
-          `${result.inserted} novo(s) e ${result.updated} atualizado(s).${extraMsg}`,
+          `${result.inserted} novo(s)${
+            result.skipped > 0
+              ? `, ${result.skipped} já cadastrado(s) ignorado(s)`
+              : ''
+          }.${extraMsg}`,
         )
       } else {
         toast.error(
@@ -415,8 +422,10 @@ export function AssociadosPage() {
             title="Importação concluída"
           >
             <p>
-              {importResult.inserted} novo(s), {importResult.updated}{' '}
-              atualizado(s)
+              {importResult.inserted} novo(s)
+              {importResult.skipped
+                ? `, ${importResult.skipped} já cadastrado(s) ignorado(s)`
+                : ''}
               {importResult.createdLookups
                 ? `, ${importResult.createdLookups} cadastro(s) auxiliar(es) criado(s)`
                 : ''}

@@ -237,7 +237,7 @@ export function ReceitaRecebimentoFormPage() {
       return
     }
 
-    navigate('/receitas/recebimento', {
+    navigate('/receitas/relatorio', {
       state: { flashSuccess: 'Recebimento registrado com sucesso!' },
     })
   }
@@ -262,7 +262,7 @@ export function ReceitaRecebimentoFormPage() {
         <AlertMessage tone="error" title="Atenção">
           {error ?? 'Receita não encontrada'}
         </AlertMessage>
-        <Link className="btn btn-soft" to="/receitas/recebimento">
+        <Link className="btn btn-soft" to="/receitas/relatorio">
           Voltar
         </Link>
       </section>
@@ -281,7 +281,7 @@ export function ReceitaRecebimentoFormPage() {
             {situacaoTituloLabel(receita.receita_situacao)}
           </p>
         </div>
-        <Link className="btn btn-soft" to="/receitas/recebimento">
+        <Link className="btn btn-soft" to="/receitas/relatorio">
           Voltar
         </Link>
       </header>
@@ -426,7 +426,7 @@ export function ReceitaRecebimentoFormPage() {
             ) : (
               <p className="muted">Sem permissão para receber.</p>
             )}
-            <Link className="btn btn-soft" to="/receitas/recebimento">
+            <Link className="btn btn-soft" to="/receitas/relatorio">
               Cancelar
             </Link>
           </div>

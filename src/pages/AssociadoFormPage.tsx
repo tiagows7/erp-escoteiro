@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { loadCidades, loadEstados } from '@/lib/brasilLocalidades'
 import type { Ramo } from '@/types/database'
 
 type Lookup = { id: number; nome: string }
@@ -88,13 +89,13 @@ export function AssociadoFormPage() {
       supabase.from('ramos').select('ramo_id, nome, idade_inicio, idade_fim').order('ramo_id'),
       supabase.from('categoria').select('categoria_id, nome').order('nome'),
       supabase.from('funcao').select('funcao_id, nome').order('nome'),
-      supabase.from('estado').select('codigo, nome').order('nome'),
+      loadEstados(supabase),
       supabase
         .from('tipo_mensalidade')
         .select('tipomensalidade_id, nome')
         .eq('empresa_id', empresaId)
         .order('nome'),
-    ]).then(([r, c, f, e, m]) => {
+    ]).then(([r, c, f, estadosList, m]) => {
       setRamos((r.data as Ramo[]) ?? [])
       setCategorias(
         (c.data ?? []).map((row) => ({
@@ -108,12 +109,7 @@ export function AssociadoFormPage() {
           nome: row.nome as string,
         })),
       )
-      setEstados(
-        (e.data ?? []).map((row) => ({
-          codigo: row.codigo as string,
-          nome: row.nome as string,
-        })),
-      )
+      setEstados(estadosList)
       setMensalidades(
         (m.data ?? []).map((row) => ({
           id: row.tipomensalidade_id as number,
@@ -170,20 +166,13 @@ export function AssociadoFormPage() {
       setCidades([])
       return
     }
-    void supabase
-      .from('cidade')
-      .select('codigo, nome')
-      .eq('uf', form.endereco_uf)
-      .order('nome')
-      .limit(1000)
-      .then(({ data }) =>
-        setCidades(
-          (data ?? []).map((row) => ({
-            id: row.codigo as number,
-            nome: row.nome as string,
-          })),
-        ),
-      )
+    let mounted = true
+    void loadCidades(supabase, form.endereco_uf).then((list) => {
+      if (mounted) setCidades(list)
+    })
+    return () => {
+      mounted = false
+    }
   }, [form.endereco_uf])
 
   useEffect(() => {

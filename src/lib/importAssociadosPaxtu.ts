@@ -9,6 +9,7 @@ export type ImportAssociadosResult = {
   total: number
   inserted: number
   updated: number
+  skipped: number
   createdLookups: number
   createdUsers: number
   usersSkipped: number
@@ -373,12 +374,31 @@ export async function importAssociadosFromPaxtuExcel(
     total: dataRows.length,
     inserted: 0,
     updated: 0,
+    skipped: 0,
     createdLookups: 0,
     createdUsers: 0,
     usersSkipped: 0,
     usersFailed: 0,
     failed: [],
     userErrors: [],
+  }
+
+  const { data: existentesRows, error: existentesError } = await client
+    .from('associados')
+    .select('registro')
+    .eq('empresa_id', empresaId)
+    .not('registro', 'is', null)
+
+  if (existentesError) {
+    throw new Error(
+      `Não foi possível verificar registros já cadastrados: ${existentesError.message}`,
+    )
+  }
+
+  const registrosExistentes = new Set<number>()
+  for (const row of existentesRows ?? []) {
+    const n = Number((row as { registro: number | null }).registro)
+    if (Number.isFinite(n) && n > 0) registrosExistentes.add(n)
   }
 
   for (const row of dataRows) {
@@ -388,6 +408,11 @@ export async function importAssociadosFromPaxtuExcel(
       const reg = parseRegistro(cellStr(row[0]))
       if (!reg || !nome) {
         throw new Error('Registro ou nome inválido')
+      }
+
+      if (registrosExistentes.has(reg.registro)) {
+        result.skipped += 1
+        continue
       }
 
       const endereco = parseEndereco(cellStr(row[2]))
@@ -449,27 +474,10 @@ export async function importAssociadosFromPaxtuExcel(
         ativo: true,
       }
 
-      const { data: existing, error: findError } = await client
-        .from('associados')
-        .select('associado_id')
-        .eq('empresa_id', empresaId)
-        .eq('registro', reg.registro)
-        .maybeSingle()
-
-      if (findError) throw new Error(findError.message)
-
-      if (existing?.associado_id) {
-        const { error } = await client
-          .from('associados')
-          .update(payload)
-          .eq('associado_id', existing.associado_id)
-        if (error) throw new Error(error.message)
-        result.updated += 1
-      } else {
-        const { error } = await client.from('associados').insert(payload)
-        if (error) throw new Error(error.message)
-        result.inserted += 1
-      }
+      const { error } = await client.from('associados').insert(payload)
+      if (error) throw new Error(error.message)
+      result.inserted += 1
+      registrosExistentes.add(reg.registro)
 
       // Usuario de acesso: login = registro, senha = DDMMAAAA
       const userStatus = await ensureUsuarioFromAssociado({

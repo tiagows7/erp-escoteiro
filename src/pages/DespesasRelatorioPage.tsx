@@ -4,29 +4,26 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import {
-  formatCompetencia,
+  DESPESA_SITUACAO,
   formatMoney,
-  RECEITA_ORIGEM,
-  situacaoTituloLabel,
-  TITULO_SITUACAO,
-} from '@/lib/receitas'
+  situacaoDespesaLabel,
+} from '@/lib/despesas'
 import {
-  applyReceitaScope,
+  applyDespesaScope,
   resolveFinanceiroScope,
 } from '@/lib/financeiroScope'
 
-type ReceitaRow = {
-  receita_id: number
-  receita_descricao: string | null
-  receita_origem: string | null
-  receita_emissao: string | null
-  receita_vencimento: string | null
-  receita_competencia: string | null
-  receita_valor: number | null
-  receita_saldo: number | null
-  receita_situacao: number | null
-  receita_ramo: number | null
-  associados: { nome: string | null } | null
+type DespesaRow = {
+  despesa_id: number
+  despesa_finalidade: string | null
+  despesa_numeronota: string | null
+  despesa_emissao: string | null
+  despesa_vencimento: string | null
+  despesa_valor: number | null
+  despesa_saldo: number | null
+  despesa_situacao: number | null
+  despesa_ramo: number | null
+  fornecedor_despesa: { fordespesa_nome: string | null } | null
   atividades: { descricao: string | null } | null
 }
 
@@ -52,23 +49,18 @@ function todayIso(date = new Date()): string {
   return `${y}-${m}-${d}`
 }
 
-function valorRecebido(row: ReceitaRow): number {
-  const valor = Number(row.receita_valor ?? 0)
-  const saldo = Number(row.receita_saldo ?? 0)
+function valorPago(row: DespesaRow): number {
+  const valor = Number(row.despesa_valor ?? 0)
+  const saldo = Number(row.despesa_saldo ?? 0)
   return Math.max(0, valor - saldo)
 }
 
-function origemLabel(origem: string | null): string {
-  return origem === RECEITA_ORIGEM.MENSALIDADE ? 'Mensalidade' : 'Avulsa'
-}
-
-export function ReceitasRecebimentoPage() {
-  const { empresa, profile, hasPermission } = useAuth()
-  const canWrite = hasPermission('financeiro.write')
+export function DespesasRelatorioPage() {
+  const { empresa, profile } = useAuth()
   const empresaId = empresa?.id
   const scope = useMemo(() => resolveFinanceiroScope(profile), [profile])
 
-  const [rows, setRows] = useState<ReceitaRow[]>([])
+  const [rows, setRows] = useState<DespesaRow[]>([])
   const [ramos, setRamos] = useState<Lookup[]>([])
   const [dataDe, setDataDe] = useState(firstDayOfMonth)
   const [dataAte, setDataAte] = useState(todayIso)
@@ -103,23 +95,23 @@ export function ReceitasRecebimentoPage() {
     void (async () => {
       setLoading(true)
       let query = supabase
-        .from('receitas')
+        .from('despesas')
         .select(
-          'receita_id, receita_descricao, receita_origem, receita_emissao, receita_vencimento, receita_competencia, receita_valor, receita_saldo, receita_situacao, receita_ramo, associados(nome), atividades(descricao)',
+          'despesa_id, despesa_finalidade, despesa_numeronota, despesa_emissao, despesa_vencimento, despesa_valor, despesa_saldo, despesa_situacao, despesa_ramo, fornecedor_despesa(fordespesa_nome), atividades(descricao)',
         )
         .eq('empresa_id', empresaId)
-        .order('receita_emissao', { ascending: false })
+        .order('despesa_emissao', { ascending: false })
         .limit(2000)
 
-      query = applyReceitaScope(query, scope)
+      query = applyDespesaScope(query, scope)
       if (!scope && filtroRamo) {
-        query = query.eq('receita_ramo', Number(filtroRamo))
+        query = query.eq('despesa_ramo', Number(filtroRamo))
       }
       if (dataDe) {
-        query = query.gte('receita_emissao', dataDe)
+        query = query.gte('despesa_emissao', dataDe)
       }
       if (dataAte) {
-        query = query.lte('receita_emissao', dataAte)
+        query = query.lte('despesa_emissao', dataAte)
       }
 
       const { data, error: queryError } = await query
@@ -130,7 +122,7 @@ export function ReceitasRecebimentoPage() {
         setRows([])
       } else {
         setError(null)
-        setRows((data as unknown as ReceitaRow[]) ?? [])
+        setRows((data as unknown as DespesaRow[]) ?? [])
       }
       setLoading(false)
     })()
@@ -150,9 +142,12 @@ export function ReceitasRecebimentoPage() {
     if (!term) return rows
     return rows.filter(
       (r) =>
-        (r.receita_descricao ?? '').toLowerCase().includes(term) ||
+        (r.despesa_finalidade ?? '').toLowerCase().includes(term) ||
+        (r.despesa_numeronota ?? '').toLowerCase().includes(term) ||
         (r.atividades?.descricao ?? '').toLowerCase().includes(term) ||
-        (r.associados?.nome ?? '').toLowerCase().includes(term),
+        (r.fornecedor_despesa?.fordespesa_nome ?? '')
+          .toLowerCase()
+          .includes(term),
     )
   }, [rows, q])
 
@@ -160,27 +155,27 @@ export function ReceitasRecebimentoPage() {
     () =>
       filtered.filter(
         (r) =>
-          r.receita_situacao === TITULO_SITUACAO.ABERTO ||
-          r.receita_situacao === TITULO_SITUACAO.PARCIAL,
+          r.despesa_situacao === DESPESA_SITUACAO.ABERTO ||
+          r.despesa_situacao === DESPESA_SITUACAO.PARCIAL,
       ),
     [filtered],
   )
 
   const pagos = useMemo(
-    () => filtered.filter((r) => r.receita_situacao === TITULO_SITUACAO.PAGO),
+    () => filtered.filter((r) => r.despesa_situacao === DESPESA_SITUACAO.PAGO),
     [filtered],
   )
 
   const totais = useMemo(() => {
     let emitido = 0
-    let recebido = 0
+    let pago = 0
     let aberto = 0
     for (const r of filtered) {
-      emitido += Number(r.receita_valor ?? 0)
-      recebido += valorRecebido(r)
-      aberto += Number(r.receita_saldo ?? 0)
+      emitido += Number(r.despesa_valor ?? 0)
+      pago += valorPago(r)
+      aberto += Number(r.despesa_saldo ?? 0)
     }
-    return { emitido, recebido, aberto }
+    return { emitido, pago, aberto }
   }, [filtered])
 
   if (!empresaId) {
@@ -197,9 +192,9 @@ export function ReceitasRecebimentoPage() {
     <>
       <header className="page-header no-print">
         <div>
-          <h2>Relatório de Receitas</h2>
+          <h2>Relatório de Despesas</h2>
           <p>
-            Emitidas, recebidas e em aberto —{' '}
+            Emitidas, pagas e em aberto —{' '}
             <strong>{empresa?.nome}</strong>
             {scope ? ' (somente seu ramo/seção)' : ''}
           </p>
@@ -250,7 +245,7 @@ export function ReceitasRecebimentoPage() {
           ) : null}
           <input
             className="input"
-            placeholder="Buscar por descrição ou associado…"
+            placeholder="Buscar por finalidade, nota ou fornecedor…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -265,7 +260,7 @@ export function ReceitasRecebimentoPage() {
 
       <section className="panel despesas-relatorio-print">
         <div className="despesas-relatorio-cabecalho print-only">
-          <h2>Relatório de Receitas</h2>
+          <h2>Relatório de Despesas</h2>
           <p>
             {empresa?.nome}
             {dataDe || dataAte
@@ -289,13 +284,13 @@ export function ReceitasRecebimentoPage() {
                 </span>
               </article>
               <article className="despesas-relatorio-card despesas-relatorio-card-pago">
-                <span className="despesas-relatorio-card-label">Já recebido</span>
+                <span className="despesas-relatorio-card-label">Já pago</span>
                 <strong className="despesas-relatorio-card-value">
-                  {formatMoney(totais.recebido)}
+                  {formatMoney(totais.pago)}
                 </strong>
                 <span className="despesas-relatorio-card-meta">
                   {pagos.length} quitada(s)
-                  {abertos.some((r) => valorRecebido(r) > 0)
+                  {abertos.some((r) => valorPago(r) > 0)
                     ? ' · inclui parciais'
                     : ''}
                 </span>
@@ -313,8 +308,8 @@ export function ReceitasRecebimentoPage() {
 
             <p className="field-hint" style={{ marginTop: '0.85rem' }}>
               {filtered.length === 0
-                ? 'Nenhuma receita no período.'
-                : `${filtered.length} receita(s) emitida(s) no período selecionado.`}
+                ? 'Nenhuma despesa no período.'
+                : `${filtered.length} despesa(s) emitida(s) no período selecionado.`}
             </p>
           </>
         )}
@@ -327,42 +322,40 @@ export function ReceitasRecebimentoPage() {
               <div>
                 <h3>Em aberto</h3>
                 <p className="muted">
-                  Títulos com saldo a receber (abertos e parciais).
+                  Títulos com saldo a pagar (abertos e parciais).
                 </p>
               </div>
               <div className="badge badge-danger">
                 {formatMoney(totais.aberto)}
               </div>
             </div>
-            <ReceitasRelatorioTabela
+            <DespesasRelatorioTabela
               rows={abertos}
               ramoMap={ramoMap}
               mode="aberto"
-              canWrite={canWrite}
-              emptyMessage="Nenhuma receita em aberto no período."
+              emptyMessage="Nenhuma despesa em aberto no período."
             />
           </section>
 
           <section className="panel despesas-relatorio-print">
             <div className="passagem-header">
               <div>
-                <h3>Já recebidas</h3>
+                <h3>Já pagas</h3>
                 <p className="muted">
-                  Receitas quitadas no período de emissão.
+                  Despesas quitadas no período de emissão.
                 </p>
               </div>
               <div className="badge">
                 {formatMoney(
-                  pagos.reduce((s, r) => s + Number(r.receita_valor ?? 0), 0),
+                  pagos.reduce((s, r) => s + Number(r.despesa_valor ?? 0), 0),
                 )}
               </div>
             </div>
-            <ReceitasRelatorioTabela
+            <DespesasRelatorioTabela
               rows={pagos}
               ramoMap={ramoMap}
               mode="pago"
-              canWrite={canWrite}
-              emptyMessage="Nenhuma receita recebida no período."
+              emptyMessage="Nenhuma despesa paga no período."
             />
           </section>
         </>
@@ -371,17 +364,15 @@ export function ReceitasRecebimentoPage() {
   )
 }
 
-function ReceitasRelatorioTabela({
+function DespesasRelatorioTabela({
   rows,
   ramoMap,
   mode,
-  canWrite,
   emptyMessage,
 }: {
-  rows: ReceitaRow[]
+  rows: DespesaRow[]
   ramoMap: Map<number, string>
   mode: 'aberto' | 'pago'
-  canWrite: boolean
   emptyMessage: string
 }) {
   if (rows.length === 0) {
@@ -391,7 +382,7 @@ function ReceitasRelatorioTabela({
   return (
     <>
       <p className="field-hint" style={{ marginBottom: '0.75rem' }}>
-        {rows.length} receita(s)
+        {rows.length} despesa(s)
       </p>
       <div className="table-wrap">
         <table className="data">
@@ -400,15 +391,13 @@ function ReceitasRelatorioTabela({
               <th className="no-print"></th>
               <th>Emissão</th>
               <th>Vencimento</th>
-              <th>Descrição</th>
-              <th>Associado</th>
-              <th>Origem</th>
-              <th>Competência</th>
+              <th>Fornecedor</th>
+              <th>Finalidade</th>
               <th>Ramo</th>
               <th>Valor</th>
               {mode === 'aberto' ? (
                 <>
-                  <th>Recebido</th>
+                  <th>Pago</th>
                   <th>Saldo</th>
                 </>
               ) : null}
@@ -417,41 +406,30 @@ function ReceitasRelatorioTabela({
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.receita_id}>
+              <tr key={row.despesa_id}>
                 <td className="no-print">
-                  {mode === 'aberto' && canWrite ? (
-                    <Link
-                      className="btn btn-primary"
-                      to={`/receitas/recebimento/${row.receita_id}`}
-                    >
-                      Receber
-                    </Link>
-                  ) : (
-                    <Link
-                      className="btn btn-soft"
-                      to={`/receitas/inclusao/${row.receita_id}`}
-                    >
-                      Abrir
-                    </Link>
-                  )}
+                  <Link
+                    className="btn btn-soft"
+                    to={`/despesas/inclusao/${row.despesa_id}`}
+                  >
+                    Abrir
+                  </Link>
                 </td>
-                <td>{formatDate(row.receita_emissao)}</td>
-                <td>{formatDate(row.receita_vencimento)}</td>
-                <td>{row.receita_descricao || '—'}</td>
-                <td>{row.associados?.nome || '—'}</td>
-                <td>{origemLabel(row.receita_origem)}</td>
-                <td>{formatCompetencia(row.receita_competencia)}</td>
+                <td>{formatDate(row.despesa_emissao)}</td>
+                <td>{formatDate(row.despesa_vencimento)}</td>
+                <td>{row.fornecedor_despesa?.fordespesa_nome || '—'}</td>
+                <td>{row.despesa_finalidade || '—'}</td>
                 <td>
-                  {(row.receita_ramo && ramoMap.get(row.receita_ramo)) || '—'}
+                  {(row.despesa_ramo && ramoMap.get(row.despesa_ramo)) || '—'}
                 </td>
-                <td>{formatMoney(row.receita_valor)}</td>
+                <td>{formatMoney(row.despesa_valor)}</td>
                 {mode === 'aberto' ? (
                   <>
-                    <td>{formatMoney(valorRecebido(row))}</td>
-                    <td>{formatMoney(row.receita_saldo)}</td>
+                    <td>{formatMoney(valorPago(row))}</td>
+                    <td>{formatMoney(row.despesa_saldo)}</td>
                   </>
                 ) : null}
-                <td>{situacaoTituloLabel(row.receita_situacao)}</td>
+                <td>{situacaoDespesaLabel(row.despesa_situacao)}</td>
               </tr>
             ))}
           </tbody>

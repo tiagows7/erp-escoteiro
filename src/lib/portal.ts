@@ -26,6 +26,8 @@ export type PortalDespesa = {
   despesa_finalidade: string | null
   fornecedor_nome: string | null
   ramo_nome: string | null
+  secao_id: number | null
+  secao_nome: string | null
   despesa_valor: number | null
   despesa_saldo: number | null
   despesa_situacao: number | null
@@ -39,10 +41,17 @@ export type PortalReceita = {
   receita_competencia: string | null
   receita_descricao: string | null
   receita_origem: string | null
+  secao_id: number | null
+  secao_nome: string | null
   receita_valor: number | null
   receita_saldo: number | null
   receita_situacao: number | null
   receita_documento: string | null
+}
+
+export type PortalSecao = {
+  secao_id: number
+  secao_nome: string
 }
 
 /** 0 = caixa do grupo; 1-4 = ramos */
@@ -96,4 +105,32 @@ export function currentPortalYear(): number {
 export function portalYearOptions(span = 5): number[] {
   const y = currentPortalYear()
   return Array.from({ length: span }, (_, i) => y - i)
+}
+
+/** Agrupa linhas por seção para exibição no portal. */
+export function groupBySecao<T extends { secao_id: number | null; secao_nome: string | null }>(
+  rows: T[],
+): { key: string; secao_id: number | null; secao_nome: string; items: T[] }[] {
+  const map = new Map<string, { secao_id: number | null; secao_nome: string; items: T[] }>()
+
+  for (const row of rows) {
+    const key =
+      row.secao_id != null ? `s-${row.secao_id}` : 's-none'
+    const nome = row.secao_nome?.trim() || 'Sem seção'
+    const cur = map.get(key) ?? {
+      secao_id: row.secao_id,
+      secao_nome: nome,
+      items: [],
+    }
+    cur.items.push(row)
+    map.set(key, cur)
+  }
+
+  return [...map.entries()]
+    .map(([key, value]) => ({ key, ...value }))
+    .sort((a, b) => {
+      if (a.secao_id == null && b.secao_id != null) return 1
+      if (a.secao_id != null && b.secao_id == null) return -1
+      return a.secao_nome.localeCompare(b.secao_nome, 'pt-BR')
+    })
 }

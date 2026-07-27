@@ -7,6 +7,8 @@ export type CreateGrupoInput = {
     cnpj?: string
     email?: string
     telefone?: string
+    estado?: string
+    cidade?: string
     ativo: boolean
     portal_transparencia?: boolean
   }
@@ -138,6 +140,10 @@ async function createViaSignUpFallback(
       cnpj: input.grupo.cnpj?.replace(/\D/g, '') || null,
       email: input.grupo.email?.trim() || null,
       telefone: input.grupo.telefone?.trim() || null,
+      estado: input.grupo.estado?.trim().toUpperCase() || null,
+      cidade: input.grupo.cidade?.trim()
+        ? Number(input.grupo.cidade)
+        : null,
       ativo: input.grupo.ativo,
       portal_transparencia: input.grupo.portal_transparencia !== false,
     })

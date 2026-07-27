@@ -76,6 +76,7 @@ const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
     'vendas.write',
     'projetos.view',
     'projetos.write',
+    'grupos.view',
   ],
   tesoureiro: [
     'dashboard.view',
@@ -180,6 +181,13 @@ export function isAssociadoLogin(profile: {
   registro?: string | null
 } | null | undefined): boolean {
   return !!(profile?.registro && String(profile.registro).trim())
+}
+
+/** Administrador do grupo (ou da plataforma). */
+export function isGrupoAdmin(
+  role: AppRole | null | undefined,
+): boolean {
+  return role === 'admin' || role === 'super_admin'
 }
 
 /** Login por e-mail com ramo: financeiro só do próprio ramo/seção. */

@@ -7,6 +7,7 @@ import {
   currentPortalYear,
   formatMoney,
   formatPortalDate,
+  groupBySecao,
   origemReceitaLabel,
   portalCaixasVisiveis,
   portalYearOptions,
@@ -16,6 +17,7 @@ import {
   type PortalGrupo,
   type PortalReceita,
   type PortalResumo,
+  type PortalSecao,
 } from '@/lib/portal'
 
 type Tab = 'despesas' | 'receitas'
@@ -28,12 +30,14 @@ export function PortalTransparenciaPage() {
   const [resumo, setResumo] = useState<PortalResumo | null>(null)
   const [despesas, setDespesas] = useState<PortalDespesa[]>([])
   const [receitas, setReceitas] = useState<PortalReceita[]>([])
+  const [secoes, setSecoes] = useState<PortalSecao[]>([])
   const [ano, setAno] = useState(currentPortalYear())
   const [caixa, setCaixa] = useState<PortalCaixaId>(() => {
     const raw = Number(searchParams.get('caixa'))
     if (raw === 0 || (raw >= 1 && raw <= 4)) return raw as PortalCaixaId
     return 0
   })
+  const [secaoId, setSecaoId] = useState<number | null>(null)
   const [tab, setTab] = useState<Tab>('despesas')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -43,6 +47,8 @@ export function PortalTransparenciaPage() {
     () => portalCaixasVisiveis(profile?.codigo_ramo),
     [profile?.codigo_ramo],
   )
+  const mostrarSecoes = caixa >= 1 && caixa <= 4 && secoes.length > 1
+  const agruparPorSecao = mostrarSecoes && secaoId == null
 
   useEffect(() => {
     const raw = Number(searchParams.get('caixa'))
@@ -56,6 +62,16 @@ export function PortalTransparenciaPage() {
       setCaixa(caixas[0]?.id ?? 0)
     }
   }, [caixas, caixa])
+
+  useEffect(() => {
+    setSecaoId(null)
+  }, [caixa])
+
+  useEffect(() => {
+    if (secaoId != null && !secoes.some((s) => s.secao_id === secaoId)) {
+      setSecaoId(null)
+    }
+  }, [secoes, secaoId])
 
   useEffect(() => {
     const cleanSlug = slug.trim().toLowerCase()
@@ -96,36 +112,50 @@ export function PortalTransparenciaPage() {
 
       setGrupo(row)
 
-      const [resumoRes, despRes, recRes] = await Promise.all([
+      const secoesPromise =
+        caixa >= 1 && caixa <= 4
+          ? supabase.rpc('portal_secoes_caixa', {
+              p_slug: cleanSlug,
+              p_caixa: caixa,
+            })
+          : Promise.resolve({ data: [], error: null })
+
+      const [resumoRes, despRes, recRes, secoesRes] = await Promise.all([
         supabase.rpc('portal_resumo', {
           p_slug: cleanSlug,
           p_ano: ano,
           p_caixa: caixa,
+          p_secao: secaoId,
         }),
         supabase.rpc('portal_despesas', {
           p_slug: cleanSlug,
           p_ano: ano,
           p_caixa: caixa,
+          p_secao: secaoId,
         }),
         supabase.rpc('portal_receitas', {
           p_slug: cleanSlug,
           p_ano: ano,
           p_caixa: caixa,
+          p_secao: secaoId,
         }),
+        secoesPromise,
       ])
 
       if (!mounted) return
 
-      if (resumoRes.error || despRes.error || recRes.error) {
+      if (resumoRes.error || despRes.error || recRes.error || secoesRes.error) {
         setError(
           resumoRes.error?.message ||
             despRes.error?.message ||
             recRes.error?.message ||
+            secoesRes.error?.message ||
             'Falha ao carregar dados.',
         )
         setResumo(null)
         setDespesas([])
         setReceitas([])
+        setSecoes([])
       } else {
         const resumoRow = (
           Array.isArray(resumoRes.data) ? resumoRes.data[0] : resumoRes.data
@@ -133,6 +163,7 @@ export function PortalTransparenciaPage() {
         setResumo(resumoRow)
         setDespesas((despRes.data as PortalDespesa[]) ?? [])
         setReceitas((recRes.data as PortalReceita[]) ?? [])
+        setSecoes((secoesRes.data as PortalSecao[]) ?? [])
       }
 
       setLoading(false)
@@ -141,10 +172,123 @@ export function PortalTransparenciaPage() {
     return () => {
       mounted = false
     }
-  }, [slug, ano, caixa])
+  }, [slug, ano, caixa, secaoId])
 
   const caixaLabel =
     caixas.find((c) => c.id === caixa)?.label ?? 'Caixa do grupo'
+  const secaoLabel =
+    secaoId == null
+      ? 'Todas as seções'
+      : (secoes.find((s) => s.secao_id === secaoId)?.secao_nome ?? 'Seção')
+
+  const despesasGrupos = useMemo(
+    () => (agruparPorSecao ? groupBySecao(despesas) : null),
+    [agruparPorSecao, despesas],
+  )
+  const receitasGrupos = useMemo(
+    () => (agruparPorSecao ? groupBySecao(receitas) : null),
+    [agruparPorSecao, receitas],
+  )
+
+  function renderDespesasTable(rows: PortalDespesa[], showSecaoCol: boolean) {
+    return (
+      <div className="table-wrap">
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Emissão</th>
+              <th>Finalidade</th>
+              <th>Fornecedor</th>
+              <th>Ramo</th>
+              {showSecaoCol ? <th>Seção</th> : null}
+              <th>Valor</th>
+              <th>Saldo</th>
+              <th>Situação</th>
+              <th>Documento</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.despesa_id}>
+                <td>{formatPortalDate(row.despesa_emissao)}</td>
+                <td>{row.despesa_finalidade || '—'}</td>
+                <td>{row.fornecedor_nome || '—'}</td>
+                <td>{row.ramo_nome || 'Grupo'}</td>
+                {showSecaoCol ? <td>{row.secao_nome || '—'}</td> : null}
+                <td>{formatMoney(row.despesa_valor)}</td>
+                <td>{formatMoney(row.despesa_saldo)}</td>
+                <td>{situacaoTituloLabel(row.despesa_situacao)}</td>
+                <td>
+                  {row.despesa_documento ? (
+                    <a
+                      className="btn btn-soft"
+                      href={row.despesa_documento}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Abrir
+                    </a>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  function renderReceitasTable(rows: PortalReceita[], showSecaoCol: boolean) {
+    return (
+      <div className="table-wrap">
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Emissão</th>
+              <th>Competência</th>
+              <th>Descrição</th>
+              <th>Origem</th>
+              {showSecaoCol ? <th>Seção</th> : null}
+              <th>Valor</th>
+              <th>Saldo</th>
+              <th>Situação</th>
+              <th>Documento</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.receita_id}>
+                <td>{formatPortalDate(row.receita_emissao)}</td>
+                <td>{formatPortalDate(row.receita_competencia)}</td>
+                <td>{row.receita_descricao || '—'}</td>
+                <td>{origemReceitaLabel(row.receita_origem)}</td>
+                {showSecaoCol ? <td>{row.secao_nome || '—'}</td> : null}
+                <td>{formatMoney(row.receita_valor)}</td>
+                <td>{formatMoney(row.receita_saldo)}</td>
+                <td>{situacaoTituloLabel(row.receita_situacao)}</td>
+                <td>
+                  {row.receita_documento ? (
+                    <a
+                      className="btn btn-soft"
+                      href={row.receita_documento}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Abrir
+                    </a>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
 
   return (
     <div className="portal-page">
@@ -203,6 +347,9 @@ export function PortalTransparenciaPage() {
               profile.codigo_ramo <= 4
                 ? 'Você vê o caixa geral e o caixa do seu ramo.'
                 : 'Caixas: grupo geral e ramos (Lobinho, Escoteiro, Sênior, Pioneiro).'}
+              {mostrarSecoes
+                ? ' Ramos com mais de uma seção também podem ser filtrados por seção.'
+                : ''}
             </p>
           </div>
 
@@ -222,12 +369,48 @@ export function PortalTransparenciaPage() {
             ))}
           </div>
 
+          {mostrarSecoes ? (
+            <div
+              className="tabs portal-secao-tabs"
+              role="tablist"
+              aria-label="Seções do ramo"
+            >
+              <button
+                type="button"
+                role="tab"
+                className={`tab${secaoId == null ? ' active' : ''}`}
+                aria-selected={secaoId == null}
+                onClick={() => setSecaoId(null)}
+              >
+                Todas as seções
+              </button>
+              {secoes.map((s) => (
+                <button
+                  key={s.secao_id}
+                  type="button"
+                  role="tab"
+                  className={`tab${secaoId === s.secao_id ? ' active' : ''}`}
+                  aria-selected={secaoId === s.secao_id}
+                  onClick={() => setSecaoId(s.secao_id)}
+                >
+                  {s.secao_nome}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           {loading ? (
             <div className="loading">Carregando portal…</div>
           ) : grupo && resumo ? (
             <>
               <p className="portal-caixa-atual">
                 Caixa: <strong>{caixaLabel}</strong>
+                {mostrarSecoes ? (
+                  <>
+                    {' '}
+                    · Seção: <strong>{secaoLabel}</strong>
+                  </>
+                ) : null}
               </p>
               <div className="portal-stats">
                 <article className="portal-stat portal-stat-receita">
@@ -286,101 +469,44 @@ export function PortalTransparenciaPage() {
             {tab === 'despesas' ? (
               despesas.length === 0 ? (
                 <div className="empty">Nenhuma despesa neste caixa/ano.</div>
-              ) : (
-                <div className="table-wrap">
-                  <table className="data">
-                    <thead>
-                      <tr>
-                        <th>Emissão</th>
-                        <th>Finalidade</th>
-                        <th>Fornecedor</th>
-                        <th>Ramo</th>
-                        <th>Valor</th>
-                        <th>Saldo</th>
-                        <th>Situação</th>
-                        <th>Documento</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {despesas.map((row) => (
-                        <tr key={row.despesa_id}>
-                          <td>{formatPortalDate(row.despesa_emissao)}</td>
-                          <td>{row.despesa_finalidade || '—'}</td>
-                          <td>{row.fornecedor_nome || '—'}</td>
-                          <td>{row.ramo_nome || 'Grupo'}</td>
-                          <td>{formatMoney(row.despesa_valor)}</td>
-                          <td>{formatMoney(row.despesa_saldo)}</td>
-                          <td>
-                            {situacaoTituloLabel(row.despesa_situacao)}
-                          </td>
-                          <td>
-                            {row.despesa_documento ? (
-                              <a
-                                className="btn btn-soft"
-                                href={row.despesa_documento}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                Abrir
-                              </a>
-                            ) : (
-                              '—'
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              ) : despesasGrupos ? (
+                <div className="portal-secao-groups">
+                  {despesasGrupos.map((grupoSecao) => (
+                    <section
+                      key={grupoSecao.key}
+                      className="portal-secao-group"
+                    >
+                      <h3>
+                        {grupoSecao.secao_nome}{' '}
+                        <span className="muted">
+                          ({grupoSecao.items.length})
+                        </span>
+                      </h3>
+                      {renderDespesasTable(grupoSecao.items, false)}
+                    </section>
+                  ))}
                 </div>
+              ) : (
+                renderDespesasTable(despesas, false)
               )
             ) : receitas.length === 0 ? (
               <div className="empty">Nenhuma receita neste caixa/ano.</div>
-            ) : (
-              <div className="table-wrap">
-                <table className="data">
-                  <thead>
-                    <tr>
-                      <th>Emissão</th>
-                      <th>Competência</th>
-                      <th>Descrição</th>
-                      <th>Origem</th>
-                      <th>Valor</th>
-                      <th>Saldo</th>
-                      <th>Situação</th>
-                      <th>Documento</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {receitas.map((row) => (
-                      <tr key={row.receita_id}>
-                        <td>{formatPortalDate(row.receita_emissao)}</td>
-                        <td>{formatPortalDate(row.receita_competencia)}</td>
-                        <td>{row.receita_descricao || '—'}</td>
-                        <td>{origemReceitaLabel(row.receita_origem)}</td>
-                        <td>{formatMoney(row.receita_valor)}</td>
-                        <td>{formatMoney(row.receita_saldo)}</td>
-                        <td>
-                          {situacaoTituloLabel(row.receita_situacao)}
-                        </td>
-                        <td>
-                          {row.receita_documento ? (
-                            <a
-                              className="btn btn-soft"
-                              href={row.receita_documento}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              Abrir
-                            </a>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            ) : receitasGrupos ? (
+              <div className="portal-secao-groups">
+                {receitasGrupos.map((grupoSecao) => (
+                  <section key={grupoSecao.key} className="portal-secao-group">
+                    <h3>
+                      {grupoSecao.secao_nome}{' '}
+                      <span className="muted">
+                        ({grupoSecao.items.length})
+                      </span>
+                    </h3>
+                    {renderReceitasTable(grupoSecao.items, false)}
+                  </section>
+                ))}
               </div>
+            ) : (
+              renderReceitasTable(receitas, false)
             )}
           </section>
         ) : null}

@@ -13,6 +13,9 @@ export function GruposPage() {
   const flashTick = useFlashSuccess()
 
   const [grupos, setGrupos] = useState<Empresa[]>([])
+  const [cidadeNomes, setCidadeNomes] = useState<Map<number, string>>(
+    () => new Map(),
+  )
   const [q, setQ] = useState('')
   const [filtroAtivo, setFiltroAtivo] = useState<'todos' | 'ativos' | 'inativos'>(
     'todos',
@@ -26,16 +29,45 @@ export function GruposPage() {
       setLoading(true)
       const { data, error: queryError } = await supabase
         .from('empresa')
-        .select('id, nome, cnpj, email, slug, telefone, logo_url, ativo')
+        .select('id, nome, cnpj, email, slug, telefone, estado, cidade, logo_url, ativo')
         .order('nome')
 
       if (!mounted) return
       if (queryError) {
         setError(queryError.message)
         setGrupos([])
+        setCidadeNomes(new Map())
+        setLoading(false)
+        return
+      }
+
+      const list = (data as Empresa[]) ?? []
+      setError(null)
+      setGrupos(list)
+
+      const codigos = [
+        ...new Set(
+          list
+            .map((g) => g.cidade)
+            .filter((c): c is number => c != null && Number.isFinite(c)),
+        ),
+      ]
+      if (codigos.length > 0) {
+        const { data: cidadesData } = await supabase
+          .from('cidade')
+          .select('codigo, nome')
+          .in('codigo', codigos)
+        if (!mounted) return
+        setCidadeNomes(
+          new Map(
+            (cidadesData ?? []).map((c) => [
+              c.codigo as number,
+              c.nome as string,
+            ]),
+          ),
+        )
       } else {
-        setError(null)
-        setGrupos((data as Empresa[]) ?? [])
+        setCidadeNomes(new Map())
       }
       setLoading(false)
     })()
@@ -51,14 +83,19 @@ export function GruposPage() {
 
     const term = q.trim().toLowerCase()
     if (!term) return list
-    return list.filter(
-      (g) =>
+    return list.filter((g) => {
+      const cidadeNome =
+        g.cidade != null ? (cidadeNomes.get(g.cidade) ?? '') : ''
+      return (
         g.nome.toLowerCase().includes(term) ||
         (g.slug ?? '').toLowerCase().includes(term) ||
         (g.email ?? '').toLowerCase().includes(term) ||
-        (g.telefone ?? '').toLowerCase().includes(term),
-    )
-  }, [grupos, q, filtroAtivo])
+        (g.telefone ?? '').toLowerCase().includes(term) ||
+        (g.estado ?? '').toLowerCase().includes(term) ||
+        cidadeNome.toLowerCase().includes(term)
+      )
+    })
+  }, [grupos, q, filtroAtivo, cidadeNomes])
 
   return (
     <>
@@ -120,6 +157,7 @@ export function GruposPage() {
                   <th></th>
                   <th>ID</th>
                   <th>Nome</th>
+                  <th>Cidade / UF</th>
                   <th>Slug</th>
                   <th>Contato</th>
                   <th>Status</th>
@@ -143,6 +181,18 @@ export function GruposPage() {
                         />
                       ) : null}
                       {grupo.nome}
+                    </td>
+                    <td>
+                      {grupo.cidade != null || grupo.estado
+                        ? [
+                            grupo.cidade != null
+                              ? (cidadeNomes.get(grupo.cidade) ?? null)
+                              : null,
+                            grupo.estado,
+                          ]
+                            .filter(Boolean)
+                            .join(' / ') || '—'
+                        : '—'}
                     </td>
                     <td>
                       <code>{grupo.slug ?? '—'}</code>

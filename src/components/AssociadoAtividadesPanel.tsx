@@ -6,6 +6,7 @@ import { formatMoney } from '@/lib/despesas'
 import { removerPagamentoAtividade } from '@/lib/atividadePagamento'
 import {
   atividadeVisivelPara,
+  labelAtividadeEscopo,
   type AssociadoAtividadeCtx,
 } from '@/lib/atividadeVisibilidade'
 import { PixSicrediCheckoutModal } from '@/components/PixSicrediCheckoutModal'
@@ -32,6 +33,8 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
   const toast = useToast()
   const [associado, setAssociado] = useState<AssociadoCtx | null>(null)
   const [items, setItems] = useState<AtividadeCardItem[]>([])
+  const [ramoMap, setRamoMap] = useState<Map<number, string>>(() => new Map())
+  const [secaoMap, setSecaoMap] = useState<Map<number, string>>(() => new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<number | null>(null)
@@ -76,7 +79,7 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
     const assocCtx = assoc as AssociadoCtx
     setAssociado(assocCtx)
 
-    const [ativRes, confRes, pagRes] = await Promise.all([
+    const [ativRes, confRes, pagRes, ramosRes, secoesRes] = await Promise.all([
       supabase
         .from('atividades')
         .select(
@@ -94,6 +97,12 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
         .select('pagamento_id, atividade_id')
         .eq('empresa_id', empresaId)
         .eq('associado_id', assocCtx.associado_id),
+      supabase.from('ramos').select('ramo_id, nome').order('ramo_id'),
+      supabase
+        .from('secao')
+        .select('secao_id, nome')
+        .eq('empresa_id', empresaId)
+        .order('nome', { ascending: true }),
     ])
 
     if (ativRes.error || confRes.error || pagRes.error) {
@@ -107,6 +116,23 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
       setLoading(false)
       return
     }
+
+    setRamoMap(
+      new Map(
+        (ramosRes.data ?? []).map((r) => [
+          r.ramo_id as number,
+          r.nome as string,
+        ]),
+      ),
+    )
+    setSecaoMap(
+      new Map(
+        (secoesRes.data ?? []).map((s) => [
+          s.secao_id as number,
+          s.nome as string,
+        ]),
+      ),
+    )
 
     const confMap = new Map(
       ((confRes.data ?? []) as { confirmacao_id: number; atividade_id: number }[]).map(
@@ -275,6 +301,9 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
         {items.map((item) => (
           <article key={item.atividade_id} className="associado-atividade-card">
             <h4>{item.descricao}</h4>
+            <p className="associado-atividade-escopo">
+              {labelAtividadeEscopo(item, ramoMap, secaoMap)}
+            </p>
             <p className="associado-atividade-meta">
               {item.local ? `Local: ${item.local}` : 'Local não informado'}
             </p>

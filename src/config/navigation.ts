@@ -1,5 +1,9 @@
 import type { Permission } from '@/lib/roles'
-import { isAssociadoLogin, isRamoFinanceiroScoped } from '@/lib/roles'
+import {
+  isAssociadoLogin,
+  isGrupoAdmin,
+  isRamoFinanceiroScoped,
+} from '@/lib/roles'
 import type { Profile } from '@/types/database'
 
 export type NavLinkItem = {
@@ -8,6 +12,8 @@ export type NavLinkItem = {
   label: string
   end?: boolean
   permission?: Permission
+  /** Só administrador do grupo (ou super_admin) */
+  grupoAdminOnly?: boolean
 }
 
 export type NavGroupItem = {
@@ -67,24 +73,28 @@ export const NAV_ITEMS: NavItem[] = [
         to: '/cadastros/tipo-pagamento',
         label: 'Tipo de Pagamento',
         permission: 'financeiro.view',
+        grupoAdminOnly: true,
       },
       {
         type: 'link',
         to: '/secoes',
         label: 'Seção',
         permission: 'estrutura.view',
+        grupoAdminOnly: true,
       },
       {
         type: 'link',
         to: '/patrulhas',
         label: 'Matilhas / Patrulhas / Clã',
         permission: 'estrutura.view',
+        grupoAdminOnly: true,
       },
       {
         type: 'link',
         to: '/cadastros/tipo-mensalidade',
         label: 'Tipo de Mensalidade',
         permission: 'financeiro.view',
+        grupoAdminOnly: true,
       },
       {
         type: 'link',
@@ -139,6 +149,12 @@ export const NAV_ITEMS: NavItem[] = [
         label: 'Pagamento',
         permission: 'financeiro.view',
       },
+      {
+        type: 'link',
+        to: '/despesas/relatorio',
+        label: 'Relatório',
+        permission: 'financeiro.view',
+      },
     ],
   },
   {
@@ -161,8 +177,8 @@ export const NAV_ITEMS: NavItem[] = [
       },
       {
         type: 'link',
-        to: '/receitas/recebimento',
-        label: 'Contas a receber',
+        to: '/receitas/relatorio',
+        label: 'Relatório',
         permission: 'financeiro.view',
       },
     ],
@@ -199,11 +215,17 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Grupos escoteiros',
     permission: 'grupos.write',
   },
+  {
+    type: 'link',
+    to: '/grupos/meu',
+    label: 'Grupo escoteiro',
+    permission: 'grupos.view',
+  },
 ]
 
 /** Menu do associado (login por registro): dashboard + atividades + portal. */
 export function navItemsForProfile(
-  profile: Pick<Profile, 'registro' | 'codigo_ramo'> | null,
+  profile: Pick<Profile, 'registro' | 'codigo_ramo' | 'role'> | null,
 ): NavItem[] {
   if (isAssociadoLogin(profile)) {
     return [
@@ -229,10 +251,28 @@ export function navItemsForProfile(
     ]
   }
 
-  if (!isRamoFinanceiroScoped(profile)) return NAV_ITEMS
+  const admin = isGrupoAdmin(profile?.role)
+
+  const items = NAV_ITEMS.map((item) => {
+    if (item.type !== 'group') return item
+    return {
+      ...item,
+      children: item.children.filter(
+        (child) => admin || !child.grupoAdminOnly,
+      ),
+    }
+  }).filter((item) => {
+    // Super admin: lista de grupos. Admin do grupo: só "Grupo escoteiro".
+    if (item.type !== 'link') return true
+    if (item.to === '/grupos') return profile?.role === 'super_admin'
+    if (item.to === '/grupos/meu') return profile?.role === 'admin'
+    return true
+  })
+
+  if (!isRamoFinanceiroScoped(profile)) return items
 
   // Login e-mail com ramo: financeiro sem gera mensalidade (só próprio ramo/seção).
-  return NAV_ITEMS.map((item) => {
+  return items.map((item) => {
     if (item.type !== 'group' || item.id !== 'receitas') return item
     return {
       ...item,

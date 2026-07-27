@@ -5,7 +5,10 @@ import { formatMoney } from '@/lib/despesas'
 import { registrarPagamentoAtividade } from '@/lib/atividadePagamento'
 import {
   atividadeVisivelPara,
+  atividadeVisivelParaStaff,
   filtroAtividadesRamoOuGrupo,
+  filtroAtividadesRamoSecaoOuGrupo,
+  labelAtividadeEscopo,
   type AssociadoAtividadeCtx,
 } from '@/lib/atividadeVisibilidade'
 import type { Atividade } from '@/types/database'
@@ -37,12 +40,20 @@ type Props = {
   empresaId: number
   /** Quando informado, filtra atividades deste ramo. */
   codigoRamo: number | null
+  /** Com ramo + seção: só seção (e gerais do ramo/grupo). */
+  codigoSecao?: number | null
 }
 
-export function StaffAtividadesPanel({ empresaId, codigoRamo }: Props) {
+export function StaffAtividadesPanel({
+  empresaId,
+  codigoRamo,
+  codigoSecao = null,
+}: Props) {
   const toast = useToast()
   const [items, setItems] = useState<AtividadeResumo[]>([])
   const [associados, setAssociados] = useState<AssociadoRow[]>([])
+  const [ramoMap, setRamoMap] = useState<Map<number, string>>(() => new Map())
+  const [secaoMap, setSecaoMap] = useState<Map<number, string>>(() => new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [popupAtividadeId, setPopupAtividadeId] = useState<number | null>(null)
@@ -50,6 +61,15 @@ export function StaffAtividadesPanel({ empresaId, codigoRamo }: Props) {
   const [showLista, setShowLista] = useState(false)
   const [busca, setBusca] = useState('')
   const [busyId, setBusyId] = useState<number | null>(null)
+
+  const secaoFiltro =
+    codigoRamo != null &&
+    codigoRamo >= 1 &&
+    codigoRamo <= 5 &&
+    codigoSecao != null &&
+    codigoSecao > 0
+      ? codigoSecao
+      : null
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -63,13 +83,21 @@ export function StaffAtividadesPanel({ empresaId, codigoRamo }: Props) {
       .eq('empresa_id', empresaId)
       .order('created_at', { ascending: false })
 
-    // Com ramo no perfil: atividades do ramo + do grupo todo (sem ramo).
-    // Sem ramo (e-mail admin/tesoureiro etc.): todas as atividades, inclusive as do grupo.
+    // Com ramo+seção: grupo todo, ramo sem seção, ou mesma seção.
+    // Só ramo: atividades do ramo + grupo todo.
+    // Sem ramo: todas.
     if (codigoRamo != null && codigoRamo >= 1 && codigoRamo <= 5) {
-      ativQuery = ativQuery.or(filtroAtividadesRamoOuGrupo(codigoRamo))
+      if (secaoFiltro != null) {
+        ativQuery = ativQuery.or(
+          filtroAtividadesRamoSecaoOuGrupo(codigoRamo, secaoFiltro),
+        )
+      } else {
+        ativQuery = ativQuery.or(filtroAtividadesRamoOuGrupo(codigoRamo))
+      }
     }
 
-    const [ativRes, confRes, pagRes, assocRes] = await Promise.all([
+    const [ativRes, confRes, pagRes, assocRes, ramosRes, secoesRes] =
+      await Promise.all([
       ativQuery,
       supabase
         .from('atividade_confirmacao')
@@ -84,6 +112,12 @@ export function StaffAtividadesPanel({ empresaId, codigoRamo }: Props) {
         .select('associado_id, nome, ramo, secao, patrulha_matilha')
         .eq('empresa_id', empresaId)
         .eq('ativo', true)
+        .order('nome', { ascending: true }),
+      supabase.from('ramos').select('ramo_id, nome').order('ramo_id'),
+      supabase
+        .from('secao')
+        .select('secao_id, nome')
+        .eq('empresa_id', empresaId)
         .order('nome', { ascending: true }),
     ])
 
@@ -100,6 +134,23 @@ export function StaffAtividadesPanel({ empresaId, codigoRamo }: Props) {
       setLoading(false)
       return
     }
+
+    setRamoMap(
+      new Map(
+        (ramosRes.data ?? []).map((r) => [
+          r.ramo_id as number,
+          r.nome as string,
+        ]),
+      ),
+    )
+    setSecaoMap(
+      new Map(
+        (secoesRes.data ?? []).map((s) => [
+          s.secao_id as number,
+          s.nome as string,
+        ]),
+      ),
+    )
 
     const assocList = ((assocRes.data ?? []) as AssociadoRow[]).map((a) => ({
       associado_id: a.associado_id,
@@ -139,7 +190,10 @@ export function StaffAtividadesPanel({ empresaId, codigoRamo }: Props) {
       pagByAtiv.set(row.atividade_id, cur)
     }
 
-    const atividades = (ativRes.data as Atividade[]) ?? []
+    const atividades = ((ativRes.data as Atividade[]) ?? []).filter((a) => {
+      if (codigoRamo == null || codigoRamo < 1 || codigoRamo > 5) return true
+      return atividadeVisivelParaStaff(a, codigoRamo, secaoFiltro)
+    })
     setItems(
       atividades.map((a) => {
         const pag = pagByAtiv.get(a.atividade_id)
@@ -152,7 +206,7 @@ export function StaffAtividadesPanel({ empresaId, codigoRamo }: Props) {
       }),
     )
     setLoading(false)
-  }, [empresaId, codigoRamo])
+  }, [empresaId, codigoRamo, secaoFiltro])
 
   useEffect(() => {
     void load()
@@ -198,6 +252,7 @@ export function StaffAtividadesPanel({ empresaId, codigoRamo }: Props) {
   }, [popupPessoas, busca])
 
   const temRamo = codigoRamo != null && codigoRamo >= 1 && codigoRamo <= 5
+  const temSecao = secaoFiltro != null
 
   const totalArrecadadoGeral = useMemo(
     () => items.reduce((acc, item) => acc + item.totalArrecadado, 0),
@@ -273,9 +328,11 @@ export function StaffAtividadesPanel({ empresaId, codigoRamo }: Props) {
     return (
       <section className="panel staff-atividades-panel">
         <div className="loading">
-          {temRamo
-            ? 'Carregando atividades do ramo…'
-            : 'Carregando atividades…'}
+          {temSecao
+            ? 'Carregando atividades do ramo/seção…'
+            : temRamo
+              ? 'Carregando atividades do ramo…'
+              : 'Carregando atividades…'}
         </div>
       </section>
     )
@@ -299,11 +356,19 @@ export function StaffAtividadesPanel({ empresaId, codigoRamo }: Props) {
     <section className="panel staff-atividades-panel">
       <div className="passagem-header">
         <div>
-          <h3>{temRamo ? 'Atividades do ramo' : 'Atividades'}</h3>
+          <h3>
+            {temSecao
+              ? 'Atividades do ramo/seção'
+              : temRamo
+                ? 'Atividades do ramo'
+                : 'Atividades'}
+          </h3>
           <p className="muted">
-            {temRamo
-              ? 'Inclui atividades do ramo e as do grupo todo (sem ramo).'
-              : 'Atividades do grupo, inclusive as sem ramo específico.'}
+            {temSecao
+              ? 'Inclui atividades da seção, do ramo (sem seção) e as do grupo todo.'
+              : temRamo
+                ? 'Inclui atividades do ramo e as do grupo todo (sem ramo).'
+                : 'Atividades do grupo, inclusive as sem ramo específico.'}
           </p>
         </div>
       </div>
@@ -334,8 +399,10 @@ export function StaffAtividadesPanel({ empresaId, codigoRamo }: Props) {
               <header className="staff-atividade-head">
                 <div>
                   <h4>{item.descricao}</h4>
+                  <p className="staff-atividade-escopo">
+                    {labelAtividadeEscopo(item, ramoMap, secaoMap)}
+                  </p>
                   <p className="staff-atividade-meta">
-                    {item.ramo == null ? 'Grupo todo · ' : ''}
                     {item.local ? `Local: ${item.local}` : 'Local não informado'}
                     {' · '}
                     Valor unitário: {formatMoney(item.valor)}
@@ -386,6 +453,8 @@ export function StaffAtividadesPanel({ empresaId, codigoRamo }: Props) {
               <div>
                 <h3 id="staff-atividade-popup-title">{popupItem.descricao}</h3>
                 <p className="muted">
+                  {labelAtividadeEscopo(popupItem, ramoMap, secaoMap)}
+                  {' · '}
                   {isAssociadosMode
                     ? 'Confirme presença e baixe o pagamento em PIX'
                     : 'Somente quem já confirmou presença'}
