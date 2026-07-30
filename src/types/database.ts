@@ -38,6 +38,12 @@ export type Associado = {
   conquista_lis_de_ouro: boolean | null
   conquista_escoteiro_patria: boolean | null
   conquista_insignia_bp: boolean | null
+  conquista_cruzeiro_do_sul_data: string | null
+  conquista_lis_de_ouro_data: string | null
+  conquista_escoteiro_patria_data: string | null
+  conquista_insignia_bp_data: string | null
+  conquista_insignia_madeira: boolean | null
+  conquista_insignia_madeira_data: string | null
 }
 
 export type Profile = {

@@ -46,6 +46,12 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'portal.view',
   },
   {
+    type: 'link',
+    to: '/conquistas',
+    label: 'Conquistas',
+    permission: 'dashboard.view',
+  },
+  {
     type: 'group',
     id: 'cadastros',
     label: 'Cadastros',
@@ -244,15 +250,21 @@ export function navItemsForProfile(
       },
       {
         type: 'link',
-        to: '/atividades',
-        label: 'Atividades',
-        permission: 'atividades.view',
-      },
-      {
-        type: 'link',
         to: '/portal-transparencia',
         label: 'Portal da Transparência',
         permission: 'portal.view',
+      },
+      {
+        type: 'link',
+        to: '/conquistas',
+        label: 'Conquistas',
+        permission: 'dashboard.view',
+      },
+      {
+        type: 'link',
+        to: '/atividades',
+        label: 'Atividades',
+        permission: 'atividades.view',
       },
     ]
   }

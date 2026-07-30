@@ -9,7 +9,8 @@ import { AssociadoAtividadesPanel } from '@/components/AssociadoAtividadesPanel'
 import { AssociadoMensalidadesPanel } from '@/components/AssociadoMensalidadesPanel'
 import { StaffAtividadesPanel } from '@/components/StaffAtividadesPanel'
 import { StaffMensalidadesAbertasPanel } from '@/components/StaffMensalidadesAbertasPanel'
-import { ConquistasPanel } from '@/components/ConquistasPanel'
+import { formatMoney } from '@/lib/despesas'
+import { RECEITA_ORIGEM } from '@/lib/receitas'
 import { isAssociadoLogin } from '@/lib/roles'
 import type {
   DashboardAniversariante,
@@ -127,6 +128,226 @@ function categoriaEhBeneficiario(nome: string | null | undefined): boolean {
   return (nome ?? '').toUpperCase().includes('BENEFICI')
 }
 
+type MensalidadeTipoDetalhe = {
+  id: number | null
+  nome: string
+  quantidade: number
+  valorUnitario: number
+  total: number
+}
+
+type BeneficiarioMensalidadeStats = {
+  total: number
+  pagantes: number
+  isentos: number
+  /** Soma do valor do tipo de mensalidade dos que pagam. */
+  valorMensalidade: number
+  porTipo: MensalidadeTipoDetalhe[]
+  /** Totais gerados em receitas (origem mensalidade) por mês 0..11 do ano corrente. */
+  geradoPorMes: number[]
+}
+
+const BENEF_MENSALIDADE_VAZIO: BeneficiarioMensalidadeStats = {
+  total: 0,
+  pagantes: 0,
+  isentos: 0,
+  valorMensalidade: 0,
+  porTipo: [],
+  geradoPorMes: Array.from({ length: 12 }, () => 0),
+}
+
+function percentuaisParte(a: number, b: number): [number, number] {
+  const t = a + b
+  if (t <= 0) return [0, 0]
+  const pa = Math.round((a / t) * 100)
+  return [pa, 100 - pa]
+}
+
+function parseValorMensalidade(raw: unknown): number {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0
+  if (raw == null) return 0
+  const s = String(raw).trim().replace(/\s/g, '')
+  if (!s) return 0
+  const n = s.includes(',')
+    ? Number(s.replace(/\./g, '').replace(',', '.'))
+    : Number(s)
+  return Number.isFinite(n) ? n : 0
+}
+
+function BeneficiariosDonut({
+  pagantes,
+  isentos,
+}: {
+  pagantes: number
+  isentos: number
+}) {
+  const total = pagantes + isentos
+  const size = 148
+  const stroke = 20
+  const r = (size - stroke) / 2
+  const c = 2 * Math.PI * r
+  const [pctPagantes] = percentuaisParte(pagantes, isentos)
+  const pagLen = total > 0 ? (pagantes / total) * c : 0
+  const isentoLen = total > 0 ? (isentos / total) * c : 0
+
+  return (
+    <div className="benef-donut" aria-hidden="true">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle
+          className="benef-donut-track"
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          strokeWidth={stroke}
+        />
+        {total > 0 ? (
+          <>
+            <circle
+              className="benef-donut-pagantes"
+              cx={size / 2}
+              cy={size / 2}
+              r={r}
+              fill="none"
+              strokeWidth={stroke}
+              strokeDasharray={`${pagLen} ${c - pagLen}`}
+              strokeDashoffset={c * 0.25}
+              strokeLinecap="butt"
+            />
+            <circle
+              className="benef-donut-isentos"
+              cx={size / 2}
+              cy={size / 2}
+              r={r}
+              fill="none"
+              strokeWidth={stroke}
+              strokeDasharray={`${isentoLen} ${c - isentoLen}`}
+              strokeDashoffset={c * 0.25 - pagLen}
+              strokeLinecap="butt"
+            />
+          </>
+        ) : null}
+      </svg>
+      <div className="benef-donut-center">
+        <strong>{total}</strong>
+        <span>beneficiários</span>
+      </div>
+      <span className="sr-only">
+        {pctPagantes}% pagam mensalidade
+      </span>
+    </div>
+  )
+}
+
+function PrevisaoMensalidadeChart({
+  valorMensal,
+  geradoPorMes,
+}: {
+  valorMensal: number
+  geradoPorMes: number[]
+}) {
+  const agora = new Date()
+  const ano = agora.getFullYear()
+  const mesAtualIdx = agora.getMonth() // 0..11
+
+  const meses = MESES.map((nome, index) => {
+    const gerado = Number(geradoPorMes[index] ?? 0)
+    const isProjetado = index > mesAtualIdx
+    const valor = isProjetado ? valorMensal : gerado
+    return {
+      index,
+      label: nome.slice(0, 3),
+      nome,
+      valor: Number(valor.toFixed(2)),
+      isCurrent: index === mesAtualIdx,
+      isGerado: index <= mesAtualIdx,
+      isProjetado,
+    }
+  })
+
+  const totalGerado = Number(
+    meses
+      .filter((m) => m.isGerado)
+      .reduce((s, m) => s + m.valor, 0)
+      .toFixed(2),
+  )
+  const totalProjetado = Number(
+    meses
+      .filter((m) => m.isProjetado)
+      .reduce((s, m) => s + m.valor, 0)
+      .toFixed(2),
+  )
+  const totalAno = Number((totalGerado + totalProjetado).toFixed(2))
+  const maxValor = Math.max(...meses.map((m) => m.valor), 0)
+
+  if (totalAno <= 0 && valorMensal <= 0) {
+    return (
+      <div className="dashboard-previsao-empty muted">
+        Sem dados — gere mensalidades nas receitas ou cadastre o tipo/valor nos
+        associados.
+      </div>
+    )
+  }
+
+  return (
+    <div className="dashboard-previsao-chart">
+      <div className="dashboard-previsao-total">
+        <span>Previsão {ano}</span>
+        <strong>{formatMoney(totalAno)}</strong>
+      </div>
+      <p className="dashboard-previsao-restante muted">
+        Gerado até {MESES[mesAtualIdx]}: {formatMoney(totalGerado)}
+        {totalProjetado > 0
+          ? ` · Projetado: ${formatMoney(totalProjetado)}`
+          : ''}
+      </p>
+      <div
+        className="dashboard-previsao-meses"
+        role="img"
+        aria-label={`Mensalidades geradas até ${MESES[mesAtualIdx]} e projeção até dezembro de ${ano}`}
+      >
+        {meses.map((mes) => {
+          const altura =
+            maxValor > 0
+              ? Math.max(mes.valor > 0 ? 8 : 2, (mes.valor / maxValor) * 100)
+              : 2
+          const tipoLabel = mes.isProjetado ? 'Projetado' : 'Gerado'
+          const mostraValorNaBarra = altura >= 42
+          return (
+            <div
+              key={mes.index}
+              className={`dashboard-previsao-mes${mes.isCurrent ? ' is-current' : ''}${mes.isGerado && !mes.isCurrent ? ' is-gerado' : ''}${mes.isProjetado ? ' is-projetado' : ''}`}
+            >
+              <div className="dashboard-previsao-mes-bar-wrap">
+                <div
+                  className="dashboard-previsao-mes-bar"
+                  style={{ height: `${altura}%` }}
+                >
+                  {mostraValorNaBarra ? (
+                    <span className="dashboard-previsao-mes-bar-valor">
+                      {formatMoney(mes.valor)}
+                    </span>
+                  ) : null}
+                  <div className="dashboard-previsao-mes-popup" role="tooltip">
+                    <strong>{mes.nome}</strong>
+                    <span>{formatMoney(mes.valor)}</span>
+                    <em>{tipoLabel}</em>
+                  </div>
+                </div>
+              </div>
+              <span className="dashboard-previsao-mes-label">{mes.label}</span>
+            </div>
+          )
+        })}
+      </div>
+      <p className="dashboard-previsao-legenda muted">
+        Até o mês atual: receitas geradas · depois: cadastro (
+        {formatMoney(valorMensal)}/mês)
+      </p>
+    </div>
+  )
+}
+
 /** Mesma regra do card Voluntários no SQL do dashboard. */
 function associadoEhVoluntario(opts: {
   data_nascimento: string | null
@@ -195,6 +416,9 @@ export function DashboardPage() {
     DashboardAniversariante[]
   >([])
   const [totalAtivos, setTotalAtivos] = useState(0)
+  const [benefMensalidade, setBenefMensalidade] =
+    useState<BeneficiarioMensalidadeStats>(BENEF_MENSALIDADE_VAZIO)
+  const [tiposMensalidadeOpen, setTiposMensalidadeOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [mensagemAniversario, setMensagemAniversario] = useState<string | null>(
@@ -278,6 +502,7 @@ export function DashboardPage() {
         setPassagens([])
         setAniversariantes([])
         setTotalAtivos(0)
+        setBenefMensalidade(BENEF_MENSALIDADE_VAZIO)
       } else {
         const ramosAll = (contagem.data as DashboardRamo[]) ?? []
         const passagensAll = (passagem.data as DashboardPassagemRamo[]) ?? []
@@ -436,6 +661,251 @@ export function DashboardPage() {
           (anivers.data as DashboardAniversariante[]) ?? [],
         )
         setTotalAtivos(totalRes.count ?? 0)
+
+        if (empresaId) {
+          let benefQuery = supabase
+            .from('associados')
+            .select(
+              `
+              associado_id,
+              categoria,
+              isento,
+              tipo_mensalidade,
+              tipo_mensalidade_row:tipo_mensalidade!tipo_mensalidade (
+                tipomensalidade_id,
+                nome,
+                valor
+              )
+            `,
+            )
+            .eq('empresa_id', empresaId)
+            .eq('ativo', true)
+          if (ramoFiltro != null) {
+            benefQuery = benefQuery.eq('ramo', ramoFiltro)
+          }
+          if (secaoFiltro != null) {
+            benefQuery = benefQuery.eq('secao', secaoFiltro)
+          }
+
+          const [{ data: assocBenef, error: benefJoinError }, { data: catsBenef }] =
+            await Promise.all([
+              benefQuery,
+              supabase.from('categoria').select('categoria_id, nome'),
+            ])
+
+          if (!mounted) return
+
+          type AssocBenefRow = {
+            categoria: number | null
+            isento: boolean | null
+            tipo_mensalidade: number | string | null
+            tipo_mensalidade_row?: {
+              tipomensalidade_id: number | string
+              nome: string | null
+              valor: number | string | null
+            } | null
+          }
+
+          let rows: AssocBenefRow[] = (assocBenef as AssocBenefRow[] | null) ?? []
+          const valorByTipo = new Map<number, number>()
+          const nomeByTipo = new Map<number, string>()
+
+          const aplicarTipos = (
+            tipos: {
+              tipomensalidade_id: number | string
+              nome?: string | null
+              valor: number | string | null
+            }[],
+          ) => {
+            for (const t of tipos) {
+              const id = Number(t.tipomensalidade_id)
+              if (!Number.isFinite(id)) continue
+              valorByTipo.set(id, parseValorMensalidade(t.valor))
+              if (t.nome) nomeByTipo.set(id, String(t.nome))
+            }
+          }
+
+          if (benefJoinError) {
+            let plainQuery = supabase
+              .from('associados')
+              .select('associado_id, categoria, isento, tipo_mensalidade')
+              .eq('empresa_id', empresaId)
+              .eq('ativo', true)
+            if (ramoFiltro != null) {
+              plainQuery = plainQuery.eq('ramo', ramoFiltro)
+            }
+            if (secaoFiltro != null) {
+              plainQuery = plainQuery.eq('secao', secaoFiltro)
+            }
+
+            const [{ data: plainAssoc }, { data: tiposMensalidade }] =
+              await Promise.all([
+                plainQuery,
+                supabase
+                  .from('tipo_mensalidade')
+                  .select('tipomensalidade_id, nome, valor'),
+              ])
+
+            if (!mounted) return
+
+            rows = (plainAssoc as AssocBenefRow[] | null) ?? []
+            aplicarTipos(
+              (tiposMensalidade ?? []) as {
+                tipomensalidade_id: number | string
+                nome?: string | null
+                valor: number | string | null
+              }[],
+            )
+          } else {
+            for (const a of rows) {
+              const row = a.tipo_mensalidade_row
+              if (!row?.tipomensalidade_id) continue
+              const id = Number(row.tipomensalidade_id)
+              if (!Number.isFinite(id)) continue
+              if (row.nome) nomeByTipo.set(id, String(row.nome))
+              valorByTipo.set(id, parseValorMensalidade(row.valor))
+            }
+
+            const tipoIds = [
+              ...new Set(
+                rows
+                  .map((a) =>
+                    a.tipo_mensalidade != null && a.tipo_mensalidade !== ''
+                      ? Number(a.tipo_mensalidade)
+                      : NaN,
+                  )
+                  .filter((id) => Number.isFinite(id) && !valorByTipo.has(id)),
+              ),
+            ]
+            if (tipoIds.length > 0) {
+              const { data: tiposMensalidade } = await supabase
+                .from('tipo_mensalidade')
+                .select('tipomensalidade_id, nome, valor')
+                .in('tipomensalidade_id', tipoIds)
+
+              if (!mounted) return
+
+              aplicarTipos(
+                (tiposMensalidade ?? []) as {
+                  tipomensalidade_id: number | string
+                  nome?: string | null
+                  valor: number | string | null
+                }[],
+              )
+            }
+          }
+
+          const catMap = new Map(
+            ((catsBenef ?? []) as { categoria_id: number; nome: string }[]).map(
+              (c) => [Number(c.categoria_id), c.nome],
+            ),
+          )
+
+          let pagantes = 0
+          let isentos = 0
+          let valorMensalidade = 0
+          const porTipoMap = new Map<string, MensalidadeTipoDetalhe>()
+
+          for (const a of rows) {
+            const catNome =
+              a.categoria != null
+                ? (catMap.get(Number(a.categoria)) ?? null)
+                : null
+            if (!categoriaEhBeneficiario(catNome)) continue
+            if (a.isento === true) {
+              isentos += 1
+              continue
+            }
+            pagantes += 1
+
+            const tipoId =
+              a.tipo_mensalidade_row?.tipomensalidade_id != null
+                ? Number(a.tipo_mensalidade_row.tipomensalidade_id)
+                : a.tipo_mensalidade != null && a.tipo_mensalidade !== ''
+                  ? Number(a.tipo_mensalidade)
+                  : null
+
+            const valorUnit =
+              tipoId != null && Number.isFinite(tipoId)
+                ? (valorByTipo.get(tipoId) ??
+                  parseValorMensalidade(a.tipo_mensalidade_row?.valor))
+                : 0
+            valorMensalidade += valorUnit
+
+            const key =
+              tipoId != null && Number.isFinite(tipoId)
+                ? `t-${tipoId}`
+                : 'sem-tipo'
+            const atual = porTipoMap.get(key)
+            if (atual) {
+              atual.quantidade += 1
+              atual.total = Number((atual.total + valorUnit).toFixed(2))
+            } else {
+              porTipoMap.set(key, {
+                id: tipoId != null && Number.isFinite(tipoId) ? tipoId : null,
+                nome:
+                  tipoId != null && Number.isFinite(tipoId)
+                    ? (nomeByTipo.get(tipoId) ??
+                      a.tipo_mensalidade_row?.nome ??
+                      `Tipo #${tipoId}`)
+                    : 'Sem tipo de mensalidade',
+                quantidade: 1,
+                valorUnitario: valorUnit,
+                total: Number(valorUnit.toFixed(2)),
+              })
+            }
+          }
+
+          const porTipo = [...porTipoMap.values()].sort((a, b) => {
+            if (b.total !== a.total) return b.total - a.total
+            return a.nome.localeCompare(b.nome, 'pt-BR')
+          })
+
+          const anoAtual = new Date().getFullYear()
+          let receitasQuery = supabase
+            .from('receitas')
+            .select('receita_valor, receita_competencia')
+            .eq('empresa_id', empresaId)
+            .eq('receita_origem', RECEITA_ORIGEM.MENSALIDADE)
+            .gte('receita_competencia', `${anoAtual}-01-01`)
+            .lte('receita_competencia', `${anoAtual}-12-31`)
+            .limit(20000)
+          if (ramoFiltro != null) {
+            receitasQuery = receitasQuery.eq('receita_ramo', ramoFiltro)
+          }
+          if (secaoFiltro != null) {
+            receitasQuery = receitasQuery.eq('receita_secao', secaoFiltro)
+          }
+
+          const { data: receitasMensalidade } = await receitasQuery
+          if (!mounted) return
+
+          const geradoPorMes = Array.from({ length: 12 }, () => 0)
+          for (const r of (receitasMensalidade ?? []) as {
+            receita_valor: number | string | null
+            receita_competencia: string | null
+          }[]) {
+            const comp = r.receita_competencia?.slice(0, 10)
+            if (!comp) continue
+            const [y, m] = comp.split('-').map(Number)
+            if (y !== anoAtual || !m || m < 1 || m > 12) continue
+            geradoPorMes[m - 1] += parseValorMensalidade(r.receita_valor)
+          }
+          for (let i = 0; i < 12; i += 1) {
+            geradoPorMes[i] = Number(geradoPorMes[i].toFixed(2))
+          }
+
+          setBenefMensalidade({
+            total: pagantes + isentos,
+            pagantes,
+            isentos,
+            valorMensalidade: Number(valorMensalidade.toFixed(2)),
+            porTipo,
+            geradoPorMes,
+          })
+        } else {
+          setBenefMensalidade(BENEF_MENSALIDADE_VAZIO)
+        }
       }
       setLoading(false)
     }
@@ -823,6 +1293,12 @@ export function DashboardPage() {
     [validadeRegistro],
   )
 
+  const [pctPagantes, pctIsentos] = useMemo(
+    () =>
+      percentuaisParte(benefMensalidade.pagantes, benefMensalidade.isentos),
+    [benefMensalidade.pagantes, benefMensalidade.isentos],
+  )
+
   return (
     <>
       <header className="page-header">
@@ -834,26 +1310,25 @@ export function DashboardPage() {
               : `${empresa?.nome ?? 'Grupo'} — visão geral e passagens de ramo`}
           </p>
         </div>
+        {associadoView ? (
+          <section
+            className={`associado-validade-registro is-${validadeStatus.tone}`}
+            aria-live="polite"
+          >
+            <div>
+              <span>Validade do registro</span>
+              <strong>
+                {validadeRegistro
+                  ? formatDate(validadeRegistro)
+                  : 'Não informada'}
+              </strong>
+            </div>
+            <span className="associado-validade-badge">
+              {validadeStatus.label}
+            </span>
+          </section>
+        ) : null}
       </header>
-
-      {associadoView ? (
-        <section
-          className={`associado-validade-registro is-${validadeStatus.tone}`}
-          aria-live="polite"
-        >
-          <div>
-            <span>Validade do registro</span>
-            <strong>
-              {validadeRegistro
-                ? formatDate(validadeRegistro)
-                : 'Não informada'}
-            </strong>
-          </div>
-          <span className="associado-validade-badge">
-            {validadeStatus.label}
-          </span>
-        </section>
-      ) : null}
 
       {error ? (
         <AlertMessage tone="error" title="Não foi possível carregar">
@@ -914,12 +1389,93 @@ export function DashboardPage() {
       </section>
       ) : null}
 
-      {!associadoView && empresaId && ramoFiltro == null ? (
-        <StaffMensalidadesAbertasPanel empresaId={empresaId} />
+      {!associadoView ? (
+        <section className="panel dashboard-benef-panel">
+          <div className="passagem-header">
+            <div>
+              <h3>Beneficiários — mensalidade</h3>
+              <p className="muted">
+                {secaoFiltro != null
+                  ? 'Ativos do ramo/seção · quem paga e quem é isento'
+                  : ramoFiltro != null
+                    ? 'Ativos do ramo · quem paga e quem é isento'
+                    : 'Ativos do grupo · quem paga e quem é isento'}
+              </p>
+            </div>
+            <span className="badge">
+              {loading ? '…' : `${benefMensalidade.total} beneficiários`}
+            </span>
+          </div>
+
+          {loading ? (
+            <div className="loading">Carregando…</div>
+          ) : benefMensalidade.total === 0 ? (
+            <div className="empty">Nenhum beneficiário ativo neste filtro.</div>
+          ) : (
+            <div className="dashboard-benef-charts">
+              <div className="dashboard-benef-chart">
+                <BeneficiariosDonut
+                  pagantes={benefMensalidade.pagantes}
+                  isentos={benefMensalidade.isentos}
+                />
+                <ul className="dashboard-benef-legend">
+                  <li>
+                    <span className="dashboard-benef-swatch is-pagantes" />
+                    <div>
+                      <strong>Paga mensalidade</strong>
+                      <p>
+                        {benefMensalidade.pagantes} · {pctPagantes}%
+                      </p>
+                      <button
+                        type="button"
+                        className="dashboard-benef-valor-btn"
+                        onClick={() => setTiposMensalidadeOpen(true)}
+                        disabled={benefMensalidade.pagantes === 0}
+                      >
+                        Total mensalidade:{' '}
+                        {formatMoney(benefMensalidade.valorMensalidade)}
+                        <span>Ver por tipo</span>
+                      </button>
+                      {benefMensalidade.pagantes > 0 &&
+                      benefMensalidade.valorMensalidade <= 0 ? (
+                        <p className="dashboard-benef-valor-hint muted">
+                          Confira se o associado tem tipo de mensalidade e se o
+                          valor está preenchido em Cadastros → Tipo de
+                          Mensalidade.
+                        </p>
+                      ) : null}
+                    </div>
+                  </li>
+                  <li>
+                    <span className="dashboard-benef-swatch is-isentos" />
+                    <div>
+                      <strong>Isento</strong>
+                      <p>
+                        {benefMensalidade.isentos} · {pctIsentos}%
+                      </p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="dashboard-previsao-panel">
+                <h4>Previsão de mensalidades</h4>
+                <p className="muted">
+                  Até o mês atual: mensalidades geradas nas receitas. Depois:
+                  projeção pelo valor do cadastro.
+                </p>
+                <PrevisaoMensalidadeChart
+                  valorMensal={benefMensalidade.valorMensalidade}
+                  geradoPorMes={benefMensalidade.geradoPorMes}
+                />
+              </div>
+            </div>
+          )}
+        </section>
       ) : null}
 
-      {!associadoView && empresaId ? (
-        <ConquistasPanel empresaId={empresaId} />
+      {!associadoView && empresaId && ramoFiltro == null ? (
+        <StaffMensalidadesAbertasPanel empresaId={empresaId} />
       ) : null}
 
       <section
@@ -1106,6 +1662,82 @@ export function DashboardPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {tiposMensalidadeOpen ? (
+        <div
+          className="confirm-overlay"
+          role="presentation"
+          onClick={() => setTiposMensalidadeOpen(false)}
+        >
+          <div
+            className="passagem-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tipos-mensalidade-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="passagem-dialog-header">
+              <div>
+                <h3 id="tipos-mensalidade-title">Mensalidade por tipo</h3>
+                <p className="muted">
+                  Beneficiários que pagam · total{' '}
+                  {formatMoney(benefMensalidade.valorMensalidade)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-soft"
+                onClick={() => setTiposMensalidadeOpen(false)}
+              >
+                Fechar
+              </button>
+            </header>
+
+            {benefMensalidade.porTipo.length === 0 ? (
+              <div className="empty">Nenhum tipo de mensalidade encontrado.</div>
+            ) : (
+              <div className="table-wrap">
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>Tipo</th>
+                      <th>Jovens</th>
+                      <th>Valor unitário</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {benefMensalidade.porTipo.map((item) => (
+                      <tr key={item.id ?? `sem-${item.nome}`}>
+                        <td>{item.nome}</td>
+                        <td>{item.quantidade}</td>
+                        <td>{formatMoney(item.valorUnitario)}</td>
+                        <td>{formatMoney(item.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td>
+                        <strong>Total</strong>
+                      </td>
+                      <td>
+                        <strong>{benefMensalidade.pagantes}</strong>
+                      </td>
+                      <td />
+                      <td>
+                        <strong>
+                          {formatMoney(benefMensalidade.valorMensalidade)}
+                        </strong>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       ) : null}

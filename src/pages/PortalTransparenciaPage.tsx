@@ -460,23 +460,23 @@ export function PortalTransparenciaPage() {
                   </em>
                 </article>
                 <article className="stat-card">
-                  <span>Despesas lançadas</span>
-                  <strong>{formatMoney(resumo.total_despesas)}</strong>
+                  <span>Despesas</span>
+                  <strong>{formatMoney(resumo.despesas_pagas)}</strong>
                   <em className="stat-card-hint">
-                    Pago: {formatMoney(resumo.despesas_pagas)}
+                    Lançado: {formatMoney(resumo.total_despesas)}
                   </em>
                 </article>
                 <article className="stat-card stat-card-total">
-                  <span>Resultado (lançado)</span>
+                  <span>Resultado</span>
                   <strong
                     className={
-                      Number(resumo.saldo_lancado) < 0 ? 'is-neg' : undefined
+                      Number(resumo.saldo_realizado) < 0 ? 'is-neg' : undefined
                     }
                   >
-                    {formatMoney(resumo.saldo_lancado)}
+                    {formatMoney(resumo.saldo_realizado)}
                   </strong>
                   <em className="stat-card-hint">
-                    Realizado: {formatMoney(resumo.saldo_realizado)}
+                    Lançado: {formatMoney(resumo.saldo_lancado)}
                   </em>
                 </article>
               </div>

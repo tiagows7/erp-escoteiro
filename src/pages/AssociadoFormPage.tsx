@@ -28,6 +28,12 @@ const emptyForm = {
   conquista_lis_de_ouro: false,
   conquista_escoteiro_patria: false,
   conquista_insignia_bp: false,
+  conquista_insignia_madeira: false,
+  conquista_cruzeiro_do_sul_data: '',
+  conquista_lis_de_ouro_data: '',
+  conquista_escoteiro_patria_data: '',
+  conquista_insignia_bp_data: '',
+  conquista_insignia_madeira_data: '',
   endereco_cep: '',
   endereco: '',
   endereco_numero: '',
@@ -216,6 +222,17 @@ export function AssociadoFormPage() {
         conquista_lis_de_ouro: data.conquista_lis_de_ouro === true,
         conquista_escoteiro_patria: data.conquista_escoteiro_patria === true,
         conquista_insignia_bp: data.conquista_insignia_bp === true,
+        conquista_insignia_madeira: data.conquista_insignia_madeira === true,
+        conquista_cruzeiro_do_sul_data:
+          data.conquista_cruzeiro_do_sul_data?.slice(0, 10) ?? '',
+        conquista_lis_de_ouro_data:
+          data.conquista_lis_de_ouro_data?.slice(0, 10) ?? '',
+        conquista_escoteiro_patria_data:
+          data.conquista_escoteiro_patria_data?.slice(0, 10) ?? '',
+        conquista_insignia_bp_data:
+          data.conquista_insignia_bp_data?.slice(0, 10) ?? '',
+        conquista_insignia_madeira_data:
+          data.conquista_insignia_madeira_data?.slice(0, 10) ?? '',
         endereco_cep: data.endereco_cep ?? '',
         endereco: data.endereco ?? '',
         endereco_numero: data.endereco_numero ?? '',
@@ -288,6 +305,22 @@ export function AssociadoFormPage() {
       conquista_lis_de_ouro: form.conquista_lis_de_ouro,
       conquista_escoteiro_patria: form.conquista_escoteiro_patria,
       conquista_insignia_bp: form.conquista_insignia_bp,
+      conquista_insignia_madeira: form.conquista_insignia_madeira,
+      conquista_cruzeiro_do_sul_data: form.conquista_cruzeiro_do_sul
+        ? strOrNull(form.conquista_cruzeiro_do_sul_data)
+        : null,
+      conquista_lis_de_ouro_data: form.conquista_lis_de_ouro
+        ? strOrNull(form.conquista_lis_de_ouro_data)
+        : null,
+      conquista_escoteiro_patria_data: form.conquista_escoteiro_patria
+        ? strOrNull(form.conquista_escoteiro_patria_data)
+        : null,
+      conquista_insignia_bp_data: form.conquista_insignia_bp
+        ? strOrNull(form.conquista_insignia_bp_data)
+        : null,
+      conquista_insignia_madeira_data: form.conquista_insignia_madeira
+        ? strOrNull(form.conquista_insignia_madeira_data)
+        : null,
       endereco_cep: strOrNull(form.endereco_cep),
       endereco: strOrNull(form.endereco)?.toUpperCase() ?? null,
       endereco_numero: strOrNull(form.endereco_numero),
@@ -563,55 +596,141 @@ export function AssociadoFormPage() {
                 Isento
               </label>
             </div>
-            <div className="field field-span-2">
+            <div className="field field-span-full conquistas-bloco">
               <p className="form-section-title" style={{ marginBottom: '0.55rem' }}>
                 Conquistas máximas
               </p>
-              <div className="field-checks conquistas-checks">
-                <label>
+              <div className="conquistas-checks conquistas-checks-single-row">
+                <div className="conquista-item">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={form.conquista_cruzeiro_do_sul}
+                      onChange={(e) => {
+                        update('conquista_cruzeiro_do_sul', e.target.checked)
+                        if (!e.target.checked) {
+                          update('conquista_cruzeiro_do_sul_data', '')
+                        }
+                      }}
+                      disabled={disabled}
+                    />
+                    Cruzeiro do Sul
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={form.conquista_cruzeiro_do_sul}
+                    type="date"
+                    className="input"
+                    value={form.conquista_cruzeiro_do_sul_data}
                     onChange={(e) =>
-                      update('conquista_cruzeiro_do_sul', e.target.checked)
+                      update('conquista_cruzeiro_do_sul_data', e.target.value)
                     }
-                    disabled={disabled}
+                    disabled={disabled || !form.conquista_cruzeiro_do_sul}
+                    aria-label="Data Cruzeiro do Sul"
                   />
-                  Cruzeiro do Sul
-                </label>
-                <label>
+                </div>
+                <div className="conquista-item">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={form.conquista_lis_de_ouro}
+                      onChange={(e) => {
+                        update('conquista_lis_de_ouro', e.target.checked)
+                        if (!e.target.checked) {
+                          update('conquista_lis_de_ouro_data', '')
+                        }
+                      }}
+                      disabled={disabled}
+                    />
+                    Lis de Ouro
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={form.conquista_lis_de_ouro}
+                    type="date"
+                    className="input"
+                    value={form.conquista_lis_de_ouro_data}
                     onChange={(e) =>
-                      update('conquista_lis_de_ouro', e.target.checked)
+                      update('conquista_lis_de_ouro_data', e.target.value)
                     }
-                    disabled={disabled}
+                    disabled={disabled || !form.conquista_lis_de_ouro}
+                    aria-label="Data Lis de Ouro"
                   />
-                  Lis de Ouro
-                </label>
-                <label>
+                </div>
+                <div className="conquista-item">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={form.conquista_escoteiro_patria}
+                      onChange={(e) => {
+                        update('conquista_escoteiro_patria', e.target.checked)
+                        if (!e.target.checked) {
+                          update('conquista_escoteiro_patria_data', '')
+                        }
+                      }}
+                      disabled={disabled}
+                    />
+                    Escoteiro da Pátria
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={form.conquista_escoteiro_patria}
+                    type="date"
+                    className="input"
+                    value={form.conquista_escoteiro_patria_data}
                     onChange={(e) =>
-                      update('conquista_escoteiro_patria', e.target.checked)
+                      update('conquista_escoteiro_patria_data', e.target.value)
                     }
-                    disabled={disabled}
+                    disabled={disabled || !form.conquista_escoteiro_patria}
+                    aria-label="Data Escoteiro da Pátria"
                   />
-                  Escoteiro da Pátria
-                </label>
-                <label>
+                </div>
+                <div className="conquista-item">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={form.conquista_insignia_bp}
+                      onChange={(e) => {
+                        update('conquista_insignia_bp', e.target.checked)
+                        if (!e.target.checked) {
+                          update('conquista_insignia_bp_data', '')
+                        }
+                      }}
+                      disabled={disabled}
+                    />
+                    Insígnia de B.P.
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={form.conquista_insignia_bp}
+                    type="date"
+                    className="input"
+                    value={form.conquista_insignia_bp_data}
                     onChange={(e) =>
-                      update('conquista_insignia_bp', e.target.checked)
+                      update('conquista_insignia_bp_data', e.target.value)
                     }
-                    disabled={disabled}
+                    disabled={disabled || !form.conquista_insignia_bp}
+                    aria-label="Data Insígnia de B.P."
                   />
-                  Insígnia de B.P.
-                </label>
+                </div>
+                <div className="conquista-item">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={form.conquista_insignia_madeira}
+                      onChange={(e) => {
+                        update('conquista_insignia_madeira', e.target.checked)
+                        if (!e.target.checked) {
+                          update('conquista_insignia_madeira_data', '')
+                        }
+                      }}
+                      disabled={disabled}
+                    />
+                    Insígnia da Madeira
+                  </label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={form.conquista_insignia_madeira_data}
+                    onChange={(e) =>
+                      update('conquista_insignia_madeira_data', e.target.value)
+                    }
+                    disabled={disabled || !form.conquista_insignia_madeira}
+                    aria-label="Data Insígnia da Madeira"
+                  />
+                </div>
               </div>
             </div>
           </div>
