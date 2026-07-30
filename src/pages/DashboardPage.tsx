@@ -9,6 +9,7 @@ import { AssociadoAtividadesPanel } from '@/components/AssociadoAtividadesPanel'
 import { AssociadoMensalidadesPanel } from '@/components/AssociadoMensalidadesPanel'
 import { StaffAtividadesPanel } from '@/components/StaffAtividadesPanel'
 import { StaffMensalidadesAbertasPanel } from '@/components/StaffMensalidadesAbertasPanel'
+import { ConquistasPanel } from '@/components/ConquistasPanel'
 import { isAssociadoLogin } from '@/lib/roles'
 import type {
   DashboardAniversariante,
@@ -915,6 +916,10 @@ export function DashboardPage() {
 
       {!associadoView && empresaId && ramoFiltro == null ? (
         <StaffMensalidadesAbertasPanel empresaId={empresaId} />
+      ) : null}
+
+      {!associadoView && empresaId ? (
+        <ConquistasPanel empresaId={empresaId} />
       ) : null}
 
       <section

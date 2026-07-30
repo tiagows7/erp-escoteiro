@@ -17,8 +17,10 @@ import {
   type PortalGrupo,
   type PortalReceita,
   type PortalResumo,
+  type PortalSaldoLocal,
   type PortalSecao,
 } from '@/lib/portal'
+import { documentLabel, parseDocumentUrls } from '@/lib/documentUrls'
 
 type Tab = 'despesas' | 'receitas'
 
@@ -31,6 +33,7 @@ export function PortalTransparenciaPage() {
   const [despesas, setDespesas] = useState<PortalDespesa[]>([])
   const [receitas, setReceitas] = useState<PortalReceita[]>([])
   const [secoes, setSecoes] = useState<PortalSecao[]>([])
+  const [saldoLocais, setSaldoLocais] = useState<PortalSaldoLocal[]>([])
   const [ano, setAno] = useState(currentPortalYear())
   const [caixa, setCaixa] = useState<PortalCaixaId>(() => {
     const raw = Number(searchParams.get('caixa'))
@@ -120,7 +123,8 @@ export function PortalTransparenciaPage() {
             })
           : Promise.resolve({ data: [], error: null })
 
-      const [resumoRes, despRes, recRes, secoesRes] = await Promise.all([
+      const [resumoRes, despRes, recRes, secoesRes, locaisRes] =
+        await Promise.all([
         supabase.rpc('portal_resumo', {
           p_slug: cleanSlug,
           p_ano: ano,
@@ -140,11 +144,21 @@ export function PortalTransparenciaPage() {
           p_secao: secaoId,
         }),
         secoesPromise,
+        supabase.rpc('portal_saldo_locais', {
+          p_slug: cleanSlug,
+          p_caixa: caixa,
+          p_secao: secaoId,
+        }),
       ])
 
       if (!mounted) return
 
-      if (resumoRes.error || despRes.error || recRes.error || secoesRes.error) {
+      if (
+        resumoRes.error ||
+        despRes.error ||
+        recRes.error ||
+        secoesRes.error
+      ) {
         setError(
           resumoRes.error?.message ||
             despRes.error?.message ||
@@ -156,6 +170,7 @@ export function PortalTransparenciaPage() {
         setDespesas([])
         setReceitas([])
         setSecoes([])
+        setSaldoLocais([])
       } else {
         const resumoRow = (
           Array.isArray(resumoRes.data) ? resumoRes.data[0] : resumoRes.data
@@ -164,6 +179,12 @@ export function PortalTransparenciaPage() {
         setDespesas((despRes.data as PortalDespesa[]) ?? [])
         setReceitas((recRes.data as PortalReceita[]) ?? [])
         setSecoes((secoesRes.data as PortalSecao[]) ?? [])
+        if (locaisRes.error) {
+          console.warn('Locais do saldo:', locaisRes.error.message)
+          setSaldoLocais([])
+        } else {
+          setSaldoLocais((locaisRes.data as PortalSaldoLocal[]) ?? [])
+        }
       }
 
       setLoading(false)
@@ -219,18 +240,27 @@ export function PortalTransparenciaPage() {
                 <td>{formatMoney(row.despesa_saldo)}</td>
                 <td>{situacaoTituloLabel(row.despesa_situacao)}</td>
                 <td>
-                  {row.despesa_documento ? (
-                    <a
-                      className="btn btn-soft"
-                      href={row.despesa_documento}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Abrir
-                    </a>
-                  ) : (
-                    '—'
-                  )}
+                  {(() => {
+                    const docs = parseDocumentUrls(row.despesa_documento)
+                    if (docs.length === 0) return '—'
+                    return (
+                      <div className="portal-doc-links">
+                        {docs.map((url, index) => (
+                          <a
+                            key={url}
+                            className="btn btn-soft"
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {docs.length === 1
+                              ? 'Abrir'
+                              : documentLabel(url, index)}
+                          </a>
+                        ))}
+                      </div>
+                    )
+                  })()}
                 </td>
               </tr>
             ))}
@@ -269,18 +299,27 @@ export function PortalTransparenciaPage() {
                 <td>{formatMoney(row.receita_saldo)}</td>
                 <td>{situacaoTituloLabel(row.receita_situacao)}</td>
                 <td>
-                  {row.receita_documento ? (
-                    <a
-                      className="btn btn-soft"
-                      href={row.receita_documento}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Abrir
-                    </a>
-                  ) : (
-                    '—'
-                  )}
+                  {(() => {
+                    const docs = parseDocumentUrls(row.receita_documento)
+                    if (docs.length === 0) return '—'
+                    return (
+                      <div className="portal-doc-links">
+                        {docs.map((url, index) => (
+                          <a
+                            key={url}
+                            className="btn btn-soft"
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {docs.length === 1
+                              ? 'Abrir'
+                              : documentLabel(url, index)}
+                          </a>
+                        ))}
+                      </div>
+                    )
+                  })()}
                 </td>
               </tr>
             ))}
@@ -412,33 +451,52 @@ export function PortalTransparenciaPage() {
                   </>
                 ) : null}
               </p>
-              <div className="portal-stats">
-                <article className="portal-stat portal-stat-receita">
+              <div className="stats-grid portal-stats-grid">
+                <article className="stat-card">
                   <span>Receitas lançadas</span>
                   <strong>{formatMoney(resumo.total_receitas)}</strong>
-                  <small>
+                  <em className="stat-card-hint">
                     Recebido: {formatMoney(resumo.receitas_recebidas)}
-                  </small>
+                  </em>
                 </article>
-                <article className="portal-stat portal-stat-despesa">
+                <article className="stat-card">
                   <span>Despesas lançadas</span>
                   <strong>{formatMoney(resumo.total_despesas)}</strong>
-                  <small>Pago: {formatMoney(resumo.despesas_pagas)}</small>
+                  <em className="stat-card-hint">
+                    Pago: {formatMoney(resumo.despesas_pagas)}
+                  </em>
                 </article>
-                <article className="portal-stat portal-stat-saldo">
+                <article className="stat-card stat-card-total">
                   <span>Resultado (lançado)</span>
                   <strong
                     className={
-                      Number(resumo.saldo_lancado) < 0 ? 'is-neg' : 'is-pos'
+                      Number(resumo.saldo_lancado) < 0 ? 'is-neg' : undefined
                     }
                   >
                     {formatMoney(resumo.saldo_lancado)}
                   </strong>
-                  <small>
+                  <em className="stat-card-hint">
                     Realizado: {formatMoney(resumo.saldo_realizado)}
-                  </small>
+                  </em>
                 </article>
               </div>
+
+              {saldoLocais.length > 0 ? (
+                <div className="portal-locais">
+                  <p className="portal-locais-title">Onde está o valor</p>
+                  <div className="stats-grid portal-stats-grid">
+                    {saldoLocais.map((local) => (
+                      <article key={local.id} className="stat-card">
+                        <span>{local.nome}</span>
+                        <strong>{formatMoney(local.valor)}</strong>
+                        {local.secao_nome ? (
+                          <em className="stat-card-hint">{local.secao_nome}</em>
+                        ) : null}
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </>
           ) : null}
         </section>

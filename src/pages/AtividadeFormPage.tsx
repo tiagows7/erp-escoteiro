@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { StaffAtividadesPanel } from '@/components/StaffAtividadesPanel'
 import { formatMoney, parseMoneyInput } from '@/lib/despesas'
 import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
 import type { Ramo } from '@/types/database'
@@ -443,6 +444,18 @@ export function AtividadeFormPage() {
           </div>
         </form>
       </section>
+
+      {!isNew && empresaId ? (
+        <div style={{ marginTop: '1.25rem' }}>
+          <StaffAtividadesPanel
+            empresaId={empresaId}
+            codigoRamo={null}
+            atividadeId={Number(id)}
+            autoOpenAssociados
+            embedded
+          />
+        </div>
+      ) : null}
     </>
   )
 }

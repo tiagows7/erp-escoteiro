@@ -1,4 +1,8 @@
 import { supabase } from '@/lib/supabase'
+import {
+  parseDocumentUrls,
+  serializeDocumentUrls,
+} from '@/lib/documentUrls'
 
 const BUCKET = 'despesa-notas'
 const MAX_BYTES = 5 * 1024 * 1024
@@ -21,16 +25,17 @@ function extensionFor(mime: string, fileName: string): string {
   return 'bin'
 }
 
-export async function uploadDespesaNota(
+async function uploadOneFile(
   empresaId: number,
   despesaId: number,
   file: File,
+  index: number,
 ): Promise<{ url: string } | { error: string }> {
   if (!ALLOWED.has(file.type)) {
-    return { error: 'Use PDF, PNG, JPG ou WEBP (máx. 5 MB).' }
+    return { error: `${file.name}: use PDF, PNG, JPG ou WEBP (máx. 5 MB).` }
   }
   if (file.size > MAX_BYTES) {
-    return { error: 'O arquivo deve ter no máximo 5 MB.' }
+    return { error: `${file.name}: o arquivo deve ter no máximo 5 MB.` }
   }
 
   const ext = extensionFor(file.type, file.name)
@@ -39,7 +44,7 @@ export async function uploadDespesaNota(
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
     .slice(0, 40)
-  const path = `${empresaId}/${despesaId}/${Date.now()}-${safeName || `nota.${ext}`}`
+  const path = `${empresaId}/${despesaId}/${Date.now()}-${index}-${safeName || `nota.${ext}`}`
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
@@ -50,15 +55,37 @@ export async function uploadDespesaNota(
     })
 
   if (uploadError) {
-    return { error: uploadError.message }
+    return { error: `${file.name}: ${uploadError.message}` }
   }
 
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
-  const url = data.publicUrl
+  return { url: data.publicUrl }
+}
 
+/** Upload de um ou mais arquivos; anexa aos documentos já existentes. */
+export async function uploadDespesaNotas(
+  empresaId: number,
+  despesaId: number,
+  files: File[],
+  existingDocumento: string | null | undefined = null,
+): Promise<{ urls: string[] } | { error: string }> {
+  if (files.length === 0) {
+    return { urls: parseDocumentUrls(existingDocumento) }
+  }
+
+  const uploaded: string[] = []
+  for (let i = 0; i < files.length; i++) {
+    const result = await uploadOneFile(empresaId, despesaId, files[i], i)
+    if ('error' in result) {
+      return { error: result.error }
+    }
+    uploaded.push(result.url)
+  }
+
+  const urls = [...parseDocumentUrls(existingDocumento), ...uploaded]
   const { error: updateError } = await supabase
     .from('despesas')
-    .update({ despesa_documento: url })
+    .update({ despesa_documento: serializeDocumentUrls(urls) })
     .eq('despesa_id', despesaId)
     .eq('empresa_id', empresaId)
 
@@ -66,16 +93,18 @@ export async function uploadDespesaNota(
     return { error: updateError.message }
   }
 
-  return { url }
+  return { urls }
 }
 
-export function isNotaImage(url: string | null | undefined): boolean {
-  if (!url) return false
-  const lower = url.toLowerCase().split('?')[0]
-  return (
-    lower.endsWith('.png') ||
-    lower.endsWith('.jpg') ||
-    lower.endsWith('.jpeg') ||
-    lower.endsWith('.webp')
-  )
+/** @deprecated Use uploadDespesaNotas */
+export async function uploadDespesaNota(
+  empresaId: number,
+  despesaId: number,
+  file: File,
+): Promise<{ url: string } | { error: string }> {
+  const result = await uploadDespesaNotas(empresaId, despesaId, [file])
+  if ('error' in result) return result
+  return { url: result.urls[result.urls.length - 1] }
 }
+
+export { isDocumentImage as isNotaImage } from '@/lib/documentUrls'

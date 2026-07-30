@@ -34,6 +34,10 @@ export type Associado = {
   isento: boolean | null
   tipo_mensalidade: number | null
   validade_registro: string | null
+  conquista_cruzeiro_do_sul: boolean | null
+  conquista_lis_de_ouro: boolean | null
+  conquista_escoteiro_patria: boolean | null
+  conquista_insignia_bp: boolean | null
 }
 
 export type Profile = {

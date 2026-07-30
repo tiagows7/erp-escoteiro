@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   formatMoney,
   situacaoFromSaldo,
@@ -273,6 +274,11 @@ export function ReceitaRecebimentoFormPage() {
 
   return (
     <>
+      <WaitingOverlay
+        open={saving}
+        title="Montando movimento"
+        message="Registrando o recebimento. Aguarde um momento…"
+      />
       <header className="page-header">
         <div>
           <h2>Registrar recebimento</h2>

@@ -50,6 +50,14 @@ function formatDate(value: string | null | undefined) {
   return `${d}/${m}/${y}`
 }
 
+function todayISO() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
   const { empresa } = useAuth()
   const toast = useToast()
@@ -88,6 +96,7 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
         TITULO_SITUACAO.PARCIAL,
       ])
       .gt('receita_saldo', 0)
+      .lte('receita_vencimento', todayISO())
       .order('receita_vencimento', { ascending: true })
       .limit(5000)
 
@@ -235,7 +244,7 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
         <div>
           <h3>Mensalidades em aberto</h3>
           <p className="muted">
-            Total do grupo — cobrança via WhatsApp para responsáveis/associados.
+            Títulos com vencimento até hoje — cobrança via WhatsApp.
           </p>
         </div>
       </div>

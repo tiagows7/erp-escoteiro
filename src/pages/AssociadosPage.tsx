@@ -8,6 +8,7 @@ import {
 } from '@/lib/importAssociadosPaxtu'
 import { AddIcon } from '@/components/AddIcon'
 import { AlertMessage } from '@/components/AlertMessage'
+import { WaitingOverlay } from '@/components/WaitingOverlay'
 import { useToast } from '@/contexts/ToastContext'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 import type { Associado, Ramo } from '@/types/database'
@@ -329,18 +330,11 @@ export function AssociadosPage() {
         ) : null}
       </header>
 
-      {importing ? (
-        <div className="import-progress" role="status" aria-live="polite">
-          <span className="spinner spinner-dark" aria-hidden="true" />
-          <div>
-            <strong>Aguarde — importação em andamento</strong>
-            <p>
-              Lendo o arquivo Excel e gravando os associados. Isso pode levar
-              alguns instantes…
-            </p>
-          </div>
-        </div>
-      ) : null}
+      <WaitingOverlay
+        open={importing}
+        title="Aguarde — importação em andamento"
+        message="Lendo o arquivo Excel e gravando os associados. Isso pode levar alguns instantes…"
+      />
 
       <section className="panel">
         <div className="toolbar filtros-associados">

@@ -22,6 +22,14 @@ function formatDate(value: string | null | undefined) {
   return `${d}/${m}/${y}`
 }
 
+function todayISO() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
   const [items, setItems] = useState<MensalidadeAberta[]>([])
   const [associadoId, setAssociadoId] = useState<number | null>(null)
@@ -80,6 +88,7 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
         TITULO_SITUACAO.PARCIAL,
       ])
       .gt('receita_saldo', 0)
+      .lte('receita_vencimento', todayISO())
       .order('receita_vencimento', { ascending: true })
 
     if (recError) {
@@ -154,7 +163,8 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
           <div>
             <h3>Mensalidades em aberto</h3>
             <p className="muted">
-              Pague via PIX Sicredi. A baixa só ocorre após confirmação do banco.
+              Títulos com vencimento até hoje. Pague via PIX Sicredi; a baixa só
+              ocorre após confirmação do banco.
             </p>
           </div>
         </div>

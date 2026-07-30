@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/contexts/ToastContext'
 import { formatMoney } from '@/lib/despesas'
@@ -42,12 +42,24 @@ type Props = {
   codigoRamo: number | null
   /** Com ramo + seção: só seção (e gerais do ramo/grupo). */
   codigoSecao?: number | null
+  /** Se informado, restringe a uma atividade (ex.: tela de edição). */
+  atividadeId?: number | null
+  /**
+   * No modo de uma atividade: abre direto o popup de associados
+   * (confirmar presença / baixar PIX).
+   */
+  autoOpenAssociados?: boolean
+  /** Oculta o resumo geral e já mostra a lista/card da atividade. */
+  embedded?: boolean
 }
 
 export function StaffAtividadesPanel({
   empresaId,
   codigoRamo,
   codigoSecao = null,
+  atividadeId = null,
+  autoOpenAssociados = false,
+  embedded = false,
 }: Props) {
   const toast = useToast()
   const [items, setItems] = useState<AtividadeResumo[]>([])
@@ -61,6 +73,7 @@ export function StaffAtividadesPanel({
   const [showLista, setShowLista] = useState(false)
   const [busca, setBusca] = useState('')
   const [busyId, setBusyId] = useState<number | null>(null)
+  const didAutoOpen = useRef(false)
 
   const secaoFiltro =
     codigoRamo != null &&
@@ -83,10 +96,12 @@ export function StaffAtividadesPanel({
       .eq('empresa_id', empresaId)
       .order('created_at', { ascending: false })
 
-    // Com ramo+seção: grupo todo, ramo sem seção, ou mesma seção.
-    // Só ramo: atividades do ramo + grupo todo.
-    // Sem ramo: todas.
-    if (codigoRamo != null && codigoRamo >= 1 && codigoRamo <= 5) {
+    if (atividadeId != null && atividadeId > 0) {
+      ativQuery = ativQuery.eq('atividade_id', atividadeId)
+    } else if (codigoRamo != null && codigoRamo >= 1 && codigoRamo <= 5) {
+      // Com ramo+seção: grupo todo, ramo sem seção, ou mesma seção.
+      // Só ramo: atividades do ramo + grupo todo.
+      // Sem ramo: todas.
       if (secaoFiltro != null) {
         ativQuery = ativQuery.or(
           filtroAtividadesRamoSecaoOuGrupo(codigoRamo, secaoFiltro),
@@ -191,6 +206,9 @@ export function StaffAtividadesPanel({
     }
 
     const atividades = ((ativRes.data as Atividade[]) ?? []).filter((a) => {
+      if (atividadeId != null && atividadeId > 0) {
+        return a.atividade_id === atividadeId
+      }
       if (codigoRamo == null || codigoRamo < 1 || codigoRamo > 5) return true
       return atividadeVisivelParaStaff(a, codigoRamo, secaoFiltro)
     })
@@ -206,11 +224,32 @@ export function StaffAtividadesPanel({
       }),
     )
     setLoading(false)
-  }, [empresaId, codigoRamo, secaoFiltro])
+  }, [empresaId, codigoRamo, secaoFiltro, atividadeId])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (embedded || (atividadeId != null && atividadeId > 0)) {
+      setShowLista(true)
+    }
+  }, [embedded, atividadeId])
+
+  useEffect(() => {
+    if (!autoOpenAssociados || didAutoOpen.current || loading || items.length === 0) {
+      return
+    }
+    const target =
+      atividadeId != null
+        ? items.find((i) => i.atividade_id === atividadeId)
+        : items[0]
+    if (!target) return
+    didAutoOpen.current = true
+    setBusca('')
+    setPopupAtividadeId(target.atividade_id)
+    setPopupMode('associados')
+  }, [autoOpenAssociados, loading, items, atividadeId])
 
   const popupItem = useMemo(
     () => items.find((item) => item.atividade_id === popupAtividadeId) ?? null,
@@ -352,48 +391,59 @@ export function StaffAtividadesPanel({
 
   const isAssociadosMode = popupMode === 'associados'
 
+  const singleAtividade = atividadeId != null && atividadeId > 0
+
   return (
     <section className="panel staff-atividades-panel">
       <div className="passagem-header">
         <div>
           <h3>
-            {temSecao
-              ? 'Atividades do ramo/seção'
-              : temRamo
-                ? 'Atividades do ramo'
-                : 'Atividades'}
+            {singleAtividade || embedded
+              ? 'Confirmados e pagamentos'
+              : temSecao
+                ? 'Atividades do ramo/seção'
+                : temRamo
+                  ? 'Atividades do ramo'
+                  : 'Atividades'}
           </h3>
           <p className="muted">
-            {temSecao
-              ? 'Inclui atividades da seção, do ramo (sem seção) e as do grupo todo.'
-              : temRamo
-                ? 'Inclui atividades do ramo e as do grupo todo (sem ramo).'
-                : 'Atividades do grupo, inclusive as sem ramo específico.'}
+            {singleAtividade || embedded
+              ? 'Mesma rotina do dashboard: confirme presença e baixe o pagamento em PIX.'
+              : temSecao
+                ? 'Inclui atividades da seção, do ramo (sem seção) e as do grupo todo.'
+                : temRamo
+                  ? 'Inclui atividades do ramo e as do grupo todo (sem ramo).'
+                  : 'Atividades do grupo, inclusive as sem ramo específico.'}
           </p>
         </div>
       </div>
 
-      <article className="associado-mensalidade-resumo">
-        <div>
-          <span>Atividades</span>
-          <strong>{items.length}</strong>
-          <p className="muted">
-            Arrecadado {formatMoney(totalArrecadadoGeral)}
-          </p>
-        </div>
-        <div className="associado-mensalidade-resumo-actions">
-          <button
-            type="button"
-            className="btn btn-soft"
-            onClick={() => setShowLista((prev) => !prev)}
-          >
-            {showLista ? 'Ocultar lista' : 'Ver lista'}
-          </button>
-        </div>
-      </article>
+      {!singleAtividade && !embedded ? (
+        <article className="associado-mensalidade-resumo">
+          <div>
+            <span>Atividades</span>
+            <strong>{items.length}</strong>
+            <p className="muted">
+              Arrecadado {formatMoney(totalArrecadadoGeral)}
+            </p>
+          </div>
+          <div className="associado-mensalidade-resumo-actions">
+            <button
+              type="button"
+              className="btn btn-soft"
+              onClick={() => setShowLista((prev) => !prev)}
+            >
+              {showLista ? 'Ocultar lista' : 'Ver lista'}
+            </button>
+          </div>
+        </article>
+      ) : null}
 
-      {showLista ? (
-        <div className="staff-atividades-list" style={{ marginTop: '0.9rem' }}>
+      {showLista || singleAtividade || embedded ? (
+        <div
+          className="staff-atividades-list"
+          style={{ marginTop: singleAtividade || embedded ? 0 : '0.9rem' }}
+        >
           {items.map((item) => (
             <article key={item.atividade_id} className="staff-atividade-card">
               <header className="staff-atividade-head">

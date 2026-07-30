@@ -13,8 +13,13 @@ import {
 } from '@/lib/receitas'
 import {
   isReceitaDocumentoImage,
-  uploadReceitaDocumento,
+  uploadReceitaDocumentos,
 } from '@/lib/uploadReceitaDocumento'
+import {
+  documentLabel,
+  parseDocumentUrls,
+  serializeDocumentUrls,
+} from '@/lib/documentUrls'
 import {
   matchesFinanceiroScope,
   resolveFinanceiroScope,
@@ -79,9 +84,8 @@ export function ReceitaFormPage() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
-  const [documentoUrl, setDocumentoUrl] = useState<string | null>(null)
-  const [docFile, setDocFile] = useState<File | null>(null)
-  const [docPreview, setDocPreview] = useState<string | null>(null)
+  const [documentoUrls, setDocumentoUrls] = useState<string[]>([])
+  const [docFiles, setDocFiles] = useState<File[]>([])
 
   useEffect(() => {
     if (!scope || !isNew) return
@@ -211,7 +215,8 @@ export function ReceitaFormPage() {
       setSaldo(saldoNum)
       setSituacao(data.receita_situacao)
       setPaidAmount(Math.max(0, valorNum - saldoNum))
-      setDocumentoUrl(data.receita_documento ?? null)
+      setDocumentoUrls(parseDocumentUrls(data.receita_documento))
+      setDocFiles([])
       setLoading(false)
     })()
 
@@ -227,25 +232,9 @@ export function ReceitaFormPage() {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  function onDocChange(file: File | null) {
-    if (docPreview?.startsWith('blob:')) {
-      URL.revokeObjectURL(docPreview)
-    }
-    setDocFile(file)
-    if (file && file.type.startsWith('image/')) {
-      setDocPreview(URL.createObjectURL(file))
-    } else {
-      setDocPreview(null)
-    }
+  function onDocChange(list: FileList | null) {
+    setDocFiles(list ? Array.from(list) : [])
   }
-
-  useEffect(() => {
-    return () => {
-      if (docPreview?.startsWith('blob:')) {
-        URL.revokeObjectURL(docPreview)
-      }
-    }
-  }, [docPreview])
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
@@ -301,11 +290,11 @@ export function ReceitaFormPage() {
         return
       }
 
-      if (docFile) {
-        const up = await uploadReceitaDocumento(
+      if (docFiles.length > 0) {
+        const up = await uploadReceitaDocumentos(
           empresaId,
           inserted.receita_id as number,
-          docFile,
+          docFiles,
         )
         if ('error' in up) {
           setSaving(false)
@@ -351,8 +340,13 @@ export function ReceitaFormPage() {
         return
       }
 
-      if (docFile) {
-        const up = await uploadReceitaDocumento(empresaId, Number(id), docFile)
+      if (docFiles.length > 0) {
+        const up = await uploadReceitaDocumentos(
+          empresaId,
+          Number(id),
+          docFiles,
+          serializeDocumentUrls(documentoUrls),
+        )
         if ('error' in up) {
           setSaving(false)
           setError(`Dados salvos, mas o comprovante não foi enviado: ${up.error}`)
@@ -610,40 +604,52 @@ export function ReceitaFormPage() {
               id="receita_documento"
               className="input"
               type="file"
+              multiple
               accept="image/png,image/jpeg,image/webp,application/pdf,.pdf,.png,.jpg,.jpeg,.webp"
-              onChange={(e) => onDocChange(e.target.files?.[0] ?? null)}
+              onChange={(e) => onDocChange(e.target.files)}
               disabled={disabled}
             />
             <span className="field-hint">
-              PDF ou imagem (PNG/JPG/WEBP), até 5 MB. Aparece no portal da
-              transparência.
+              Você pode selecionar vários arquivos. PDF ou imagem (PNG/JPG/WEBP),
+              até 5 MB cada. Aparecem no portal da transparência.
             </span>
             <div className="despesa-nota-preview">
-              {docPreview ? (
-                <img src={docPreview} alt="Prévia do comprovante" />
-              ) : docFile ? (
-                <p className="muted" style={{ margin: 0 }}>
-                  Arquivo selecionado: <strong>{docFile.name}</strong>
-                </p>
-              ) : documentoUrl ? (
-                <>
-                  {isReceitaDocumentoImage(documentoUrl) ? (
-                    <img src={documentoUrl} alt="Comprovante da receita" />
-                  ) : null}
-                  <a
-                    className="btn btn-soft"
-                    href={documentoUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Abrir documento anexado
-                  </a>
-                </>
-              ) : (
+              {docFiles.length > 0 ? (
+                <ul className="doc-file-list">
+                  {docFiles.map((file) => (
+                    <li key={`${file.name}-${file.size}`}>
+                      <strong>{file.name}</strong>
+                      <span className="muted">
+                        {' '}
+                        ({Math.round(file.size / 1024)} KB)
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {documentoUrls.length > 0 ? (
+                <ul className="doc-file-list">
+                  {documentoUrls.map((url, index) => (
+                    <li key={url}>
+                      {isReceitaDocumentoImage(url) ? (
+                        <img src={url} alt={documentLabel(url, index)} />
+                      ) : null}
+                      <a
+                        className="btn btn-soft"
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {documentLabel(url, index)}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              ) : docFiles.length === 0 ? (
                 <p className="muted" style={{ margin: 0 }}>
                   Nenhum documento anexado.
                 </p>
-              )}
+              ) : null}
             </div>
           </div>
         </div>

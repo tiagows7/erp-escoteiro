@@ -36,6 +36,7 @@ import { DespesasPagamentoPage } from '@/pages/DespesasPagamentoPage'
 import { DespesaPagamentoFormPage } from '@/pages/DespesaPagamentoFormPage'
 import { DespesasRelatorioPage } from '@/pages/DespesasRelatorioPage'
 import { GrupoMeuRedirectPage } from '@/pages/GrupoMeuRedirectPage'
+import { BackupPage } from '@/pages/BackupPage'
 import { ReceitasInclusaoPage } from '@/pages/ReceitasInclusaoPage'
 import { ReceitaFormPage } from '@/pages/ReceitaFormPage'
 import { GeraMensalidadePage } from '@/pages/GeraMensalidadePage'
@@ -377,6 +378,15 @@ export default function App() {
               element={
                 <RequirePermission anyOf={['grupos.write', 'grupos.view']}>
                   <GrupoFormPage />
+                </RequirePermission>
+              }
+            />
+
+            <Route
+              path="backup"
+              element={
+                <RequirePermission permission="grupos.write">
+                  <BackupPage />
                 </RequirePermission>
               }
             />

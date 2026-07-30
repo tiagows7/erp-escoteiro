@@ -54,6 +54,15 @@ export type PortalSecao = {
   secao_nome: string
 }
 
+export type PortalSaldoLocal = {
+  id: number
+  nome: string
+  valor: number
+  ordem: number
+  secao_id: number | null
+  secao_nome: string | null
+}
+
 /** 0 = caixa do grupo; 1-4 = ramos */
 export type PortalCaixaId = 0 | 1 | 2 | 3 | 4
 

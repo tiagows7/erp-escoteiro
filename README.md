@@ -44,7 +44,14 @@ Para o fluxo ideal (usuário já confirmado, sem trocar sessão), publique a Edg
 ```bash
 npx supabase login
 npx supabase functions deploy create-grupo --project-ref miognzsrqxktbievlggs
+npx supabase functions deploy export-backup --project-ref miognzsrqxktbievlggs
 ```
+
+### Backup lógico (super admin)
+
+Na tela **Backup do banco** (`/backup`), o super admin gera um export JSON (por grupo ou plataforma). Rode também a migration `033_backup_storage.sql` (bucket privado `backups`) e publique a function `export-backup`.
+
+Isso **não** substitui o backup físico / PITR do Supabase.
 
 Sem a function publicada, o app usa um fallback via `signUp` (pode exigir desativar “Confirm email” em Authentication → Providers → Email).
 

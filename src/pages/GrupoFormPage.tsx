@@ -11,11 +11,17 @@ import { uploadGrupoLogo } from '@/lib/uploadGrupoLogo'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { ContaBancariaModal } from '@/components/ContaBancariaModal'
+import {
+  SaldoLocalModal,
+  type SaldoLocalRow,
+} from '@/components/SaldoLocalModal'
 import { AddIcon } from '@/components/AddIcon'
 import {
   contaBancariaFromRow,
   type ContaBancariaRow,
 } from '@/lib/contaBancariaFields'
+import { PORTAL_CAIXAS } from '@/lib/portal'
+import { formatMoney } from '@/lib/despesas'
 import { loadCidades, loadEstados } from '@/lib/brasilLocalidades'
 import type { Ramo } from '@/types/database'
 
@@ -77,6 +83,11 @@ export function GrupoFormPage() {
     null,
   )
   const [contaBusyId, setContaBusyId] = useState<number | null>(null)
+  const [saldoLocais, setSaldoLocais] = useState<SaldoLocalRow[]>([])
+  const [saldoListaOpen, setSaldoListaOpen] = useState(false)
+  const [saldoModalOpen, setSaldoModalOpen] = useState(false)
+  const [saldoEditando, setSaldoEditando] = useState<SaldoLocalRow | null>(null)
+  const [saldoBusyId, setSaldoBusyId] = useState<number | null>(null)
   const [estados, setEstados] = useState<{ codigo: string; nome: string }[]>(
     [],
   )
@@ -124,7 +135,7 @@ export function GrupoFormPage() {
     let mounted = true
 
     void (async () => {
-      const [empresaRes, secoesRes, contasRes] = await Promise.all([
+      const [empresaRes, secoesRes, contasRes, locaisRes] = await Promise.all([
         supabase
           .from('empresa')
           .select(
@@ -144,6 +155,14 @@ export function GrupoFormPage() {
           )
           .eq('empresa_id', Number(id))
           .order('id', { ascending: true }),
+        supabase
+          .from('empresa_saldo_local')
+          .select(
+            'id, empresa_id, caixa_id, secao_id, nome, valor, ordem, ativo',
+          )
+          .eq('empresa_id', Number(id))
+          .order('ordem', { ascending: true })
+          .order('nome', { ascending: true }),
       ])
 
       if (!mounted) return
@@ -188,6 +207,11 @@ export function GrupoFormPage() {
           ...contaBancariaFromRow(row),
         })),
       )
+
+      if (locaisRes.error) {
+        console.warn('Locais do saldo:', locaisRes.error.message)
+      }
+      setSaldoLocais((locaisRes.data as SaldoLocalRow[] | null) ?? [])
 
       setLoading(false)
     })()
@@ -466,6 +490,29 @@ export function GrupoFormPage() {
     toast.success('Conta bancária excluída.')
   }
 
+  async function excluirSaldoLocal(localId: number) {
+    if (!canWrite) return
+    const ok = await toast.confirm({
+      title: 'Excluir local do saldo',
+      message: 'Esta ação não pode ser desfeita.',
+      confirmLabel: 'Excluir',
+      danger: true,
+    })
+    if (!ok) return
+    setSaldoBusyId(localId)
+    const { error: delError } = await supabase
+      .from('empresa_saldo_local')
+      .delete()
+      .eq('id', localId)
+    setSaldoBusyId(null)
+    if (delError) {
+      setError(delError.message)
+      return
+    }
+    setSaldoLocais((prev) => prev.filter((l) => l.id !== localId))
+    toast.success('Local do saldo excluído.')
+  }
+
   if (!canManagePlatform && isNew) {
     return <Navigate to="/grupos/meu" replace />
   }
@@ -504,15 +551,26 @@ export function GrupoFormPage() {
         </div>
         <div className="page-header-actions actions-pair">
           {!isNew && canWrite ? (
-            <button
-              type="button"
-              className="btn btn-primary btn-with-icon"
-              disabled={saving}
-              onClick={() => setContasListaOpen(true)}
-            >
-              <AddIcon />
-              Cadastrar banco
-            </button>
+            <>
+              <button
+                type="button"
+                className="btn btn-primary btn-with-icon"
+                disabled={saving}
+                onClick={() => setContasListaOpen(true)}
+              >
+                <AddIcon />
+                Cadastrar banco
+              </button>
+              <button
+                type="button"
+                className="btn btn-soft btn-with-icon"
+                disabled={saving}
+                onClick={() => setSaldoListaOpen(true)}
+              >
+                <AddIcon />
+                Locais do saldo
+              </button>
+            </>
           ) : null}
           <Link className="btn btn-soft" to={backTo}>
             Voltar
@@ -1008,6 +1066,146 @@ export function GrupoFormPage() {
             })
             toast.success(
               contaEditando ? 'Conta atualizada.' : 'Conta cadastrada.',
+            )
+          }}
+        />
+      ) : null}
+
+      {saldoListaOpen ? (
+        <div
+          className="confirm-overlay"
+          role="presentation"
+          onClick={() => setSaldoListaOpen(false)}
+        >
+          <div
+            className="passagem-dialog conta-bancaria-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="saldo-lista-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="passagem-dialog-header">
+              <div>
+                <h3 id="saldo-lista-title">Locais do saldo</h3>
+                <p className="muted">
+                  Onde está o dinheiro de cada caixa (conta, investimento,
+                  dinheiro em caixa…). Aparece no Portal da Transparência.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-soft"
+                onClick={() => setSaldoListaOpen(false)}
+              >
+                Fechar
+              </button>
+            </header>
+
+            <div className="toolbar" style={{ marginBottom: '0.85rem' }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-with-icon"
+                disabled={disabled}
+                onClick={() => {
+                  setSaldoEditando(null)
+                  setSaldoModalOpen(true)
+                }}
+              >
+                <AddIcon />
+                Novo local
+              </button>
+            </div>
+
+            {saldoLocais.length === 0 ? (
+              <div className="empty">Nenhum local de saldo cadastrado.</div>
+            ) : (
+              <div className="table-wrap">
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>Local</th>
+                      <th>Caixa</th>
+                      <th>Seção</th>
+                      <th>Valor</th>
+                      <th>Portal</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {saldoLocais.map((local) => (
+                      <tr key={local.id}>
+                        <td>{local.nome}</td>
+                        <td>
+                          {PORTAL_CAIXAS.find((c) => c.id === local.caixa_id)
+                            ?.label ?? `Caixa ${local.caixa_id}`}
+                        </td>
+                        <td>
+                          {local.secao_id != null
+                            ? (secaoMap.get(local.secao_id) ?? local.secao_id)
+                            : '—'}
+                        </td>
+                        <td>{formatMoney(local.valor)}</td>
+                        <td>{local.ativo === false ? 'Oculto' : 'Sim'}</td>
+                        <td>
+                          <div className="atividades-row-actions">
+                            <button
+                              type="button"
+                              className="btn btn-soft"
+                              disabled={disabled || saldoBusyId === local.id}
+                              onClick={() => {
+                                setSaldoEditando(local)
+                                setSaldoModalOpen(true)
+                              }}
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-danger"
+                              disabled={disabled || saldoBusyId === local.id}
+                              onClick={() => void excluirSaldoLocal(local.id)}
+                            >
+                              {saldoBusyId === local.id
+                                ? 'Excluindo…'
+                                : 'Excluir'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {saldoModalOpen && !isNew && id ? (
+        <SaldoLocalModal
+          empresaId={Number(id)}
+          ramos={ramos}
+          secoes={secoes}
+          editing={saldoEditando}
+          onClose={() => {
+            setSaldoModalOpen(false)
+            setSaldoEditando(null)
+          }}
+          onSaved={(row) => {
+            setSaldoLocais((prev) => {
+              const idx = prev.findIndex((l) => l.id === row.id)
+              if (idx >= 0) {
+                const next = [...prev]
+                next[idx] = row
+                return next
+              }
+              return [...prev, row].sort(
+                (a, b) =>
+                  a.ordem - b.ordem || a.nome.localeCompare(b.nome, 'pt-BR'),
+              )
+            })
+            toast.success(
+              saldoEditando ? 'Local atualizado.' : 'Local cadastrado.',
             )
           }}
         />

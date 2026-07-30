@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   formatMoney,
   situacaoDespesaLabel,
@@ -270,6 +271,11 @@ export function DespesaPagamentoFormPage() {
 
   return (
     <>
+      <WaitingOverlay
+        open={saving}
+        title="Montando movimento"
+        message="Registrando o pagamento. Aguarde um momento…"
+      />
       <header className="page-header">
         <div>
           <h2>Registrar pagamento</h2>

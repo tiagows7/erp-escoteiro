@@ -10,7 +10,12 @@ import {
   situacaoDespesaLabel,
   situacaoFromSaldo,
 } from '@/lib/despesas'
-import { isNotaImage, uploadDespesaNota } from '@/lib/uploadDespesaNota'
+import { isNotaImage, uploadDespesaNotas } from '@/lib/uploadDespesaNota'
+import {
+  documentLabel,
+  parseDocumentUrls,
+  serializeDocumentUrls,
+} from '@/lib/documentUrls'
 import {
   matchesFinanceiroScope,
   resolveFinanceiroScope,
@@ -73,9 +78,8 @@ export function DespesaFormPage() {
   const [patrulhas, setPatrulhas] = useState<Lookup[]>([])
   const [fornecedores, setFornecedores] = useState<Lookup[]>([])
   const [atividades, setAtividades] = useState<AtividadeLookup[]>([])
-  const [documentoUrl, setDocumentoUrl] = useState<string | null>(null)
-  const [notaFile, setNotaFile] = useState<File | null>(null)
-  const [notaPreview, setNotaPreview] = useState<string | null>(null)
+  const [documentoUrls, setDocumentoUrls] = useState<string[]>([])
+  const [notaFiles, setNotaFiles] = useState<File[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
@@ -225,9 +229,8 @@ export function DespesaFormPage() {
       setSaldo(saldoNum)
       setSituacao(data.despesa_situacao)
       setPaidAmount(Math.max(0, valorNum - saldoNum))
-      setDocumentoUrl(data.despesa_documento ?? null)
-      setNotaFile(null)
-      setNotaPreview(null)
+      setDocumentoUrls(parseDocumentUrls(data.despesa_documento))
+      setNotaFiles([])
       setLoading(false)
     })()
 
@@ -243,16 +246,8 @@ export function DespesaFormPage() {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  function onNotaChange(file: File | null) {
-    if (notaPreview?.startsWith('blob:')) {
-      URL.revokeObjectURL(notaPreview)
-    }
-    setNotaFile(file)
-    if (file && file.type.startsWith('image/')) {
-      setNotaPreview(URL.createObjectURL(file))
-    } else {
-      setNotaPreview(null)
-    }
+  function onNotaChange(list: FileList | null) {
+    setNotaFiles(list ? Array.from(list) : [])
   }
 
   async function onSubmit(event: FormEvent) {
@@ -309,11 +304,11 @@ export function DespesaFormPage() {
         return
       }
 
-      if (notaFile) {
-        const up = await uploadDespesaNota(
+      if (notaFiles.length > 0) {
+        const up = await uploadDespesaNotas(
           empresaId,
           created.despesa_id as number,
-          notaFile,
+          notaFiles,
         )
         if ('error' in up) {
           setSaving(false)
@@ -354,8 +349,13 @@ export function DespesaFormPage() {
         return
       }
 
-      if (notaFile) {
-        const up = await uploadDespesaNota(empresaId, Number(id), notaFile)
+      if (notaFiles.length > 0) {
+        const up = await uploadDespesaNotas(
+          empresaId,
+          Number(id),
+          notaFiles,
+          serializeDocumentUrls(documentoUrls),
+        )
         if ('error' in up) {
           setSaving(false)
           setError(`Dados salvos, mas a nota não foi enviada: ${up.error}`)
@@ -631,40 +631,53 @@ export function DespesaFormPage() {
               id="despesa_nota"
               className="input"
               type="file"
+              multiple
               accept="image/png,image/jpeg,image/webp,application/pdf,.pdf,.png,.jpg,.jpeg,.webp"
-              onChange={(e) => onNotaChange(e.target.files?.[0] ?? null)}
+              onChange={(e) => onNotaChange(e.target.files)}
               disabled={disabled}
             />
             <span className="field-hint">
-              PDF ou imagem (PNG/JPG/WEBP), até 5 MB.
+              Você pode selecionar vários arquivos. PDF ou imagem (PNG/JPG/WEBP),
+              até 5 MB cada.
             </span>
 
             <div className="despesa-nota-preview">
-              {notaPreview ? (
-                <img src={notaPreview} alt="Prévia da nota" />
-              ) : notaFile ? (
-                <p className="muted" style={{ margin: 0 }}>
-                  Arquivo selecionado: <strong>{notaFile.name}</strong>
-                </p>
-              ) : documentoUrl ? (
-                <>
-                  {isNotaImage(documentoUrl) ? (
-                    <img src={documentoUrl} alt="Nota da despesa" />
-                  ) : null}
-                  <a
-                    className="btn btn-soft"
-                    href={documentoUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Abrir nota anexada
-                  </a>
-                </>
-              ) : (
+              {notaFiles.length > 0 ? (
+                <ul className="doc-file-list">
+                  {notaFiles.map((file) => (
+                    <li key={`${file.name}-${file.size}`}>
+                      <strong>{file.name}</strong>
+                      <span className="muted">
+                        {' '}
+                        ({Math.round(file.size / 1024)} KB)
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {documentoUrls.length > 0 ? (
+                <ul className="doc-file-list">
+                  {documentoUrls.map((url, index) => (
+                    <li key={url}>
+                      {isNotaImage(url) ? (
+                        <img src={url} alt={documentLabel(url, index)} />
+                      ) : null}
+                      <a
+                        className="btn btn-soft"
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {documentLabel(url, index)}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              ) : notaFiles.length === 0 ? (
                 <p className="muted" style={{ margin: 0 }}>
                   Nenhuma nota anexada.
                 </p>
-              )}
+              ) : null}
             </div>
           </div>
         </div>

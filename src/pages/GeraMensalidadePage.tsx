@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   competenciaToDate,
   currentCompetenciaInput,
@@ -52,6 +53,7 @@ export function GeraMensalidadePage() {
   const [preview, setPreview] = useState<PreviewRow[]>([])
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [progressDetail, setProgressDetail] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [whatsQueue, setWhatsQueue] = useState<PreviewRow[]>([])
@@ -196,6 +198,7 @@ export function GeraMensalidadePage() {
     if (!ok) return
 
     setGenerating(true)
+    setProgressDetail(`0 de ${aGerar.length}`)
     setError(null)
 
     const payload = aGerar.map((row) => ({
@@ -224,6 +227,7 @@ export function GeraMensalidadePage() {
 
       if (insertError) {
         setGenerating(false)
+        setProgressDetail(null)
         setError(
           `Geradas ${inserted} até o erro: ${insertError.message}`,
         )
@@ -231,9 +235,11 @@ export function GeraMensalidadePage() {
         return
       }
       inserted += data?.length ?? chunk.length
+      setProgressDetail(`${inserted} de ${payload.length}`)
     }
 
     setGenerating(false)
+    setProgressDetail(null)
     toast.success(
       'Mensalidades geradas',
       `${inserted} receita(s) criada(s) com sucesso.`,
@@ -330,6 +336,17 @@ export function GeraMensalidadePage() {
 
   return (
     <>
+      <WaitingOverlay
+        open={generating || loading}
+        title={generating ? 'Montando movimentos' : 'Aguarde'}
+        message={
+          generating
+            ? 'Gerando as mensalidades no financeiro. Não feche esta tela.'
+            : 'Montando a prévia dos movimentos de mensalidade…'
+        }
+        detail={generating ? progressDetail : null}
+      />
+
       <header className="page-header">
         <div>
           <h2>Gera Mensalidade</h2>

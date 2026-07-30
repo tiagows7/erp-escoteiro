@@ -24,6 +24,10 @@ const emptyForm = {
   tipo_mensalidade: '',
   ativo: true,
   isento: false,
+  conquista_cruzeiro_do_sul: false,
+  conquista_lis_de_ouro: false,
+  conquista_escoteiro_patria: false,
+  conquista_insignia_bp: false,
   endereco_cep: '',
   endereco: '',
   endereco_numero: '',
@@ -208,6 +212,10 @@ export function AssociadoFormPage() {
         tipo_mensalidade: data.tipo_mensalidade?.toString() ?? '',
         ativo: data.ativo ?? true,
         isento: data.isento ?? false,
+        conquista_cruzeiro_do_sul: data.conquista_cruzeiro_do_sul === true,
+        conquista_lis_de_ouro: data.conquista_lis_de_ouro === true,
+        conquista_escoteiro_patria: data.conquista_escoteiro_patria === true,
+        conquista_insignia_bp: data.conquista_insignia_bp === true,
         endereco_cep: data.endereco_cep ?? '',
         endereco: data.endereco ?? '',
         endereco_numero: data.endereco_numero ?? '',
@@ -276,6 +284,10 @@ export function AssociadoFormPage() {
       tipo_mensalidade: numOrNull(form.tipo_mensalidade),
       ativo: form.ativo,
       isento: form.isento,
+      conquista_cruzeiro_do_sul: form.conquista_cruzeiro_do_sul,
+      conquista_lis_de_ouro: form.conquista_lis_de_ouro,
+      conquista_escoteiro_patria: form.conquista_escoteiro_patria,
+      conquista_insignia_bp: form.conquista_insignia_bp,
       endereco_cep: strOrNull(form.endereco_cep),
       endereco: strOrNull(form.endereco)?.toUpperCase() ?? null,
       endereco_numero: strOrNull(form.endereco_numero),
@@ -550,6 +562,57 @@ export function AssociadoFormPage() {
                 />
                 Isento
               </label>
+            </div>
+            <div className="field field-span-2">
+              <p className="form-section-title" style={{ marginBottom: '0.55rem' }}>
+                Conquistas máximas
+              </p>
+              <div className="field-checks conquistas-checks">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={form.conquista_cruzeiro_do_sul}
+                    onChange={(e) =>
+                      update('conquista_cruzeiro_do_sul', e.target.checked)
+                    }
+                    disabled={disabled}
+                  />
+                  Cruzeiro do Sul
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={form.conquista_lis_de_ouro}
+                    onChange={(e) =>
+                      update('conquista_lis_de_ouro', e.target.checked)
+                    }
+                    disabled={disabled}
+                  />
+                  Lis de Ouro
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={form.conquista_escoteiro_patria}
+                    onChange={(e) =>
+                      update('conquista_escoteiro_patria', e.target.checked)
+                    }
+                    disabled={disabled}
+                  />
+                  Escoteiro da Pátria
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={form.conquista_insignia_bp}
+                    onChange={(e) =>
+                      update('conquista_insignia_bp', e.target.checked)
+                    }
+                    disabled={disabled}
+                  />
+                  Insígnia de B.P.
+                </label>
+              </div>
             </div>
           </div>
         ) : null}

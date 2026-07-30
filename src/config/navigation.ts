@@ -221,6 +221,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Grupo escoteiro',
     permission: 'grupos.view',
   },
+  {
+    type: 'link',
+    to: '/backup',
+    label: 'Backup do banco',
+    permission: 'grupos.write',
+  },
 ]
 
 /** Menu do associado (login por registro): dashboard + atividades + portal. */
@@ -262,9 +268,11 @@ export function navItemsForProfile(
       ),
     }
   }).filter((item) => {
-    // Super admin: lista de grupos. Admin do grupo: só "Grupo escoteiro".
+    // Super admin: lista de grupos + backup. Admin do grupo: só "Grupo escoteiro".
     if (item.type !== 'link') return true
-    if (item.to === '/grupos') return profile?.role === 'super_admin'
+    if (item.to === '/grupos' || item.to === '/backup') {
+      return profile?.role === 'super_admin'
+    }
     if (item.to === '/grupos/meu') return profile?.role === 'admin'
     return true
   })
