@@ -8,7 +8,10 @@ import {
 } from '@/lib/receitas'
 import type { MensalidadeAberta } from '@/lib/mensalidadePagamento'
 import { PixSicrediCheckoutModal } from '@/components/PixSicrediCheckoutModal'
-import type { PixCreateInput } from '@/lib/pixSicredi'
+import {
+  empresaTemChavePixInformada,
+  type PixCreateInput,
+} from '@/lib/pixSicredi'
 
 type Props = {
   empresaId: number
@@ -22,14 +25,6 @@ function formatDate(value: string | null | undefined) {
   return `${d}/${m}/${y}`
 }
 
-function todayISO() {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
 export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
   const [items, setItems] = useState<MensalidadeAberta[]>([])
   const [associadoId, setAssociadoId] = useState<number | null>(null)
@@ -38,6 +33,7 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
   const [showLista, setShowLista] = useState(false)
   const [pixInput, setPixInput] = useState<PixCreateInput | null>(null)
   const [pixTitle, setPixTitle] = useState('Pagar com PIX Sicredi')
+  const [podePagarPix, setPodePagarPix] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -47,6 +43,7 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
     if (!Number.isFinite(registroNum) || registroNum <= 0) {
       setAssociadoId(null)
       setItems([])
+      setPodePagarPix(false)
       setLoading(false)
       return
     }
@@ -57,6 +54,10 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
       .eq('empresa_id', empresaId)
       .eq('registro', registroNum)
       .maybeSingle()
+
+    void empresaTemChavePixInformada(empresaId)
+      .then(setPodePagarPix)
+      .catch(() => setPodePagarPix(false))
 
     if (assocError) {
       setError(assocError.message)
@@ -88,7 +89,6 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
         TITULO_SITUACAO.PARCIAL,
       ])
       .gt('receita_saldo', 0)
-      .lte('receita_vencimento', todayISO())
       .order('receita_vencimento', { ascending: true })
 
     if (recError) {
@@ -152,8 +152,12 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
     })
   }
 
-  if (loading || error || items.length === 0) {
-    return null
+  if (loading) {
+    return (
+      <section className="panel associado-mensalidades-panel">
+        <div className="loading">Carregando mensalidades…</div>
+      </section>
+    )
   }
 
   return (
@@ -163,37 +167,52 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
           <div>
             <h3>Mensalidades em aberto</h3>
             <p className="muted">
-              Títulos com vencimento até hoje. Pague via PIX Sicredi; a baixa só
-              ocorre após confirmação do banco.
+              {podePagarPix
+                ? 'Mensalidades em aberto. Pague via PIX Sicredi; a baixa só ocorre após confirmação do banco.'
+                : 'Mensalidades em aberto.'}
             </p>
           </div>
         </div>
 
-        <article className="associado-mensalidade-resumo">
-          <div>
-            <span>Em aberto</span>
-            <strong>{items.length}</strong>
-            <p className="muted">Total {formatMoney(totalSaldo)}</p>
-          </div>
-          <div className="associado-mensalidade-resumo-actions">
-            <button
-              type="button"
-              className="btn btn-soft"
-              onClick={() => setShowLista((prev) => !prev)}
-            >
-              {showLista ? 'Ocultar' : 'Ver detalhes'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => pagarTodas()}
-            >
-              Pagar
-            </button>
-          </div>
-        </article>
+        {error ? (
+          <p className="muted">{error}</p>
+        ) : (
+          <article className="associado-mensalidade-resumo">
+            <div>
+              <span>Em aberto</span>
+              <strong>{items.length}</strong>
+              <p className="muted">Total {formatMoney(totalSaldo)}</p>
+            </div>
+            <div className="associado-mensalidade-resumo-actions">
+              {items.length > 0 ? (
+                <button
+                  type="button"
+                  className="btn btn-soft"
+                  onClick={() => setShowLista((prev) => !prev)}
+                >
+                  {showLista ? 'Ocultar' : 'Ver detalhes'}
+                </button>
+              ) : null}
+              {podePagarPix && items.length > 0 ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => pagarTodas()}
+                >
+                  Pagar
+                </button>
+              ) : null}
+            </div>
+          </article>
+        )}
 
-        {showLista ? (
+        {!error && items.length === 0 ? (
+          <p className="muted" style={{ marginTop: '0.75rem' }}>
+            Nenhuma mensalidade em aberto no momento.
+          </p>
+        ) : null}
+
+        {showLista && items.length > 0 ? (
           <div className="associado-mensalidades-lista">
             {items.map((item) => (
               <article
@@ -213,13 +232,15 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
                     {formatMoney(item.receita_saldo)}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-accent"
-                  onClick={() => pagarUma(item)}
-                >
-                  Pagar
-                </button>
+                {podePagarPix ? (
+                  <button
+                    type="button"
+                    className="btn btn-accent"
+                    onClick={() => pagarUma(item)}
+                  >
+                    Pagar
+                  </button>
+                ) : null}
               </article>
             ))}
           </div>

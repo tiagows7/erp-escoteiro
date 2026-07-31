@@ -10,7 +10,10 @@ import {
   type AssociadoAtividadeCtx,
 } from '@/lib/atividadeVisibilidade'
 import { PixSicrediCheckoutModal } from '@/components/PixSicrediCheckoutModal'
-import type { PixCreateInput } from '@/lib/pixSicredi'
+import {
+  empresaTemChavePixInformada,
+  type PixCreateInput,
+} from '@/lib/pixSicredi'
 import type { Atividade } from '@/types/database'
 
 type AssociadoCtx = AssociadoAtividadeCtx & {
@@ -41,6 +44,7 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
   const [pixInput, setPixInput] = useState<PixCreateInput | null>(null)
   const [pixTitle, setPixTitle] = useState('Pagar atividade com PIX Sicredi')
   const [showLista, setShowLista] = useState(false)
+  const [podePagarPix, setPodePagarPix] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -50,16 +54,22 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
     if (!Number.isFinite(registroNum) || registroNum <= 0) {
       setAssociado(null)
       setItems([])
+      setPodePagarPix(false)
       setLoading(false)
       return
     }
 
-    const { data: assoc, error: assocError } = await supabase
-      .from('associados')
-      .select('associado_id, ramo, secao, patrulha_matilha')
-      .eq('empresa_id', empresaId)
-      .eq('registro', registroNum)
-      .maybeSingle()
+    const [{ data: assoc, error: assocError }, temPix] = await Promise.all([
+      supabase
+        .from('associados')
+        .select('associado_id, ramo, secao, patrulha_matilha')
+        .eq('empresa_id', empresaId)
+        .eq('registro', registroNum)
+        .maybeSingle(),
+      empresaTemChavePixInformada(empresaId),
+    ])
+
+    setPodePagarPix(temPix)
 
     if (assocError) {
       setError(assocError.message)
@@ -347,7 +357,7 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
                 </>
               )}
 
-              {item.confirmado && !item.pago ? (
+              {podePagarPix && item.confirmado && !item.pago ? (
                 <button
                   type="button"
                   className="btn btn-accent"

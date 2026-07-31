@@ -256,9 +256,18 @@ export function ReceitaFormPage() {
       return
     }
 
-    const ramoPayload = scope ? scope.ramo : numOrNull(form.receita_ramo)
-    const secaoPayload =
-      scope?.secao != null ? scope.secao : numOrNull(form.receita_secao)
+    const isMensalidadeSave = origem === RECEITA_ORIGEM.MENSALIDADE
+    // Mensalidade = conta do grupo (caixa 0); não cai nos ramos.
+    const ramoPayload = isMensalidadeSave
+      ? null
+      : scope
+        ? scope.ramo
+        : numOrNull(form.receita_ramo)
+    const secaoPayload = isMensalidadeSave
+      ? null
+      : scope?.secao != null
+        ? scope.secao
+        : numOrNull(form.receita_secao)
 
     setSaving(true)
     setError(null)
@@ -480,28 +489,47 @@ export function ReceitaFormPage() {
 
           <div className="field">
             <label htmlFor="receita_ramo">Ramo</label>
-            <select
-              id="receita_ramo"
-              className="select"
-              value={form.receita_ramo}
-              onChange={(e) => {
-                update('receita_ramo', e.target.value)
-                update('receita_secao', '')
-                update('atividade_id', '')
-              }}
-              disabled={disabled || isPaid || !!scope}
-            >
-              <option value="">Selecione</option>
-              {ramos.map((ramo) => (
-                <option key={ramo.ramo_id} value={ramo.ramo_id}>
-                  {ramo.nome}
-                </option>
-              ))}
-            </select>
+            {isMensalidade ? (
+              <input
+                id="receita_ramo"
+                className="input"
+                value="Conta do grupo"
+                disabled
+                readOnly
+              />
+            ) : (
+              <select
+                id="receita_ramo"
+                className="select"
+                value={form.receita_ramo}
+                onChange={(e) => {
+                  update('receita_ramo', e.target.value)
+                  update('receita_secao', '')
+                  update('atividade_id', '')
+                }}
+                disabled={disabled || isPaid || !!scope}
+              >
+                <option value="">Selecione</option>
+                {ramos.map((ramo) => (
+                  <option key={ramo.ramo_id} value={ramo.ramo_id}>
+                    {ramo.nome}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="field">
             <label htmlFor="receita_secao">Seção</label>
+            {isMensalidade ? (
+              <input
+                id="receita_secao"
+                className="input"
+                value="—"
+                disabled
+                readOnly
+              />
+            ) : (
             <select
               id="receita_secao"
               className="select"
@@ -519,6 +547,7 @@ export function ReceitaFormPage() {
                 </option>
               ))}
             </select>
+            )}
           </div>
 
           <div className="field field-span-2">

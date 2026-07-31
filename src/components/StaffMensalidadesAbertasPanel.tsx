@@ -8,6 +8,7 @@ import {
   RECEITA_ORIGEM,
   TITULO_SITUACAO,
 } from '@/lib/receitas'
+import { registrarPagamentosMensalidadeLote } from '@/lib/mensalidadePagamento'
 import {
   mensagemCobrancaMensalidade,
   normalizeWhatsAppPhone,
@@ -19,6 +20,7 @@ type ReceitaAbertaRow = {
   receita_descricao: string | null
   receita_competencia: string | null
   receita_vencimento: string | null
+  receita_valor: number
   receita_saldo: number
   associado_id: number | null
   associados: {
@@ -29,6 +31,12 @@ type ReceitaAbertaRow = {
   } | null
 }
 
+type TituloAberto = {
+  receita_id: number
+  receita_valor: number
+  receita_saldo: number
+}
+
 type AssociadoAberto = {
   associado_id: number
   nome: string
@@ -37,6 +45,7 @@ type AssociadoAberto = {
   qtd: number
   total: number
   detalhes: string[]
+  titulos: TituloAberto[]
 }
 
 type Props = {
@@ -50,16 +59,8 @@ function formatDate(value: string | null | undefined) {
   return `${d}/${m}/${y}`
 }
 
-function todayISO() {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
 export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
-  const { empresa } = useAuth()
+  const { empresa, profile } = useAuth()
   const toast = useToast()
   const [rows, setRows] = useState<AssociadoAberto[]>([])
   const [tituloCount, setTituloCount] = useState(0)
@@ -67,6 +68,13 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
   const [showLista, setShowLista] = useState(false)
   const [whatsQueue, setWhatsQueue] = useState<AssociadoAberto[]>([])
   const [whatsIndex, setWhatsIndex] = useState(0)
+  const [busyId, setBusyId] = useState<number | null>(null)
+
+  /** Usuário do grupo (sem ramo): pode baixar PIX direto no card. */
+  const podeBaixarPix = useMemo(() => {
+    const ramo = profile?.codigo_ramo
+    return ramo == null || Number(ramo) < 1 || Number(ramo) > 5
+  }, [profile?.codigo_ramo])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -79,6 +87,7 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
         receita_descricao,
         receita_competencia,
         receita_vencimento,
+        receita_valor,
         receita_saldo,
         associado_id,
         associados (
@@ -96,7 +105,6 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
         TITULO_SITUACAO.PARCIAL,
       ])
       .gt('receita_saldo', 0)
-      .lte('receita_vencimento', todayISO())
       .order('receita_vencimento', { ascending: true })
       .limit(5000)
 
@@ -118,6 +126,7 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
       const telefone =
         assoc?.responsavel_fonecelular || assoc?.celular || null
       const saldo = Number(item.receita_saldo ?? 0)
+      const valor = Number(item.receita_valor ?? 0)
       const detalhe = [
         formatCompetencia(item.receita_competencia),
         formatMoney(saldo),
@@ -128,11 +137,18 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
         .filter(Boolean)
         .join(' · ')
 
+      const titulo: TituloAberto = {
+        receita_id: item.receita_id,
+        receita_valor: valor,
+        receita_saldo: saldo,
+      }
+
       const existing = map.get(item.associado_id)
       if (existing) {
         existing.qtd += 1
         existing.total += saldo
         existing.detalhes.push(detalhe)
+        existing.titulos.push(titulo)
         if (!existing.telefone && telefone) existing.telefone = telefone
       } else {
         map.set(item.associado_id, {
@@ -143,6 +159,7 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
           qtd: 1,
           total: saldo,
           detalhes: [detalhe],
+          titulos: [titulo],
         })
       }
     }
@@ -226,6 +243,36 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
     setWhatsIndex((prev) => prev + 1)
   }
 
+  async function baixarPix(row: AssociadoAberto) {
+    if (!podeBaixarPix || row.titulos.length === 0) return
+
+    const ok = await toast.confirm({
+      title: 'Pagar e baixar em PIX?',
+      message: `${row.nome} · ${row.qtd} mensalidade(s) · ${formatMoney(row.total)} — baixa imediata com tipo PIX.`,
+      confirmLabel: 'Pagar PIX',
+      cancelLabel: 'Cancelar',
+    })
+    if (!ok) return
+
+    setBusyId(row.associado_id)
+    const result = await registrarPagamentosMensalidadeLote({
+      empresaId,
+      receitas: row.titulos,
+      observacao: 'Recebimento PIX — mensalidade (dashboard)',
+    })
+    setBusyId(null)
+
+    if (!result.ok) {
+      toast.error('Não foi possível baixar', result.error)
+      return
+    }
+    toast.success(
+      'Pagamento baixado',
+      `${row.nome} · ${result.qtd} título(s) · PIX`,
+    )
+    await load()
+  }
+
   if (loading) {
     return (
       <section className="panel staff-mensalidades-panel">
@@ -234,17 +281,15 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
     )
   }
 
-  if (tituloCount === 0) {
-    return null
-  }
-
   return (
     <section className="panel staff-mensalidades-panel">
       <div className="passagem-header">
         <div>
           <h3>Mensalidades em aberto</h3>
           <p className="muted">
-            Títulos com vencimento até hoje — cobrança via WhatsApp.
+            {podeBaixarPix
+              ? 'Cobrança via WhatsApp ou pagar e baixar em PIX.'
+              : 'Mensalidades em aberto — cobrança via WhatsApp.'}
           </p>
         </div>
       </div>
@@ -258,23 +303,33 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
           </p>
         </div>
         <div className="associado-mensalidade-resumo-actions">
-          <button
-            type="button"
-            className="btn btn-soft"
-            onClick={() => setShowLista((prev) => !prev)}
-          >
-            {showLista ? 'Ocultar lista' : 'Ver lista'}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => void iniciarFilaWhats()}
-            disabled={comWhats.length === 0}
-          >
-            WhatsApp ({comWhats.length})
-          </button>
+          {tituloCount > 0 ? (
+            <button
+              type="button"
+              className="btn btn-soft"
+              onClick={() => setShowLista((prev) => !prev)}
+            >
+              {showLista ? 'Ocultar lista' : 'Ver lista'}
+            </button>
+          ) : null}
+          {tituloCount > 0 ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void iniciarFilaWhats()}
+              disabled={comWhats.length === 0}
+            >
+              WhatsApp ({comWhats.length})
+            </button>
+          ) : null}
         </div>
       </article>
+
+      {tituloCount === 0 ? (
+        <p className="muted" style={{ marginTop: '0.75rem' }}>
+          Nenhuma mensalidade em aberto no momento.
+        </p>
+      ) : null}
 
       {whatsQueue.length > 0 ? (
         <article className="associado-mensalidade-item" style={{ marginTop: '0.9rem' }}>
@@ -330,17 +385,29 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
                 </p>
                 <p className="muted">Tel. {row.telefone || 'não cadastrado'}</p>
               </div>
-              {normalizeWhatsAppPhone(row.telefone) ? (
-                <button
-                  type="button"
-                  className="btn btn-accent"
-                  onClick={() => enviarWhats(row)}
-                >
-                  WhatsApp
-                </button>
-              ) : (
-                <span className="muted">Sem telefone</span>
-              )}
+              <div className="associado-mensalidade-resumo-actions">
+                {podeBaixarPix ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={busyId === row.associado_id}
+                    onClick={() => void baixarPix(row)}
+                  >
+                    {busyId === row.associado_id ? 'Baixando…' : 'Pagar PIX'}
+                  </button>
+                ) : null}
+                {normalizeWhatsAppPhone(row.telefone) ? (
+                  <button
+                    type="button"
+                    className="btn btn-accent"
+                    onClick={() => enviarWhats(row)}
+                  >
+                    WhatsApp
+                  </button>
+                ) : !podeBaixarPix ? (
+                  <span className="muted">Sem telefone</span>
+                ) : null}
+              </div>
             </article>
           ))}
         </div>

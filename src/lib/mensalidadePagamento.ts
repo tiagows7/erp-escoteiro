@@ -33,6 +33,7 @@ export async function registrarPagamentoMensalidade(opts: {
     MensalidadeAberta,
     'receita_id' | 'receita_valor' | 'receita_saldo'
   >
+  observacao?: string
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const saldo = Number(opts.receita.receita_saldo ?? 0)
   if (!(saldo > 0)) {
@@ -48,7 +49,10 @@ export async function registrarPagamentoMensalidade(opts: {
     tipopagto_id: pix.tipopagto_id,
     data_pagamento: todayISO(),
     valor: saldo,
-    observacao: truncate('Recebimento PIX — mensalidade (associado)', 200),
+    observacao: truncate(
+      opts.observacao ?? 'Recebimento PIX — mensalidade',
+      200,
+    ),
   })
 
   if (baixaError) return { ok: false, error: baixaError.message }
@@ -69,4 +73,27 @@ export async function registrarPagamentoMensalidade(opts: {
   if (updateError) return { ok: false, error: updateError.message }
 
   return { ok: true }
+}
+
+/** Quita várias mensalidades em aberto via PIX. */
+export async function registrarPagamentosMensalidadeLote(opts: {
+  empresaId: number
+  receitas: Pick<
+    MensalidadeAberta,
+    'receita_id' | 'receita_valor' | 'receita_saldo'
+  >[]
+  observacao?: string
+}): Promise<{ ok: true; qtd: number } | { ok: false; error: string }> {
+  let qtd = 0
+  for (const receita of opts.receitas) {
+    if (!(Number(receita.receita_saldo) > 0)) continue
+    const result = await registrarPagamentoMensalidade({
+      empresaId: opts.empresaId,
+      receita,
+      observacao: opts.observacao,
+    })
+    if (!result.ok) return result
+    qtd += 1
+  }
+  return { ok: true, qtd }
 }

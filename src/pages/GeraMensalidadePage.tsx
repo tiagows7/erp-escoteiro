@@ -207,7 +207,9 @@ export function GeraMensalidadePage() {
       tipomensalidade_id: row.tipomensalidade_id,
       receita_origem: RECEITA_ORIGEM.MENSALIDADE,
       receita_descricao: `Mensalidade ${competencia.slice(5, 7)}/${competencia.slice(0, 4)} — ${row.tipo_nome}`,
-      receita_ramo: row.ramo,
+      // Conta do grupo: não atribui movimento ao ramo/seção do associado.
+      receita_ramo: null,
+      receita_secao: null,
       receita_emissao: compDate,
       receita_vencimento: vencimento,
       receita_competencia: compDate,

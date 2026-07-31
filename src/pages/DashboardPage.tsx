@@ -395,7 +395,7 @@ function passagemLimiteLabel(ramoId: number): string {
 export function DashboardPage() {
   const { empresa, profile, hasPermission } = useAuth()
   const toast = useToast()
-  const empresaId = empresa?.id
+  const empresaId = empresa?.id ?? profile?.empresa_id ?? undefined
   const associadoView = isAssociadoLogin(profile)
   const canOpenAssociado = hasPermission('associados.view')
   /** Login e-mail com ramo: dashboard só desse ramo. */
@@ -1474,7 +1474,7 @@ export function DashboardPage() {
         </section>
       ) : null}
 
-      {!associadoView && empresaId && ramoFiltro == null ? (
+      {!associadoView && empresaId ? (
         <StaffMensalidadesAbertasPanel empresaId={empresaId} />
       ) : null}
 

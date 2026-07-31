@@ -5,6 +5,45 @@ export type PixCobrancaTipo =
   | 'mensalidade_lote'
   | 'atividade'
 
+function chavePixInformada(
+  chave: string | null | undefined,
+  ativo: boolean | null | undefined,
+): boolean {
+  return ativo === true && !!(chave ?? '').trim()
+}
+
+/** Há chave PIX ativa no grupo (empresa) ou em algum ramo. */
+export async function empresaTemChavePixInformada(
+  empresaId: number,
+): Promise<boolean> {
+  try {
+    const [{ data: emp }, { data: ramos }] = await Promise.all([
+      supabase
+        .from('empresa')
+        .select('sicredi_pix_chave, sicredi_pix_ativo')
+        .eq('id', empresaId)
+        .maybeSingle(),
+      supabase
+        .from('empresa_ramo_pix_sicredi')
+        .select('sicredi_pix_chave, sicredi_pix_ativo')
+        .eq('empresa_id', empresaId),
+    ])
+
+    if (chavePixInformada(emp?.sicredi_pix_chave, emp?.sicredi_pix_ativo)) {
+      return true
+    }
+
+    return ((ramos ?? []) as {
+      sicredi_pix_chave: string | null
+      sicredi_pix_ativo: boolean | null
+    }[]).some((row) =>
+      chavePixInformada(row.sicredi_pix_chave, row.sicredi_pix_ativo),
+    )
+  } catch {
+    return false
+  }
+}
+
 export type PixCobrancaResumo = {
   id: number
   txid: string
