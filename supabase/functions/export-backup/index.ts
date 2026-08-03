@@ -52,7 +52,11 @@ const REDACT_FIELDS: Record<string, string[]> = {
     'sicredi_pix_cert',
     'sicredi_pix_key',
   ],
-  empresa_conta_bancaria: ['api_client_secret'],
+  empresa_conta_bancaria: [
+    'api_client_secret',
+    'api_pix_cert',
+    'api_pix_key',
+  ],
 }
 
 type Payload = {

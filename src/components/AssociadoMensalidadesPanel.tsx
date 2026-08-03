@@ -35,8 +35,9 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
   const [pixTitle, setPixTitle] = useState('Pagar com PIX Sicredi')
   const [podePagarPix, setPodePagarPix] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (opts?: { quiet?: boolean }) => {
+    const quiet = opts?.quiet === true
+    if (!quiet) setLoading(true)
     setError(null)
 
     const registroNum = Number(String(registro).replace(/\D/g, ''))
@@ -44,7 +45,7 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
       setAssociadoId(null)
       setItems([])
       setPodePagarPix(false)
-      setLoading(false)
+      if (!quiet) setLoading(false)
       return
     }
 
@@ -63,14 +64,14 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
       setError(assocError.message)
       setAssociadoId(null)
       setItems([])
-      setLoading(false)
+      if (!quiet) setLoading(false)
       return
     }
 
     if (!assoc?.associado_id) {
       setAssociadoId(null)
       setItems([])
-      setLoading(false)
+      if (!quiet) setLoading(false)
       return
     }
 
@@ -94,7 +95,7 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
     if (recError) {
       setError(recError.message)
       setItems([])
-      setLoading(false)
+      if (!quiet) setLoading(false)
       return
     }
 
@@ -105,7 +106,7 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
         receita_saldo: Number(row.receita_saldo ?? 0),
       })),
     )
-    setLoading(false)
+    if (!quiet) setLoading(false)
   }, [empresaId, registro])
 
   useEffect(() => {
@@ -152,16 +153,13 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
     })
   }
 
-  if (loading) {
-    return (
-      <section className="panel associado-mensalidades-panel">
-        <div className="loading">Carregando mensalidades…</div>
-      </section>
-    )
-  }
-
   return (
     <>
+      {loading ? (
+        <section className="panel associado-mensalidades-panel">
+          <div className="loading">Carregando mensalidades…</div>
+        </section>
+      ) : (
       <section className="panel associado-mensalidades-panel">
         <div className="passagem-header">
           <div>
@@ -246,6 +244,7 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
           </div>
         ) : null}
       </section>
+      )}
 
       <PixSicrediCheckoutModal
         open={!!pixInput}
@@ -253,7 +252,7 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
         input={pixInput}
         onClose={() => setPixInput(null)}
         onPaid={() => {
-          void load()
+          void load({ quiet: true })
         }}
       />
     </>

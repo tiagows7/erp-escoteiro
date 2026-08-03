@@ -107,6 +107,11 @@ export type EmpresaContaBancaria = {
   conta: string | null
   api_client_id: string | null
   api_client_secret: string | null
+  api_pix_chave: string | null
+  api_pix_ativo: boolean
+  api_pix_cert: string | null
+  api_pix_key: string | null
+  api_pix_base_url: string | null
 }
 
 export type Ramo = {

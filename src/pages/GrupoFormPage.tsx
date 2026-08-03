@@ -17,6 +17,7 @@ import {
 } from '@/components/SaldoLocalModal'
 import { AddIcon } from '@/components/AddIcon'
 import {
+  CONTA_BANCARIA_SELECT,
   contaBancariaFromRow,
   type ContaBancariaRow,
 } from '@/lib/contaBancariaFields'
@@ -150,9 +151,7 @@ export function GrupoFormPage() {
           .order('nome', { ascending: true }),
         supabase
           .from('empresa_conta_bancaria')
-          .select(
-            'id, empresa_id, ramo_id, secao_id, descricao, banco_nome, agencia, conta, api_client_id, api_client_secret',
-          )
+          .select(CONTA_BANCARIA_SELECT)
           .eq('empresa_id', Number(id))
           .order('id', { ascending: true }),
         supabase

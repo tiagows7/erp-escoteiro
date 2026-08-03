@@ -3218,6 +3218,21 @@ table.data tbody tr:hover {
   margin: 0;
 }
 
+.pix-sicredi-qr-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 0.85rem 0 1rem;
+}
+
+.pix-sicredi-qr {
+  width: 240px;
+  height: 240px;
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.5rem;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
 .pix-sicredi-waiting {
   display: grid;
   gap: 0.75rem;

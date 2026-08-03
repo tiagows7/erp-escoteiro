@@ -29,7 +29,7 @@ export function ContaBancariaFieldsForm({
           className="input"
           value={value.descricao}
           onChange={(e) => setField('descricao', e.target.value)}
-          placeholder="Ex.: Caixa do ramo, Conta eventos"
+          placeholder="Ex.: Caixa do grupo, Conta eventos"
           disabled={disabled}
         />
       </div>
@@ -66,8 +66,33 @@ export function ContaBancariaFieldsForm({
           disabled={disabled}
         />
       </div>
+
+      <p
+        className="form-section-title"
+        style={{ gridColumn: '1 / -1', margin: '0.5rem 0 0' }}
+      >
+        PIX / API do banco
+      </p>
+      <p className="field-hint" style={{ gridColumn: '1 / -1', margin: 0 }}>
+        Conta do grupo (sem ramo) = mensalidades. Conta com ramo = atividades
+        daquele ramo.
+      </p>
+
+      <label
+        className="sicredi-pix-ativo"
+        style={{ gridColumn: '1 / -1', marginTop: '0.35rem' }}
+      >
+        <input
+          type="checkbox"
+          checked={value.api_pix_ativo}
+          onChange={(e) => setField('api_pix_ativo', e.target.checked)}
+          disabled={disabled}
+        />
+        PIX Sicredi ativo nesta conta
+      </label>
+
       <div className="field">
-        <label htmlFor={`${idPrefix}-api-id`}>API — Client ID</label>
+        <label htmlFor={`${idPrefix}-api-id`}>Client ID</label>
         <input
           id={`${idPrefix}-api-id`}
           className="input"
@@ -78,8 +103,8 @@ export function ContaBancariaFieldsForm({
           disabled={disabled}
         />
       </div>
-      <div className="field" style={{ gridColumn: '1 / -1' }}>
-        <label htmlFor={`${idPrefix}-api-secret`}>API — Client Secret</label>
+      <div className="field">
+        <label htmlFor={`${idPrefix}-api-secret`}>Client Secret</label>
         <input
           id={`${idPrefix}-api-secret`}
           className="input"
@@ -90,9 +115,65 @@ export function ContaBancariaFieldsForm({
           autoComplete="new-password"
           disabled={disabled}
         />
+      </div>
+      <div className="field" style={{ gridColumn: '1 / -1' }}>
+        <label htmlFor={`${idPrefix}-api-pix`}>Chave PIX</label>
+        <input
+          id={`${idPrefix}-api-pix`}
+          className="input"
+          value={value.api_pix_chave}
+          onChange={(e) => setField('api_pix_chave', e.target.value)}
+          placeholder="E-mail, CPF/CNPJ, telefone ou chave aleatória"
+          autoComplete="off"
+          disabled={disabled}
+        />
+      </div>
+      <div className="field" style={{ gridColumn: '1 / -1' }}>
+        <label htmlFor={`${idPrefix}-api-base`}>URL base (opcional)</label>
+        <input
+          id={`${idPrefix}-api-base`}
+          className="input"
+          value={value.api_pix_base_url}
+          onChange={(e) => setField('api_pix_base_url', e.target.value)}
+          placeholder="Produção: api-pix.sicredi.com.br · Homologação: api-pix-h.sicredi.com.br"
+          autoComplete="off"
+          disabled={disabled}
+        />
         <span className="field-hint">
-          Credenciais genéricas para integração com a API do banco.
+          Vazio = produção. Credenciais de homologação do portal exigem{' '}
+          <code>https://api-pix-h.sicredi.com.br</code> — senão o Sicredi
+          responde Access Denied.
         </span>
+      </div>
+      <div className="field" style={{ gridColumn: '1 / -1' }}>
+        <label htmlFor={`${idPrefix}-api-cert`}>
+          Certificado aprovado (.crt / .cer)
+        </label>
+        <textarea
+          id={`${idPrefix}-api-cert`}
+          className="input"
+          rows={4}
+          value={value.api_pix_cert}
+          onChange={(e) => setField('api_pix_cert', e.target.value)}
+          placeholder="-----BEGIN CERTIFICATE-----"
+          disabled={disabled}
+        />
+        <span className="field-hint">
+          Tem que começar com <code>BEGIN CERTIFICATE</code>. Não use o CSR (
+          <code>BEGIN CERTIFICATE REQUEST</code>).
+        </span>
+      </div>
+      <div className="field" style={{ gridColumn: '1 / -1' }}>
+        <label htmlFor={`${idPrefix}-api-key`}>Chave privada (.key)</label>
+        <textarea
+          id={`${idPrefix}-api-key`}
+          className="input"
+          rows={4}
+          value={value.api_pix_key}
+          onChange={(e) => setField('api_pix_key', e.target.value)}
+          placeholder="-----BEGIN PRIVATE KEY-----"
+          disabled={disabled}
+        />
       </div>
     </div>
   )

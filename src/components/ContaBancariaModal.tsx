@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { ContaBancariaFieldsForm } from '@/components/ContaBancariaFieldsForm'
 import {
+  CONTA_BANCARIA_SELECT,
   contaBancariaFromRow,
   contaBancariaHasData,
   contaBancariaToDb,
@@ -67,6 +68,21 @@ export function ContaBancariaModal({
       setError('Preencha ao menos os dados da conta.')
       return
     }
+    if (fields.api_pix_ativo) {
+      const cert = fields.api_pix_cert.trim()
+      if (cert.includes('BEGIN CERTIFICATE REQUEST')) {
+        setError(
+          'No certificado você colou o CSR (pedido). Baixe no Portal Sicredi o .crt/.cer aprovado (BEGIN CERTIFICATE, sem REQUEST).',
+        )
+        return
+      }
+      if (cert && !cert.includes('BEGIN CERTIFICATE')) {
+        setError(
+          'Certificado PIX inválido. Cole o .crt/.cer aprovado com -----BEGIN CERTIFICATE-----.',
+        )
+        return
+      }
+    }
 
     setSaving(true)
     setError(null)
@@ -86,9 +102,7 @@ export function ContaBancariaModal({
         .from('empresa_conta_bancaria')
         .update(payload)
         .eq('id', editing.id)
-        .select(
-          'id, empresa_id, ramo_id, secao_id, descricao, banco_nome, agencia, conta, api_client_id, api_client_secret',
-        )
+        .select(CONTA_BANCARIA_SELECT)
         .maybeSingle()
 
       setSaving(false)
@@ -104,9 +118,7 @@ export function ContaBancariaModal({
     const { data, error: insError } = await supabase
       .from('empresa_conta_bancaria')
       .insert(payload)
-      .select(
-        'id, empresa_id, ramo_id, secao_id, descricao, banco_nome, agencia, conta, api_client_id, api_client_secret',
-      )
+      .select(CONTA_BANCARIA_SELECT)
       .maybeSingle()
 
     setSaving(false)
@@ -133,7 +145,8 @@ export function ContaBancariaModal({
               {editing ? 'Editar conta bancária' : 'Cadastrar banco'}
             </h3>
             <p className="muted">
-              Informe os dados da conta e, se quiser, vincule a um ramo/seção.
+              Dados da conta e credenciais PIX. Sem ramo = mensalidades do
+              grupo; com ramo = atividades.
             </p>
           </div>
           <button type="button" className="btn btn-soft" onClick={onClose}>
@@ -228,5 +241,10 @@ function normalizeRow(data: Record<string, unknown>): ContaBancariaRow {
     conta: (data.conta as string | null) ?? '',
     api_client_id: (data.api_client_id as string | null) ?? '',
     api_client_secret: (data.api_client_secret as string | null) ?? '',
+    api_pix_chave: (data.api_pix_chave as string | null) ?? '',
+    api_pix_ativo: data.api_pix_ativo === true,
+    api_pix_cert: (data.api_pix_cert as string | null) ?? '',
+    api_pix_key: (data.api_pix_key as string | null) ?? '',
+    api_pix_base_url: (data.api_pix_base_url as string | null) ?? '',
   }
 }

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import QRCode from 'qrcode'
 import { formatMoney } from '@/lib/receitas'
 import {
   checkPixSicrediStatus,
   createPixSicrediCobranca,
-  getPixSicrediConfig,
   type PixCreateInput,
   type PixCobrancaResumo,
 } from '@/lib/pixSicredi'
@@ -17,6 +17,16 @@ type Props = {
   onPaid: () => void
 }
 
+function paymentKey(input: PixCreateInput): string {
+  return [
+    input.empresaId,
+    input.tipo,
+    input.valor,
+    input.atividadeId ?? '',
+    (input.receitaIds ?? []).join(','),
+  ].join('|')
+}
+
 export function PixSicrediCheckoutModal({
   open,
   title,
@@ -25,75 +35,100 @@ export function PixSicrediCheckoutModal({
   onPaid,
 }: Props) {
   const [phase, setPhase] = useState<
-    'idle' | 'checking' | 'creating' | 'waiting' | 'paid' | 'error'
+    'idle' | 'creating' | 'waiting' | 'paid' | 'error'
   >('idle')
   const [message, setMessage] = useState<string | null>(null)
   const [cobranca, setCobranca] = useState<PixCobrancaResumo | null>(null)
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const startedKey = useRef<string | null>(null)
+  const sessionKeyRef = useRef<string | null>(null)
+  const readyKeyRef = useRef<string | null>(null)
   const paidNotified = useRef(false)
+  const onPaidRef = useRef(onPaid)
+  onPaidRef.current = onPaid
 
   useEffect(() => {
     if (!open || !input) {
       setPhase('idle')
       setMessage(null)
       setCobranca(null)
+      setQrDataUrl(null)
       setCopied(false)
-      startedKey.current = null
+      sessionKeyRef.current = null
+      readyKeyRef.current = null
       paidNotified.current = false
       return
     }
 
-    const key = [
-      input.tipo,
-      input.valor,
-      input.atividadeId ?? '',
-      (input.receitaIds ?? []).join(','),
-    ].join('|')
+    const key = paymentKey(input)
 
-    if (startedKey.current === key) return
-    startedKey.current = key
+    // Já temos cobrança/resultado desta sessão — não recria.
+    if (readyKeyRef.current === key) return
+
+    // Já existe geração em andamento para a mesma chave.
+    if (sessionKeyRef.current === key) return
+    sessionKeyRef.current = key
 
     let cancelled = false
 
     void (async () => {
-      setPhase('checking')
+      setPhase('creating')
       setMessage(null)
+      setCobranca(null)
+      setQrDataUrl(null)
 
-      const cfg = await getPixSicrediConfig({
-        empresaId: input.empresaId,
-        tipo: input.tipo,
-        atividadeId: input.atividadeId,
-      })
-      if (cancelled) return
-
-      if (!cfg.configured) {
-        setPhase('error')
-        setMessage(
-          cfg.message ||
-            'PIX Sicredi não configurado. Cadastre as credenciais na ficha do grupo (mensalidades) ou por ramo (atividades).',
-        )
+      const created = await createPixSicrediCobranca(input)
+      if (cancelled) {
+        // Permite nova tentativa se o efeito foi cancelado no meio.
+        if (sessionKeyRef.current === key && readyKeyRef.current !== key) {
+          sessionKeyRef.current = null
+        }
         return
       }
 
-      setPhase('creating')
-      const created = await createPixSicrediCobranca(input)
-      if (cancelled) return
-
       if (!created.ok) {
+        readyKeyRef.current = key
         setPhase('error')
         setMessage(created.error)
         return
       }
 
+      readyKeyRef.current = key
       setCobranca(created.cobranca)
       setPhase('waiting')
     })()
 
     return () => {
       cancelled = true
+      // Se ainda não ficou pronto, libera para o próximo efeito reiniciar.
+      if (readyKeyRef.current !== key && sessionKeyRef.current === key) {
+        sessionKeyRef.current = null
+      }
     }
   }, [open, input])
+
+  useEffect(() => {
+    const code = cobranca?.pix_copia_e_cola?.trim()
+    if (!code) {
+      setQrDataUrl(null)
+      return
+    }
+    let cancelled = false
+    void QRCode.toDataURL(code, {
+      width: 240,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+    })
+      .then((url) => {
+        if (!cancelled) setQrDataUrl(url)
+      })
+      .catch(() => {
+        if (!cancelled) setQrDataUrl(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [cobranca?.pix_copia_e_cola])
 
   useEffect(() => {
     if (!open || phase !== 'waiting' || !cobranca?.id) return
@@ -103,17 +138,23 @@ export function PixSicrediCheckoutModal({
       const result = await checkPixSicrediStatus(cobranca.id)
       if (stopped) return
       if (!result.ok) {
-        setMessage(result.error)
+        setPhase('error')
+        setMessage(
+          result.error ||
+            'Não foi possível confirmar o pagamento no Sicredi. Tente novamente.',
+        )
         return
       }
 
       setCobranca(result.cobranca)
       if (result.paid) {
         setPhase('paid')
-        setMessage('Pagamento confirmado pelo Sicredi. Baixa registrada.')
+        setMessage(
+          'Pagamento confirmado pelo Sicredi. A baixa da mensalidade foi registrada.',
+        )
         if (!paidNotified.current) {
           paidNotified.current = true
-          onPaid()
+          onPaidRef.current()
         }
       }
     }
@@ -124,7 +165,7 @@ export function PixSicrediCheckoutModal({
       stopped = true
       window.clearInterval(id)
     }
-  }, [open, phase, cobranca?.id, onPaid])
+  }, [open, phase, cobranca?.id])
 
   if (!open || !input) return null
 
@@ -141,48 +182,71 @@ export function PixSicrediCheckoutModal({
   }
 
   return (
-    <div className="confirm-overlay" role="presentation" onClick={onClose}>
+    <div className="confirm-overlay" role="presentation">
       <div
         className="confirm-dialog pix-sicredi-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="pix-sicredi-title"
-        onClick={(e) => e.stopPropagation()}
       >
         <header className="pix-sicredi-modal-header">
           <div>
-            <h3 id="pix-sicredi-title">{title}</h3>
+            <h3 id="pix-sicredi-title">
+              {phase === 'paid'
+                ? 'Pagamento confirmado'
+                : phase === 'error'
+                  ? 'Pagamento não concluído'
+                  : title}
+            </h3>
             <p className="muted">PIX Sicredi · {formatMoney(input.valor)}</p>
           </div>
-          <button type="button" className="btn btn-soft" onClick={onClose}>
-            Fechar
-          </button>
+          {phase !== 'paid' && phase !== 'error' ? (
+            <button type="button" className="btn btn-soft" onClick={onClose}>
+              Fechar
+            </button>
+          ) : null}
         </header>
 
-        {phase === 'checking' || phase === 'creating' ? (
-          <p className="loading">
-            {phase === 'checking'
-              ? 'Verificando integração Sicredi…'
-              : 'Gerando cobrança PIX no Sicredi…'}
-          </p>
+        {phase === 'creating' ? (
+          <p className="loading">Gerando cobrança PIX no Sicredi…</p>
         ) : null}
 
         {phase === 'error' ? (
           <div className="pix-sicredi-status is-error">
-            <p>{message}</p>
-            <p className="muted" style={{ marginTop: '0.75rem' }}>
-              Cadastre as credenciais na ficha do grupo: PIX Sicredi do grupo
-              (mensalidades) ou PIX Sicredi por ramo (atividades).
+            <p>
+              {message ||
+                'Ocorreu um erro no pagamento PIX. Verifique e tente novamente.'}
             </p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={onClose}
+              style={{ marginTop: '1rem' }}
+            >
+              OK
+            </button>
           </div>
         ) : null}
 
         {phase === 'waiting' && cobranca ? (
           <div className="pix-sicredi-waiting">
             <p>
-              Escaneie o QR no app do banco ou use o Pix Copia e Cola. O sistema
-              consulta o Sicredi e só dá baixa após a confirmação.
+              Escaneie o QR Code no app do banco ou use o Pix Copia e Cola. A
+              baixa só ocorre após confirmação do Sicredi.
             </p>
+
+            {qrDataUrl ? (
+              <div className="pix-sicredi-qr-wrap">
+                <img
+                  className="pix-sicredi-qr"
+                  src={qrDataUrl}
+                  alt="QR Code PIX"
+                  width={240}
+                  height={240}
+                />
+              </div>
+            ) : null}
+
             {cobranca.pix_copia_e_cola ? (
               <>
                 <textarea
@@ -218,22 +282,29 @@ export function PixSicrediCheckoutModal({
               </>
             ) : (
               <p className="muted">
-                Cobrança criada (txid {cobranca.txid}). Aguardando retorno do
-                QR/copia e cola…
+                Cobrança criada (txid {cobranca.txid}), mas o Sicredi ainda não
+                devolveu o Pix Copia e Cola. Aguarde ou tente novamente.
               </p>
             )}
             <p className="pix-sicredi-poll muted">
               Aguardando pagamento… status: {cobranca.status || 'ATIVA'}
             </p>
-            {message ? <p className="muted">{message}</p> : null}
           </div>
         ) : null}
 
         {phase === 'paid' ? (
           <div className="pix-sicredi-status is-ok">
-            <p>{message ?? 'Pagamento confirmado e baixa efetuada.'}</p>
-            <button type="button" className="btn btn-primary" onClick={onClose}>
-              Concluir
+            <p>
+              {message ??
+                'Pagamento confirmado pelo Sicredi. A baixa foi registrada.'}
+            </p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={onClose}
+              style={{ marginTop: '1rem' }}
+            >
+              OK
             </button>
           </div>
         ) : null}

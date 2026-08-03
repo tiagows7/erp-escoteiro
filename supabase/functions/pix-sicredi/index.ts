@@ -53,6 +53,18 @@ type DbSicrediRow = {
   sicredi_pix_ativo?: boolean | null
 }
 
+type DbContaBancariaPix = {
+  id?: number
+  ramo_id?: number | null
+  api_client_id?: string | null
+  api_client_secret?: string | null
+  api_pix_chave?: string | null
+  api_pix_cert?: string | null
+  api_pix_key?: string | null
+  api_pix_base_url?: string | null
+  api_pix_ativo?: boolean | null
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -89,6 +101,118 @@ function configFromDbRow(
     oauthPath: Deno.env.get('SICREDI_PIX_OAUTH_PATH') ?? '/oauth/token',
     apiPath: Deno.env.get('SICREDI_PIX_API_PATH') ?? '/api/v2',
     source,
+  }
+}
+
+function configFromContaBancaria(
+  row: DbContaBancariaPix | null | undefined,
+  source: string,
+): SicrediConfig | null {
+  if (!row || row.api_pix_ativo !== true) return null
+
+  const clientId = (row.api_client_id ?? '').trim()
+  const clientSecret = (row.api_client_secret ?? '').trim()
+  const chave = (row.api_pix_chave ?? '').trim()
+  const cert = (row.api_pix_cert ?? '').replace(/\\n/g, '\n').trim()
+  const key = (row.api_pix_key ?? '').replace(/\\n/g, '\n').trim()
+  const baseUrl = (
+    row.api_pix_base_url?.trim() ||
+    Deno.env.get('SICREDI_PIX_BASE_URL') ||
+    'https://api-pix.sicredi.com.br'
+  ).replace(/\/$/, '')
+
+  if (!clientId || !clientSecret || !chave || !cert || !key) return null
+
+  return {
+    clientId,
+    clientSecret,
+    chave,
+    cert,
+    key,
+    baseUrl,
+    oauthPath: Deno.env.get('SICREDI_PIX_OAUTH_PATH') ?? '/oauth/token',
+    apiPath: Deno.env.get('SICREDI_PIX_API_PATH') ?? '/api/v2',
+    source,
+  }
+}
+
+async function resolveConfigFromContas(
+  admin: ReturnType<typeof createClient>,
+  empresaId: number,
+  ramoId: number | null,
+): Promise<{ cfg: SicrediConfig | null; hint: string | null }> {
+  const { data: contas, error } = await admin
+    .from('empresa_conta_bancaria')
+    .select(
+      'id, ramo_id, api_client_id, api_client_secret, api_pix_chave, api_pix_cert, api_pix_key, api_pix_base_url, api_pix_ativo',
+    )
+    .eq('empresa_id', empresaId)
+    .order('id', { ascending: true })
+
+  if (error) {
+    return {
+      cfg: null,
+      hint: `Erro ao ler contas bancárias: ${error.message}`,
+    }
+  }
+
+  const list = (contas ?? []) as DbContaBancariaPix[]
+  if (list.length === 0) {
+    return {
+      cfg: null,
+      hint: 'Nenhuma conta bancária cadastrada. Use Cadastrar banco.',
+    }
+  }
+
+  const candidatos =
+    ramoId != null
+      ? [
+          ...list.filter((c) => c.ramo_id === ramoId),
+          ...list.filter((c) => c.ramo_id == null),
+        ]
+      : list.filter((c) => c.ramo_id == null)
+
+  if (candidatos.length === 0) {
+    return {
+      cfg: null,
+      hint:
+        ramoId != null
+          ? 'Cadastre uma conta bancária do ramo (ou do grupo, sem ramo) com PIX ativo.'
+          : 'Para mensalidades, cadastre uma conta bancária do grupo (sem ramo) com PIX ativo.',
+    }
+  }
+
+  for (const row of candidatos) {
+    const source =
+      row.ramo_id != null
+        ? `conta:${row.id}:ramo:${row.ramo_id}`
+        : `conta:${row.id}:grupo`
+    const cfg = configFromContaBancaria(row, source)
+    if (cfg) return { cfg, hint: null }
+  }
+
+  const incompleta = candidatos.find((c) => c.api_pix_ativo === true)
+  if (incompleta) {
+    const faltando: string[] = []
+    if (!(incompleta.api_client_id ?? '').trim()) faltando.push('Client ID')
+    if (!(incompleta.api_client_secret ?? '').trim()) {
+      faltando.push('Client Secret')
+    }
+    if (!(incompleta.api_pix_chave ?? '').trim()) faltando.push('Chave PIX')
+    if (!(incompleta.api_pix_cert ?? '').trim()) faltando.push('Certificado')
+    if (!(incompleta.api_pix_key ?? '').trim()) faltando.push('Chave privada')
+    return {
+      cfg: null,
+      hint:
+        faltando.length > 0
+          ? `Conta com PIX ativo incompleta. Preencha: ${faltando.join(', ')}.`
+          : 'Conta bancária com PIX ativo incompleta.',
+    }
+  }
+
+  return {
+    cfg: null,
+    hint: 'Há conta bancária, mas nenhuma com "PIX Sicredi ativo" marcado.',
   }
 }
 
@@ -132,130 +256,278 @@ async function resolveSicrediConfig(
     atividadeId?: number | null
     ramoId?: number | null
   },
-): Promise<SicrediConfig | null> {
+): Promise<{ cfg: SicrediConfig | null; hint: string | null }> {
   let ramoId = opts.ramoId ?? null
 
-  if (opts.tipo === 'atividade') {
-    if (ramoId == null && opts.atividadeId) {
-      const { data: ativ } = await admin
-        .from('atividades')
-        .select('ramo')
-        .eq('empresa_id', opts.empresaId)
-        .eq('atividade_id', opts.atividadeId)
-        .maybeSingle()
-      ramoId = (ativ?.ramo as number | null) ?? null
-    }
-
-    if (ramoId != null) {
-      const { data: ramoCfg } = await admin
-        .from('empresa_ramo_pix_sicredi')
-        .select(
-          'sicredi_pix_client_id, sicredi_pix_client_secret, sicredi_pix_chave, sicredi_pix_cert, sicredi_pix_key, sicredi_pix_base_url, sicredi_pix_ativo',
-        )
-        .eq('empresa_id', opts.empresaId)
-        .eq('ramo_id', ramoId)
-        .maybeSingle()
-
-      const fromRamo = configFromDbRow(
-        ramoCfg as DbSicrediRow | null,
-        `ramo:${ramoId}`,
-      )
-      if (fromRamo) return fromRamo
-    }
+  if (opts.tipo === 'atividade' && ramoId == null && opts.atividadeId) {
+    const { data: ativ } = await admin
+      .from('atividades')
+      .select('ramo')
+      .eq('empresa_id', opts.empresaId)
+      .eq('atividade_id', opts.atividadeId)
+      .maybeSingle()
+    ramoId = (ativ?.ramo as number | null) ?? null
   }
 
-  if (opts.tipo === 'mensalidade' || opts.tipo === 'mensalidade_lote') {
-    const { data: emp } = await admin
-      .from('empresa')
+  // Preferência: credenciais no cadastro de bancos.
+  const fromConta = await resolveConfigFromContas(
+    admin,
+    opts.empresaId,
+    opts.tipo === 'atividade' ? ramoId : null,
+  )
+  if (fromConta.cfg) return fromConta
+
+  // Fallback legado: empresa / ramo_pix_sicredi / env.
+  if (opts.tipo === 'atividade' && ramoId != null) {
+    const { data: ramoCfg } = await admin
+      .from('empresa_ramo_pix_sicredi')
       .select(
         'sicredi_pix_client_id, sicredi_pix_client_secret, sicredi_pix_chave, sicredi_pix_cert, sicredi_pix_key, sicredi_pix_base_url, sicredi_pix_ativo',
       )
-      .eq('id', opts.empresaId)
+      .eq('empresa_id', opts.empresaId)
+      .eq('ramo_id', ramoId)
       .maybeSingle()
 
-    const fromEmpresa = configFromDbRow(
-      emp as DbSicrediRow | null,
-      'empresa',
+    const fromRamo = configFromDbRow(
+      ramoCfg as DbSicrediRow | null,
+      `ramo:${ramoId}`,
     )
-    if (fromEmpresa) return fromEmpresa
+    if (fromRamo) return { cfg: fromRamo, hint: null }
   }
 
-  // Atividade sem ramo (grupo todo): usa PIX do grupo (mensalidades).
-  if (opts.tipo === 'atividade' && ramoId == null) {
-    const { data: emp } = await admin
-      .from('empresa')
-      .select(
-        'sicredi_pix_client_id, sicredi_pix_client_secret, sicredi_pix_chave, sicredi_pix_cert, sicredi_pix_key, sicredi_pix_base_url, sicredi_pix_ativo',
-      )
-      .eq('id', opts.empresaId)
-      .maybeSingle()
-
-    const fromEmpresa = configFromDbRow(
-      emp as DbSicrediRow | null,
-      'empresa',
+  const { data: emp } = await admin
+    .from('empresa')
+    .select(
+      'sicredi_pix_client_id, sicredi_pix_client_secret, sicredi_pix_chave, sicredi_pix_cert, sicredi_pix_key, sicredi_pix_base_url, sicredi_pix_ativo',
     )
-    if (fromEmpresa) return fromEmpresa
-  }
+    .eq('id', opts.empresaId)
+    .maybeSingle()
 
-  // Atividade sem config de ramo: tenta secrets globais.
-  if (opts.tipo === 'atividade') {
-    return readSicrediEnvConfig()
-  }
+  const fromEmpresa = configFromDbRow(emp as DbSicrediRow | null, 'empresa')
+  if (fromEmpresa) return { cfg: fromEmpresa, hint: null }
 
-  return readSicrediEnvConfig()
+  const fromEnv = readSicrediEnvConfig()
+  if (fromEnv) return { cfg: fromEnv, hint: null }
+
+  return {
+    cfg: null,
+    hint:
+      fromConta.hint ||
+      (opts.tipo === 'atividade'
+        ? 'Cadastre uma conta bancária com PIX ativo para o ramo (ou do grupo) em Cadastrar banco.'
+        : 'Cadastre uma conta bancária do grupo (sem ramo) com PIX ativo em Cadastrar banco.'),
+  }
 }
 
+/** Normaliza PEM colado no formulário (\\n literais, CRLF, espaços). */
+function normalizePem(pem: string): string {
+  let text = (pem ?? '').trim()
+  if (!text) return ''
+  // Conteúdo veio com "\n" literal (uma barra).
+  if (text.includes('\\n') && !text.includes('\n')) {
+    text = text.replace(/\\n/g, '\n')
+  }
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  // Remove espaços no início de cada linha (comum ao colar).
+  text = text
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .trim()
+  return text
+}
+
+function splitPemCertificates(pem: string): string[] {
+  return (
+    normalizePem(pem).match(
+      /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g,
+    ) ?? []
+  )
+}
+
+/**
+ * mTLS para Sicredi.
+ * Deno moderno usa { cert, key }; a API antiga { certChain, privateKey }
+ * é ignorada em vários runtimes → Access Denied sem certificado cliente.
+ */
 function createMtlsClient(cfg: SicrediConfig): Deno.HttpClient {
+  const fullCert = normalizePem(cfg.cert)
+  const key = normalizePem(cfg.key)
+  const blocks = splitPemCertificates(fullCert)
+  const leaf = blocks[0] ?? fullCert
+  const caCerts = blocks.slice(1)
+
+  // Preferência: API atual do Deno (cert/key).
+  try {
+    return Deno.createHttpClient({
+      cert: leaf,
+      key,
+      ...(caCerts.length > 0 ? { caCerts } : {}),
+    } as Deno.CreateHttpClientOptions)
+  } catch {
+    /* runtime antigo */
+  }
+
   return Deno.createHttpClient({
-    certChain: cfg.cert,
-    privateKey: cfg.key,
-  })
+    certChain: fullCert,
+    privateKey: key,
+  } as Deno.CreateHttpClientOptions)
+}
+
+function oauthScope(): string {
+  return (
+    Deno.env.get('SICREDI_PIX_OAUTH_SCOPE')?.trim() ||
+    'cob.write cob.read pix.read'
+  )
+}
+
+function isAccessDeniedHtml(body: string): boolean {
+  const t = body.toLowerCase()
+  return (
+    t.includes('access denied') ||
+    t.includes('<title>access denied</title>') ||
+    t.includes('access denied for this environment')
+  )
+}
+
+function oauthErrorHint(
+  status: number,
+  baseUrl: string,
+  rawBody: string,
+): string {
+  const homolog = baseUrl.includes('api-pix-h')
+  if (status === 403 && isAccessDeniedHtml(rawBody)) {
+    return homolog
+      ? 'Sicredi bloqueou o acesso (Access Denied) na homologação. Confira certificado aprovado (não CSR), Client ID/Secret e URL de homologação.'
+      : 'Sicredi bloqueou o acesso (Access Denied) na produção. Com certificado correto isso costuma ser falha de mTLS no servidor. Confira se o .cer aprovado e a chave .key (sem senha) estão salvos na conta bancária.'
+  }
+  if (status === 403) {
+    return [
+      'OAuth 403: Sicredi recusou a autenticação.',
+      'Confira Client ID/Secret + certificado da mesma aplicação,',
+      homolog
+        ? 'URL de homologação com credenciais de homologação,'
+        : 'se for homologação use https://api-pix-h.sicredi.com.br,',
+      'e escopos cob.write / cob.read no portal.',
+    ].join(' ')
+  }
+  if (status === 401) {
+    return 'OAuth 401: Client ID ou Client Secret incorretos.'
+  }
+  return `Falha OAuth Sicredi (${status}).`
+}
+
+function assertPemPair(cert: string, key: string) {
+  const c = normalizePem(cert)
+  const k = normalizePem(key)
+  if (c.includes('BEGIN CERTIFICATE REQUEST')) {
+    throw new Error(
+      'Você colou o CSR (pedido de certificado), não o certificado. No Portal Sicredi, baixe o .crt/.cer já APROVADO — ele começa com -----BEGIN CERTIFICATE----- (sem a palavra REQUEST).',
+    )
+  }
+  if (!c.includes('BEGIN CERTIFICATE')) {
+    throw new Error(
+      'Certificado inválido: cole o conteúdo completo do .crt/.cer aprovado (com -----BEGIN CERTIFICATE-----).',
+    )
+  }
+  if (
+    !k.includes('BEGIN PRIVATE KEY') &&
+    !k.includes('BEGIN RSA PRIVATE KEY')
+  ) {
+    throw new Error(
+      'Chave privada inválida: cole o conteúdo completo do .key (com -----BEGIN PRIVATE KEY-----).',
+    )
+  }
 }
 
 const tokenCache = new Map<string, { value: string; expiresAt: number }>()
 
 async function getAccessToken(cfg: SicrediConfig): Promise<string> {
-  const cacheKey = `${cfg.source}|${cfg.clientId}|${cfg.baseUrl}`
+  const cacheKey = `${cfg.source}|${cfg.clientId}|${cfg.baseUrl}|${oauthScope()}`
   const now = Date.now()
   const cached = tokenCache.get(cacheKey)
   if (cached && cached.expiresAt > now + 30_000) {
     return cached.value
   }
 
+  assertPemPair(cfg.cert, cfg.key)
+
+  const oauthPaths = Array.from(
+    new Set(
+      [
+        cfg.oauthPath,
+        '/oauth/token',
+        '/auth/openapi/token',
+      ].filter(Boolean),
+    ),
+  )
+
   const client = createMtlsClient(cfg)
   try {
     const basic = btoa(`${cfg.clientId}:${cfg.clientSecret}`)
     const body = new URLSearchParams({
       grant_type: 'client_credentials',
-      scope: 'cob.write cob.read webhook.read webhook.write',
+      scope: oauthScope(),
     })
 
-    const res = await fetch(`${cfg.baseUrl}${cfg.oauthPath}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${basic}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body,
-      client,
-    })
+    let lastStatus = 0
+    let lastRaw = ''
 
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok || !data?.access_token) {
-      throw new Error(
+    for (const path of oauthPaths) {
+      const res = await fetch(`${cfg.baseUrl}${path}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${basic}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
+          'User-Agent': 'erp-escoteiro/pix-sicredi',
+        },
+        body,
+        client,
+      })
+
+      const raw = await res.text()
+      lastStatus = res.status
+      lastRaw = raw
+
+      let data: Record<string, unknown> = {}
+      try {
+        data = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
+      } catch {
+        /* corpo não-JSON */
+      }
+
+      if (res.ok && data?.access_token) {
+        const entry = {
+          value: String(data.access_token),
+          expiresAt: now + Number(data.expires_in ?? 3000) * 1000,
+        }
+        tokenCache.set(cacheKey, entry)
+        return entry.value
+      }
+
+      // Access Denied / 404 em um path: tenta o próximo.
+      if (
+        res.status === 404 ||
+        (res.status === 403 && isAccessDeniedHtml(raw))
+      ) {
+        continue
+      }
+
+      const detail = String(
         data?.mensagem ||
           data?.error_description ||
           data?.error ||
-          `Falha OAuth Sicredi (${res.status}).`,
-      )
+          data?.detail ||
+          raw?.slice(0, 180) ||
+          '',
+      ).trim()
+      const hint = oauthErrorHint(res.status, cfg.baseUrl, raw)
+      throw new Error(detail && !isAccessDeniedHtml(detail) ? `${hint} Detalhe: ${detail}` : hint)
     }
 
-    const entry = {
-      value: String(data.access_token),
-      expiresAt: now + Number(data.expires_in ?? 3000) * 1000,
-    }
-    tokenCache.set(cacheKey, entry)
-    return entry.value
+    const hint = oauthErrorHint(lastStatus || 403, cfg.baseUrl, lastRaw)
+    throw new Error(hint)
   } finally {
     client.close()
   }
@@ -282,6 +554,17 @@ function todayISO(): string {
 function truncate(text: string, max: number): string {
   const t = text.trim()
   return t.length <= max ? t : t.slice(0, max)
+}
+
+function extractPixCopiaECola(data: Record<string, unknown>): string | null {
+  const direct = data.pixCopiaECola ?? data.pix_copia_e_cola
+  if (typeof direct === 'string' && direct.trim()) return direct.trim()
+  const nested = data.pix as Record<string, unknown> | undefined
+  const fromNested = nested?.pixCopiaECola ?? nested?.pix_copia_e_cola
+  if (typeof fromNested === 'string' && fromNested.trim()) {
+    return fromNested.trim()
+  }
+  return null
 }
 
 async function createCob(
@@ -315,22 +598,33 @@ async function createCob(
       },
     )
 
-    const data = await res.json().catch(() => ({}))
+    let data = (await res.json().catch(() => ({}))) as Record<string, unknown>
     if (!res.ok) {
       throw new Error(
-        data?.detail ||
-          data?.mensagem ||
-          data?.title ||
-          `Falha ao criar cobrança PIX (${res.status}).`,
+        String(
+          data?.detail ||
+            data?.mensagem ||
+            data?.title ||
+            `Falha ao criar cobrança PIX (${res.status}).`,
+        ),
       )
     }
 
-    return data as {
-      txid?: string
-      status?: string
-      location?: string
-      pixCopiaECola?: string
-      [key: string]: unknown
+    // Algumas respostas do PUT vêm sem o BR Code; consulta GET.
+    let pixCopiaECola = extractPixCopiaECola(data)
+    if (!pixCopiaECola) {
+      const got = await getCob(cfg, String(data.txid ?? input.txid))
+      data = { ...data, ...got }
+      pixCopiaECola = extractPixCopiaECola(got as Record<string, unknown>)
+    }
+
+    return {
+      ...data,
+      txid: String(data.txid ?? input.txid),
+      status: String(data.status ?? 'ATIVA'),
+      location:
+        typeof data.location === 'string' ? data.location : null,
+      pixCopiaECola,
     }
   } finally {
     client.close()
@@ -658,21 +952,20 @@ Deno.serve(async (req) => {
       }
 
       const tipo = body.tipo || 'mensalidade'
-      const cfg = await resolveSicrediConfig(admin, {
+      const resolved = await resolveSicrediConfig(admin, {
         empresaId,
         tipo,
         atividadeId: body.atividade_id ?? null,
       })
 
       return json({
-        configured: !!cfg,
+        configured: !!resolved.cfg,
         provider: 'sicredi',
-        source: cfg?.source ?? null,
-        message: cfg
-          ? `PIX Sicredi configurado (${cfg.source}).`
-          : tipo === 'atividade'
-            ? 'Cadastre o PIX Sicredi do ramo na ficha do grupo.'
-            : 'Cadastre o PIX Sicredi do grupo (mensalidades) na ficha do grupo.',
+        source: resolved.cfg?.source ?? null,
+        message: resolved.cfg
+          ? `PIX Sicredi configurado (${resolved.cfg.source}).`
+          : resolved.hint ||
+            'Cadastre uma conta bancária com PIX ativo em Cadastrar banco.',
       })
     }
 
@@ -715,26 +1008,26 @@ Deno.serve(async (req) => {
         ramoId = (ativ?.ramo as number | null) ?? null
       }
 
-      const cfg = await resolveSicrediConfig(admin, {
+      const resolved = await resolveSicrediConfig(admin, {
         empresaId,
         tipo,
         atividadeId,
         ramoId,
       })
 
-      if (!cfg) {
+      if (!resolved.cfg) {
         return json(
           {
             error:
-              tipo === 'atividade'
-                ? 'PIX Sicredi do ramo não configurado. Cadastre a chave do ramo no grupo.'
-                : 'PIX Sicredi do grupo não configurado. Cadastre as credenciais na ficha do grupo (mensalidades).',
+              resolved.hint ||
+              'PIX Sicredi não configurado. Cadastre uma conta bancária com PIX ativo em Cadastrar banco.',
             configured: false,
           },
           503,
         )
       }
 
+      const cfg = resolved.cfg
       const txid = generateTxid()
       const descricao =
         body.descricao?.trim() ||
@@ -813,16 +1106,17 @@ Deno.serve(async (req) => {
         })
       }
 
-      const cfg = await resolveSicrediConfig(admin, {
+      const resolved = await resolveSicrediConfig(admin, {
         empresaId: cob.empresa_id as number,
         tipo: String(cob.tipo),
         atividadeId: (cob.atividade_id as number | null) ?? null,
         ramoId: (cob.ramo_id as number | null) ?? null,
       })
-      if (!cfg) {
+      if (!resolved.cfg) {
         return json(
           {
             error:
+              resolved.hint ||
               'Credenciais PIX Sicredi não encontradas para consultar esta cobrança.',
             configured: false,
           },
@@ -830,6 +1124,7 @@ Deno.serve(async (req) => {
         )
       }
 
+      const cfg = resolved.cfg
       const remote = await getCob(cfg, String(cob.txid))
       const remoteStatus = String(remote.status ?? cob.status)
 

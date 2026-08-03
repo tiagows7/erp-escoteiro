@@ -46,8 +46,9 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
   const [showLista, setShowLista] = useState(false)
   const [podePagarPix, setPodePagarPix] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (opts?: { quiet?: boolean }) => {
+    const quiet = opts?.quiet === true
+    if (!quiet) setLoading(true)
     setError(null)
 
     const registroNum = Number(String(registro).replace(/\D/g, ''))
@@ -55,7 +56,7 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
       setAssociado(null)
       setItems([])
       setPodePagarPix(false)
-      setLoading(false)
+      if (!quiet) setLoading(false)
       return
     }
 
@@ -75,14 +76,14 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
       setError(assocError.message)
       setAssociado(null)
       setItems([])
-      setLoading(false)
+      if (!quiet) setLoading(false)
       return
     }
 
     if (!assoc?.associado_id) {
       setAssociado(null)
       setItems([])
-      setLoading(false)
+      if (!quiet) setLoading(false)
       return
     }
 
@@ -123,7 +124,7 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
           'Erro ao carregar atividades',
       )
       setItems([])
-      setLoading(false)
+      if (!quiet) setLoading(false)
       return
     }
 
@@ -166,7 +167,7 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
       }))
 
     setItems(cards)
-    setLoading(false)
+    if (!quiet) setLoading(false)
   }, [empresaId, registro])
 
   useEffect(() => {
@@ -258,26 +259,13 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
     await load()
   }
 
-  if (loading) {
-    return null
-  }
-
-  if (error) {
-    return null
-  }
-
-  if (!associado) {
-    return null
-  }
-
-  if (items.length === 0) {
-    return null
-  }
-
+  const showPanel =
+    !loading && !error && !!associado && items.length > 0
   const totalValor = items.reduce((acc, item) => acc + Number(item.valor ?? 0), 0)
 
   return (
     <>
+    {showPanel ? (
     <section className="panel associado-atividades-panel">
       <div className="passagem-header">
         <div>
@@ -379,6 +367,7 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
       </div>
       ) : null}
     </section>
+    ) : null}
 
     <PixSicrediCheckoutModal
       open={!!pixInput}
@@ -386,7 +375,7 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
       input={pixInput}
       onClose={() => setPixInput(null)}
       onPaid={() => {
-        void load()
+        void load({ quiet: true })
       }}
     />
     </>

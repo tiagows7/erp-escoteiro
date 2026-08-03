@@ -12,11 +12,26 @@ function chavePixInformada(
   return ativo === true && !!(chave ?? '').trim()
 }
 
-/** Há chave PIX ativa no grupo (empresa) ou em algum ramo. */
+/** Há chave PIX ativa em alguma conta bancária (ou fallback legado). */
 export async function empresaTemChavePixInformada(
   empresaId: number,
 ): Promise<boolean> {
   try {
+    const { data: contas } = await supabase
+      .from('empresa_conta_bancaria')
+      .select('api_pix_chave, api_pix_ativo')
+      .eq('empresa_id', empresaId)
+      .eq('api_pix_ativo', true)
+
+    if (
+      ((contas ?? []) as {
+        api_pix_chave: string | null
+        api_pix_ativo: boolean | null
+      }[]).some((row) => chavePixInformada(row.api_pix_chave, row.api_pix_ativo))
+    ) {
+      return true
+    }
+
     const [{ data: emp }, { data: ramos }] = await Promise.all([
       supabase
         .from('empresa')
