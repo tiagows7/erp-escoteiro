@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createUsuario } from '@/lib/createUsuario'
+import { associadoPortalMenuKeys } from '@/lib/menuAccess'
 import type { Associado } from '@/types/database'
 
 type Cell = string | number | boolean | Date | null | undefined
@@ -545,6 +546,7 @@ async function ensureUsuarioFromAssociado(opts: {
     opts.ramo != null && opts.ramo >= 1 && opts.ramo <= 4 ? opts.ramo : null
 
   // Sem e-mail do associado: Auth usa r{registro}@usuarios.local (login por registro)
+  // Menus: Dashboard, Portal, Conquistas e Atividades.
   const result = await createUsuario({
     nome: opts.nome,
     registro: registroStr,
@@ -553,6 +555,7 @@ async function ensureUsuarioFromAssociado(opts: {
     ativo: true,
     codigo_ramo: codigoRamo,
     codigo_secao: opts.secao,
+    menu_keys: associadoPortalMenuKeys(),
   })
 
   if (!result.ok) {

@@ -7,12 +7,13 @@
 --   empresa, secao, secao_nome, tipo_mensalidade, tipo_pagamento,
 --   ramos, estado, cidade, categoria, funcao,
 --   empresa_conta_bancaria, empresa_ramo_pix_sicredi, empresa_saldo_local,
---   profiles/auth de admin e super_admin
+--   profiles/auth de super_admin (plataforma)
 --
 -- APAGA (do grupo informado):
 --   PIX, pagamentos, receitas, despesas, atividades, associados,
 --   estoque (se existir), fornecedores de despesa,
---   usuários do grupo que NÃO são admin/super_admin
+--   TODOS os usuários do grupo, inclusive admin
+--   (atenção: se apagar o seu próprio login, precisará recriar o acesso)
 --
 -- =============================================================================
 
@@ -109,13 +110,12 @@ begin
   where empresa_id = v_empresa;
   get diagnostics n_associados = row_count;
 
-  -- 9) Usuários (mantém admin / super_admin)
+  -- 9) Usuários (inclui admin; mantém só super_admin da plataforma)
   -- auth.users precisa ser apagado para remover o login; profiles cai em CASCADE.
   with alvo as (
     select p.id
     from public.profiles p
     where p.empresa_id = v_empresa
-      and p.role is distinct from 'admin'::public.app_role
       and p.role is distinct from 'super_admin'::public.app_role
   )
   delete from auth.users u
@@ -125,7 +125,6 @@ begin
 
   delete from public.profiles p
   where p.empresa_id = v_empresa
-    and p.role is distinct from 'admin'::public.app_role
     and p.role is distinct from 'super_admin'::public.app_role;
 
   raise notice 'Removidos — pix:%, rec_pag:%, desp_pag:%, at_conf:%, at_pag:%, receitas:%, despesas:%, atividades:%, fornecedor:%, associados:%, users:%',

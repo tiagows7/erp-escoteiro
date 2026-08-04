@@ -104,6 +104,12 @@ for (const a of associados ?? []) {
     ativo: true,
     codigo_ramo: codigoRamo,
     codigo_secao: a.secao ?? null,
+    menu_keys: [
+      '/',
+      '/portal-transparencia',
+      '/conquistas',
+      '/atividades',
+    ],
   })
 
   if (profileError) {

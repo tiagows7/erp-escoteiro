@@ -4,8 +4,13 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
-import { createUsuario, updateUsuarioSenha } from '@/lib/createUsuario'
 import {
+  createUsuario,
+  excluirUsuario,
+  updateUsuarioSenha,
+} from '@/lib/createUsuario'
+import {
+  associadoPortalMenuKeys,
   defaultMenuKeysForRole,
   menuAccessCatalog,
   normalizeMenuKeys,
@@ -169,7 +174,7 @@ export function UsuarioFormPage() {
     const registroDigits = form.registro.replace(/\D/g, '')
     const isAssociado = !!registroDigits
     const menuKeysToSave = isAssociado
-      ? null
+      ? associadoPortalMenuKeys()
       : form.menu_keys.length > 0
         ? form.menu_keys
         : null
@@ -312,6 +317,37 @@ export function UsuarioFormPage() {
 
     navigate('/cadastros/usuarios', {
       state: { flashSuccess: 'Usuário inativado com sucesso!' },
+    })
+  }
+
+  async function onExcluir() {
+    if (!canWrite || !empresaId || isNew || !id) return
+    if (user?.id === id) {
+      setError('Você não pode excluir o próprio usuário.')
+      return
+    }
+
+    const ok = await toast.confirm({
+      title: 'Excluir usuário?',
+      message: `Tem certeza que deseja excluir permanentemente "${form.nome}"? O login será removido e esta ação não pode ser desfeita.`,
+      confirmLabel: 'Sim, excluir',
+      cancelLabel: 'Não',
+      danger: true,
+    })
+    if (!ok) return
+
+    setSaving(true)
+    setError(null)
+    const result = await excluirUsuario(id)
+    setSaving(false)
+
+    if (!result.ok) {
+      setError(result.error ?? 'Não foi possível excluir o usuário.')
+      return
+    }
+
+    navigate('/cadastros/usuarios', {
+      state: { flashSuccess: 'Usuário excluído com sucesso!' },
     })
   }
 
@@ -689,11 +725,21 @@ export function UsuarioFormPage() {
               {!isNew && form.ativo !== false ? (
                 <button
                   type="button"
-                  className="btn btn-danger"
-                  disabled={saving}
+                  className="btn btn-soft"
+                  disabled={saving || user?.id === id}
                   onClick={() => void onInativar()}
                 >
                   Inativar
+                </button>
+              ) : null}
+              {!isNew ? (
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  disabled={saving || user?.id === id}
+                  onClick={() => void onExcluir()}
+                >
+                  Excluir
                 </button>
               ) : null}
             </>

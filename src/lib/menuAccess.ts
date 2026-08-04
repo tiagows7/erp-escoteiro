@@ -1,7 +1,6 @@
 import { NAV_ITEMS, type NavItem } from '@/config/navigation'
 import {
   can,
-  isAssociadoLogin,
   isGrupoAdmin,
   type AppRole,
   type Permission,
@@ -14,6 +13,21 @@ export type MenuAccessOption = {
   group: string
   permission?: Permission
   grupoAdminOnly?: boolean
+}
+
+/** Menus padrão do portal do associado (login por registro / importação Excel). */
+export const ASSOCIADO_PORTAL_MENU_KEYS = [
+  '/',
+  '/portal-transparencia',
+  '/conquistas',
+  '/atividades',
+] as const
+
+export type AssociadoPortalMenuKey =
+  (typeof ASSOCIADO_PORTAL_MENU_KEYS)[number]
+
+export function associadoPortalMenuKeys(): string[] {
+  return [...ASSOCIADO_PORTAL_MENU_KEYS]
 }
 
 /** Menus que o admin do grupo pode marcar no cadastro de usuário. */
@@ -80,7 +94,7 @@ export function normalizeMenuKeys(
 export function profileUsesMenuKeys(
   profile: Pick<Profile, 'registro' | 'menu_keys'> | null | undefined,
 ): boolean {
-  if (!profile || isAssociadoLogin(profile)) return false
+  if (!profile) return false
   return Array.isArray(profile.menu_keys) && profile.menu_keys.length > 0
 }
 

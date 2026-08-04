@@ -243,7 +243,7 @@ export function navItemsForProfile(
   > | null,
 ): NavItem[] {
   if (isAssociadoLogin(profile)) {
-    return [
+    const associadoMenus: NavItem[] = [
       {
         type: 'link',
         to: '/',
@@ -270,6 +270,13 @@ export function navItemsForProfile(
         permission: 'atividades.view',
       },
     ]
+    const keys = profile?.menu_keys
+    if (Array.isArray(keys) && keys.length > 0) {
+      return associadoMenus.filter(
+        (item) => item.type === 'link' && keys.includes(item.to),
+      )
+    }
+    return associadoMenus
   }
 
   const admin = isGrupoAdmin(profile?.role)

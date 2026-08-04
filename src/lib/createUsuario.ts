@@ -232,3 +232,27 @@ export async function updateUsuarioSenha(
 
   return { ok: true }
 }
+
+export type ExcluirUsuarioResult = {
+  ok: boolean
+  error?: string
+}
+
+/** Exclui usuário do Auth (e o profile em cascade), inclusive admin. */
+export async function excluirUsuario(
+  userId: string,
+): Promise<ExcluirUsuarioResult> {
+  const { data, error } = await supabase.functions.invoke('excluir-usuario', {
+    body: { user_id: userId },
+  })
+
+  if (error) {
+    const fromBody = await readFunctionsError(error)
+    return { ok: false, error: fromBody || error.message }
+  }
+  if (data?.error) {
+    return { ok: false, error: String(data.error) }
+  }
+
+  return { ok: true }
+}
