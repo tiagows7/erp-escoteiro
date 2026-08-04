@@ -3781,11 +3781,66 @@ table.data tbody tr:hover {
   font-size: 0.88rem;
 }
 
-.projeto-card-valor {
+.projeto-card-totais {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem 0.75rem;
   margin: 0;
-  font-size: 1.15rem;
+}
+
+.projeto-card-totais > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.projeto-card-totais dt {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.projeto-card-totais dd {
+  margin: 0;
+  font-size: 0.98rem;
   font-weight: 700;
-  color: var(--forest);
+}
+
+.projeto-card-totais dd.is-receita {
+  color: #1f6b3a;
+}
+
+.projeto-card-totais dd.is-despesa {
+  color: #9a3412;
+}
+
+.projeto-card-saldo {
+  grid-column: 1 / -1;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.projeto-card-saldo.is-ok {
+  background: rgba(40, 120, 70, 0.1);
+}
+
+.projeto-card-saldo.is-ok dd {
+  color: #1f6b3a;
+}
+
+.projeto-card-saldo.is-bad {
+  background: rgba(180, 50, 40, 0.1);
+}
+
+.projeto-card-saldo.is-bad dd {
+  color: #9f1239;
+}
+
+.projeto-card-saldo.is-warn dd {
+  color: var(--ink);
 }
 
 .projeto-card-actions {

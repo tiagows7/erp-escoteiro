@@ -11,6 +11,17 @@ import type { Projeto, Ramo } from '@/types/database'
 
 type Secao = { secao_id: number; nome: string; ramo: number | null }
 
+type ProjetoTotais = {
+  receitas: number
+  despesas: number
+}
+
+type ProjetoCard = Projeto & {
+  totalReceitas: number
+  totalDespesas: number
+  saldoRestante: number
+}
+
 function escopoLabel(
   row: Projeto,
   ramoMap: Map<number, string>,
@@ -23,6 +34,12 @@ function escopoLabel(
   return `${ramoNome} · ${secaoNome}`
 }
 
+function saldoTone(value: number): 'ok' | 'warn' | 'bad' {
+  if (value > 0.005) return 'ok'
+  if (value < -0.005) return 'bad'
+  return 'warn'
+}
+
 export function ProjetosPage() {
   const { empresa, profile, hasPermission } = useAuth()
   const canWrite = hasPermission('projetos.write')
@@ -33,7 +50,7 @@ export function ProjetosPage() {
 
   const [ramos, setRamos] = useState<Ramo[]>([])
   const [secoes, setSecoes] = useState<Secao[]>([])
-  const [rows, setRows] = useState<Projeto[]>([])
+  const [rows, setRows] = useState<ProjetoCard[]>([])
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -68,18 +85,29 @@ export function ProjetosPage() {
         query = query.or(`ramo.eq.${ramoScoped},ramo.is.null`)
       }
 
-      const [ramosRes, secoesRes, listRes] = await Promise.all([
-        supabase
-          .from('ramos')
-          .select('ramo_id, nome, idade_inicio, idade_fim')
-          .order('ramo_id'),
-        supabase
-          .from('secao')
-          .select('secao_id, nome, ramo')
-          .eq('empresa_id', empresaId)
-          .order('nome'),
-        query,
-      ])
+      const [ramosRes, secoesRes, listRes, receitasRes, despesasRes] =
+        await Promise.all([
+          supabase
+            .from('ramos')
+            .select('ramo_id, nome, idade_inicio, idade_fim')
+            .order('ramo_id'),
+          supabase
+            .from('secao')
+            .select('secao_id, nome, ramo')
+            .eq('empresa_id', empresaId)
+            .order('nome'),
+          query,
+          supabase
+            .from('receitas')
+            .select('projeto_id, receita_valor')
+            .eq('empresa_id', empresaId)
+            .not('projeto_id', 'is', null),
+          supabase
+            .from('despesas')
+            .select('projeto_id, despesa_valor')
+            .eq('empresa_id', empresaId)
+            .not('projeto_id', 'is', null),
+        ])
 
       if (!mounted) return
       setRamos((ramosRes.data as Ramo[]) ?? [])
@@ -88,15 +116,41 @@ export function ProjetosPage() {
       if (listRes.error) {
         setError(listRes.error.message)
         setRows([])
-      } else {
-        setError(null)
-        setRows(
-          ((listRes.data ?? []) as Projeto[]).map((row) => ({
-            ...row,
-            valor: Number(row.valor ?? 0),
-          })),
-        )
+        setLoading(false)
+        return
       }
+
+      const totais = new Map<number, ProjetoTotais>()
+      for (const row of receitasRes.data ?? []) {
+        const pid = Number(row.projeto_id)
+        if (!Number.isFinite(pid)) continue
+        const atual = totais.get(pid) ?? { receitas: 0, despesas: 0 }
+        atual.receitas += Number(row.receita_valor ?? 0)
+        totais.set(pid, atual)
+      }
+      for (const row of despesasRes.data ?? []) {
+        const pid = Number(row.projeto_id)
+        if (!Number.isFinite(pid)) continue
+        const atual = totais.get(pid) ?? { receitas: 0, despesas: 0 }
+        atual.despesas += Number(row.despesa_valor ?? 0)
+        totais.set(pid, atual)
+      }
+
+      setError(null)
+      setRows(
+        ((listRes.data ?? []) as Projeto[]).map((row) => {
+          const valor = Number(row.valor ?? 0)
+          const t = totais.get(row.projeto_id) ?? { receitas: 0, despesas: 0 }
+          return {
+            ...row,
+            valor,
+            totalReceitas: t.receitas,
+            totalDespesas: t.despesas,
+            // Orçamento + receitas − despesas
+            saldoRestante: valor + t.receitas - t.despesas,
+          }
+        }),
+      )
       setLoading(false)
     })()
 
@@ -168,43 +222,67 @@ export function ProjetosPage() {
           <div className="empty">Nenhum projeto cadastrado.</div>
         ) : (
           <div className="projetos-grid">
-            {filtered.map((row) => (
-              <article key={row.projeto_id} className="projeto-card">
-                <div className="projeto-card-head">
-                  <h3>{row.descricao}</h3>
-                  <p className="projeto-card-escopo">
-                    {escopoLabel(row, ramoMap, secaoMap)}
-                  </p>
-                </div>
-                <p className="projeto-card-valor">
-                  {formatMoney(row.valor)}
-                </p>
-                <div className="projeto-card-actions">
-                  <Link
-                    className="btn btn-soft"
-                    to={`/projetos/${row.projeto_id}`}
-                  >
-                    Abrir
-                  </Link>
-                  {canFinanceiro ? (
-                    <>
-                      <Link
-                        className="btn btn-accent"
-                        to={`/despesas/inclusao/novo?projeto_id=${row.projeto_id}`}
-                      >
-                        Lançar despesa
-                      </Link>
-                      <Link
-                        className="btn btn-primary"
-                        to={`/receitas/inclusao/novo?projeto_id=${row.projeto_id}`}
-                      >
-                        Lançar receita
-                      </Link>
-                    </>
-                  ) : null}
-                </div>
-              </article>
-            ))}
+            {filtered.map((row) => {
+              const tone = saldoTone(row.saldoRestante)
+              return (
+                <article key={row.projeto_id} className="projeto-card">
+                  <div className="projeto-card-head">
+                    <h3>{row.descricao}</h3>
+                    <p className="projeto-card-escopo">
+                      {escopoLabel(row, ramoMap, secaoMap)}
+                    </p>
+                  </div>
+
+                  <dl className="projeto-card-totais">
+                    <div>
+                      <dt>Orçamento</dt>
+                      <dd>{formatMoney(row.valor)}</dd>
+                    </div>
+                    <div>
+                      <dt>Receitas</dt>
+                      <dd className="is-receita">
+                        {formatMoney(row.totalReceitas)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Despesas</dt>
+                      <dd className="is-despesa">
+                        {formatMoney(row.totalDespesas)}
+                      </dd>
+                    </div>
+                    <div className={`projeto-card-saldo is-${tone}`}>
+                      <dt>Saldo restante</dt>
+                      <dd>{formatMoney(row.saldoRestante)}</dd>
+                    </div>
+                  </dl>
+
+                  <div className="projeto-card-actions">
+                    <Link
+                      className="btn btn-soft"
+                      to={`/projetos/${row.projeto_id}`}
+                    >
+                      Abrir
+                    </Link>
+                    {canFinanceiro ? (
+                      <>
+                        <Link
+                          className="btn btn-accent"
+                          to={`/despesas/inclusao/novo?projeto_id=${row.projeto_id}`}
+                        >
+                          Lançar despesa
+                        </Link>
+                        <Link
+                          className="btn btn-primary"
+                          to={`/receitas/inclusao/novo?projeto_id=${row.projeto_id}`}
+                        >
+                          Lançar receita
+                        </Link>
+                      </>
+                    ) : null}
+                  </div>
+                </article>
+              )
+            })}
           </div>
         )}
       </section>

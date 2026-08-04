@@ -72,6 +72,7 @@ export function DespesaFormPage() {
   const scope = useMemo(() => resolveFinanceiroScope(profile), [profile])
   const toast = useToast()
   const projetoIdParam = searchParams.get('projeto_id')
+  const lockedByProjeto = isNew && !!projetoIdParam
 
   const [form, setForm] = useState({
     ...emptyForm,
@@ -94,14 +95,14 @@ export function DespesaFormPage() {
   const [loading, setLoading] = useState(!isNew)
 
   useEffect(() => {
-    if (!scope || !isNew) return
+    if (!scope || !isNew || lockedByProjeto) return
     setForm((prev) => ({
       ...prev,
       despesa_ramo: String(scope.ramo),
       despesa_secao:
         scope.secao != null ? String(scope.secao) : prev.despesa_secao,
     }))
-  }, [scope, isNew])
+  }, [scope, isNew, lockedByProjeto])
 
   useEffect(() => {
     if (!empresaId) return
@@ -214,12 +215,9 @@ export function DespesaFormPage() {
     setForm((prev) => ({
       ...prev,
       projeto_id: String(projeto.projeto_id),
-      despesa_ramo:
-        prev.despesa_ramo ||
-        (projeto.ramo != null ? String(projeto.ramo) : prev.despesa_ramo),
-      despesa_secao:
-        prev.despesa_secao ||
-        (projeto.secao != null ? String(projeto.secao) : prev.despesa_secao),
+      despesa_ramo: projeto.ramo != null ? String(projeto.ramo) : '',
+      despesa_secao: projeto.secao != null ? String(projeto.secao) : '',
+      despesa_secaonome: '',
       despesa_finalidade:
         prev.despesa_finalidade.trim() ||
         `Projeto: ${projeto.descricao}`,
@@ -319,9 +317,19 @@ export function DespesaFormPage() {
       return
     }
 
-    const ramoPayload = scope ? scope.ramo : numOrNull(form.despesa_ramo)
-    const secaoPayload =
-      scope?.secao != null ? scope.secao : numOrNull(form.despesa_secao)
+    const ramoPayload = lockedByProjeto
+      ? numOrNull(form.despesa_ramo)
+      : scope
+        ? scope.ramo
+        : numOrNull(form.despesa_ramo)
+    const secaoPayload = lockedByProjeto
+      ? numOrNull(form.despesa_secao)
+      : scope?.secao != null
+        ? scope.secao
+        : numOrNull(form.despesa_secao)
+    const secaonomePayload = lockedByProjeto
+      ? null
+      : numOrNull(form.despesa_secaonome)
 
     setSaving(true)
     setError(null)
@@ -334,7 +342,7 @@ export function DespesaFormPage() {
           despesa_fornecedor: numOrNull(form.despesa_fornecedor),
           despesa_ramo: ramoPayload,
           despesa_secao: secaoPayload,
-          despesa_secaonome: numOrNull(form.despesa_secaonome),
+          despesa_secaonome: secaonomePayload,
           atividade_id: numOrNull(form.atividade_id),
           projeto_id: numOrNull(form.projeto_id),
           despesa_numeronota: strOrNull(form.despesa_numeronota),
@@ -380,7 +388,7 @@ export function DespesaFormPage() {
           despesa_fornecedor: numOrNull(form.despesa_fornecedor),
           despesa_ramo: ramoPayload,
           despesa_secao: secaoPayload,
-          despesa_secaonome: numOrNull(form.despesa_secaonome),
+          despesa_secaonome: secaonomePayload,
           atividade_id: numOrNull(form.atividade_id),
           projeto_id: numOrNull(form.projeto_id),
           despesa_numeronota: strOrNull(form.despesa_numeronota),
@@ -535,9 +543,11 @@ export function DespesaFormPage() {
                 update('despesa_secaonome', '')
                 update('atividade_id', '')
               }}
-              disabled={disabled || isPaid || !!scope}
+              disabled={disabled || isPaid || !!scope || lockedByProjeto}
             >
-              <option value="">Selecione</option>
+              <option value="">
+                {lockedByProjeto ? 'Grupo todo' : 'Selecione'}
+              </option>
               {ramos.map((ramo) => (
                 <option key={ramo.ramo_id} value={ramo.ramo_id}>
                   {ramo.nome}
@@ -557,9 +567,16 @@ export function DespesaFormPage() {
                 update('despesa_secaonome', '')
                 update('atividade_id', '')
               }}
-              disabled={disabled || isPaid || (scope != null && scope.secao != null)}
+              disabled={
+                disabled ||
+                isPaid ||
+                (scope != null && scope.secao != null) ||
+                lockedByProjeto
+              }
             >
-              <option value="">Selecione</option>
+              <option value="">
+                {lockedByProjeto ? 'Todas / nenhuma' : 'Selecione'}
+              </option>
               {secoesFiltradas.map((secao) => (
                 <option key={secao.id} value={secao.id}>
                   {secao.nome}
@@ -575,7 +592,7 @@ export function DespesaFormPage() {
               className="select"
               value={form.despesa_secaonome}
               onChange={(e) => update('despesa_secaonome', e.target.value)}
-              disabled={disabled || isPaid}
+              disabled={disabled || isPaid || lockedByProjeto}
             >
               <option value="">Selecione</option>
               {patrulhasFiltradas.map((item) => (
@@ -595,7 +612,7 @@ export function DespesaFormPage() {
               onChange={(e) => {
                 const value = e.target.value
                 update('atividade_id', value)
-                if (!value) return
+                if (!value || lockedByProjeto) return
                 const ativ = atividades.find(
                   (a) => a.atividade_id === Number(value),
                 )
@@ -621,6 +638,7 @@ export function DespesaFormPage() {
               className="select"
               value={form.projeto_id}
               onChange={(e) => {
+                if (lockedByProjeto) return
                 const value = e.target.value
                 update('projeto_id', value)
                 if (!value) return
@@ -632,7 +650,7 @@ export function DespesaFormPage() {
                 if (proj.secao != null)
                   update('despesa_secao', String(proj.secao))
               }}
-              disabled={disabled || isPaid}
+              disabled={disabled || isPaid || lockedByProjeto}
             >
               <option value="">Nenhum</option>
               {projetosFiltrados.map((p) => (

@@ -75,6 +75,7 @@ export function ReceitaFormPage() {
   const scope = useMemo(() => resolveFinanceiroScope(profile), [profile])
   const toast = useToast()
   const projetoIdParam = searchParams.get('projeto_id')
+  const lockedByProjeto = isNew && !!projetoIdParam
 
   const [form, setForm] = useState({
     ...emptyForm,
@@ -97,14 +98,14 @@ export function ReceitaFormPage() {
   const [docFiles, setDocFiles] = useState<File[]>([])
 
   useEffect(() => {
-    if (!scope || !isNew) return
+    if (!scope || !isNew || lockedByProjeto) return
     setForm((prev) => ({
       ...prev,
       receita_ramo: String(scope.ramo),
       receita_secao:
         scope.secao != null ? String(scope.secao) : prev.receita_secao,
     }))
-  }, [scope, isNew])
+  }, [scope, isNew, lockedByProjeto])
 
   useEffect(() => {
     if (!empresaId) return
@@ -200,12 +201,8 @@ export function ReceitaFormPage() {
     setForm((prev) => ({
       ...prev,
       projeto_id: String(projeto.projeto_id),
-      receita_ramo:
-        prev.receita_ramo ||
-        (projeto.ramo != null ? String(projeto.ramo) : prev.receita_ramo),
-      receita_secao:
-        prev.receita_secao ||
-        (projeto.secao != null ? String(projeto.secao) : prev.receita_secao),
+      receita_ramo: projeto.ramo != null ? String(projeto.ramo) : '',
+      receita_secao: projeto.secao != null ? String(projeto.secao) : '',
       receita_descricao:
         prev.receita_descricao.trim() || `Projeto: ${projeto.descricao}`,
       receita_valor:
@@ -311,14 +308,18 @@ export function ReceitaFormPage() {
     // Mensalidade = conta do grupo (caixa 0); não cai nos ramos.
     const ramoPayload = isMensalidadeSave
       ? null
-      : scope
-        ? scope.ramo
-        : numOrNull(form.receita_ramo)
+      : lockedByProjeto
+        ? numOrNull(form.receita_ramo)
+        : scope
+          ? scope.ramo
+          : numOrNull(form.receita_ramo)
     const secaoPayload = isMensalidadeSave
       ? null
-      : scope?.secao != null
-        ? scope.secao
-        : numOrNull(form.receita_secao)
+      : lockedByProjeto
+        ? numOrNull(form.receita_secao)
+        : scope?.secao != null
+          ? scope.secao
+          : numOrNull(form.receita_secao)
 
     setSaving(true)
     setError(null)
@@ -560,9 +561,11 @@ export function ReceitaFormPage() {
                   update('receita_secao', '')
                   update('atividade_id', '')
                 }}
-                disabled={disabled || isPaid || !!scope}
+                disabled={disabled || isPaid || !!scope || lockedByProjeto}
               >
-                <option value="">Selecione</option>
+                <option value="">
+                  {lockedByProjeto ? 'Grupo todo' : 'Selecione'}
+                </option>
                 {ramos.map((ramo) => (
                   <option key={ramo.ramo_id} value={ramo.ramo_id}>
                     {ramo.nome}
@@ -591,9 +594,16 @@ export function ReceitaFormPage() {
                 update('receita_secao', e.target.value)
                 update('atividade_id', '')
               }}
-              disabled={disabled || isPaid || (scope != null && scope.secao != null)}
+              disabled={
+                disabled ||
+                isPaid ||
+                (scope != null && scope.secao != null) ||
+                lockedByProjeto
+              }
             >
-              <option value="">Selecione</option>
+              <option value="">
+                {lockedByProjeto ? 'Todas / nenhuma' : 'Selecione'}
+              </option>
               {secoesFiltradas.map((secao) => (
                 <option key={secao.id} value={secao.id}>
                   {secao.nome}
@@ -612,7 +622,7 @@ export function ReceitaFormPage() {
               onChange={(e) => {
                 const value = e.target.value
                 update('atividade_id', value)
-                if (!value) return
+                if (!value || lockedByProjeto) return
                 const ativ = atividades.find(
                   (a) => a.atividade_id === Number(value),
                 )
@@ -638,6 +648,7 @@ export function ReceitaFormPage() {
               className="select"
               value={form.projeto_id}
               onChange={(e) => {
+                if (lockedByProjeto) return
                 const value = e.target.value
                 update('projeto_id', value)
                 if (!value) return
@@ -649,7 +660,7 @@ export function ReceitaFormPage() {
                 if (proj.secao != null)
                   update('receita_secao', String(proj.secao))
               }}
-              disabled={disabled || isPaid}
+              disabled={disabled || isPaid || lockedByProjeto}
             >
               <option value="">Nenhum</option>
               {projetosFiltrados.map((p) => (
