@@ -7,6 +7,12 @@ import {
   type PixCreateInput,
   type PixCobrancaResumo,
 } from '@/lib/pixSicredi'
+import {
+  clearPixPending,
+  loadPixPending,
+  pixPaymentKey,
+  savePixPending,
+} from '@/lib/pixSicrediPending'
 import { mensagemPixCopiaCola, openWhatsApp } from '@/lib/whatsapp'
 
 type Props = {
@@ -15,16 +21,6 @@ type Props = {
   input: PixCreateInput | null
   onClose: () => void
   onPaid: () => void
-}
-
-function paymentKey(input: PixCreateInput): string {
-  return [
-    input.empresaId,
-    input.tipo,
-    input.valor,
-    input.atividadeId ?? '',
-    (input.receitaIds ?? []).join(','),
-  ].join('|')
 }
 
 export function PixSicrediCheckoutModal({
@@ -46,6 +42,13 @@ export function PixSicrediCheckoutModal({
   const paidNotified = useRef(false)
   const onPaidRef = useRef(onPaid)
   onPaidRef.current = onPaid
+  const titleRef = useRef(title)
+  titleRef.current = title
+
+  function closeAndClear() {
+    clearPixPending()
+    onClose()
+  }
 
   useEffect(() => {
     if (!open || !input) {
@@ -60,10 +63,26 @@ export function PixSicrediCheckoutModal({
       return
     }
 
-    const key = paymentKey(input)
+    const key = pixPaymentKey(input)
 
     // Já temos cobrança/resultado desta sessão — não recria.
     if (readyKeyRef.current === key) return
+
+    // Retoma cobrança salva (ex.: usuário saiu pro app do banco e a página recarregou).
+    const pending = loadPixPending()
+    if (
+      pending &&
+      pixPaymentKey(pending.input) === key &&
+      pending.cobranca?.id
+    ) {
+      sessionKeyRef.current = key
+      readyKeyRef.current = key
+      paidNotified.current = false
+      setCobranca(pending.cobranca)
+      setMessage(null)
+      setPhase('waiting')
+      return
+    }
 
     // Já existe geração em andamento para a mesma chave.
     if (sessionKeyRef.current === key) return
@@ -96,6 +115,11 @@ export function PixSicrediCheckoutModal({
       readyKeyRef.current = key
       setCobranca(created.cobranca)
       setPhase('waiting')
+      savePixPending({
+        title: titleRef.current,
+        input,
+        cobranca: created.cobranca,
+      })
     })()
 
     return () => {
@@ -134,20 +158,27 @@ export function PixSicrediCheckoutModal({
     if (!open || phase !== 'waiting' || !cobranca?.id) return
 
     let stopped = false
+    const cobrancaId = cobranca.id
+
     const tick = async () => {
-      const result = await checkPixSicrediStatus(cobranca.id)
+      const result = await checkPixSicrediStatus(cobrancaId)
       if (stopped) return
       if (!result.ok) {
-        setPhase('error')
-        setMessage(
-          result.error ||
-            'Não foi possível confirmar o pagamento no Sicredi. Tente novamente.',
-        )
+        // Erro transitório (rede ao voltar do app do banco) — segue tentando.
+        setMessage(result.error)
         return
       }
 
+      setMessage(null)
       setCobranca(result.cobranca)
+      savePixPending({
+        title: titleRef.current,
+        input: input!,
+        cobranca: result.cobranca,
+      })
+
       if (result.paid) {
+        clearPixPending()
         setPhase('paid')
         setMessage(
           'Pagamento confirmado pelo Sicredi. A baixa da mensalidade foi registrada.',
@@ -161,11 +192,22 @@ export function PixSicrediCheckoutModal({
 
     void tick()
     const id = window.setInterval(() => void tick(), 4000)
+
+    const onResume = () => {
+      if (document.visibilityState === 'visible') void tick()
+    }
+    document.addEventListener('visibilitychange', onResume)
+    window.addEventListener('focus', onResume)
+    window.addEventListener('pageshow', onResume)
+
     return () => {
       stopped = true
       window.clearInterval(id)
+      document.removeEventListener('visibilitychange', onResume)
+      window.removeEventListener('focus', onResume)
+      window.removeEventListener('pageshow', onResume)
     }
-  }, [open, phase, cobranca?.id])
+  }, [open, phase, cobranca?.id, input])
 
   if (!open || !input) return null
 
@@ -201,7 +243,7 @@ export function PixSicrediCheckoutModal({
             <p className="muted">PIX Sicredi · {formatMoney(input.valor)}</p>
           </div>
           {phase !== 'paid' && phase !== 'error' ? (
-            <button type="button" className="btn btn-soft" onClick={onClose}>
+            <button type="button" className="btn btn-soft" onClick={closeAndClear}>
               Fechar
             </button>
           ) : null}
@@ -220,7 +262,7 @@ export function PixSicrediCheckoutModal({
             <button
               type="button"
               className="btn btn-primary"
-              onClick={onClose}
+              onClick={closeAndClear}
               style={{ marginTop: '1rem' }}
             >
               OK
@@ -232,7 +274,8 @@ export function PixSicrediCheckoutModal({
           <div className="pix-sicredi-waiting">
             <p>
               Escaneie o QR Code no app do banco ou use o Pix Copia e Cola. A
-              baixa só ocorre após confirmação do Sicredi.
+              baixa só ocorre após confirmação do Sicredi. Pode sair para o app
+              do banco — ao voltar, a confirmação continua daqui.
             </p>
 
             {qrDataUrl ? (
@@ -288,6 +331,7 @@ export function PixSicrediCheckoutModal({
             )}
             <p className="pix-sicredi-poll muted">
               Aguardando pagamento… status: {cobranca.status || 'ATIVA'}
+              {message ? ` · ${message}` : ''}
             </p>
           </div>
         ) : null}
@@ -301,7 +345,7 @@ export function PixSicrediCheckoutModal({
             <button
               type="button"
               className="btn btn-primary"
-              onClick={onClose}
+              onClick={closeAndClear}
               style={{ marginTop: '1rem' }}
             >
               OK

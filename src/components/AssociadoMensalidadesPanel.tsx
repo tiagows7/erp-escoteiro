@@ -12,6 +12,7 @@ import {
   empresaTemChavePixInformada,
   type PixCreateInput,
 } from '@/lib/pixSicredi'
+import { loadPixPendingForEmpresa } from '@/lib/pixSicrediPending'
 
 type Props = {
   empresaId: number
@@ -112,6 +113,16 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    const pending = loadPixPendingForEmpresa(empresaId, [
+      'mensalidade',
+      'mensalidade_lote',
+    ])
+    if (!pending) return
+    setPixTitle(pending.title)
+    setPixInput(pending.input)
+  }, [empresaId])
 
   const totalSaldo = useMemo(
     () => items.reduce((acc, row) => acc + row.receita_saldo, 0),

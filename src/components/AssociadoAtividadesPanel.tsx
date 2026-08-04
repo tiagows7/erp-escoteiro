@@ -14,6 +14,7 @@ import {
   empresaTemChavePixInformada,
   type PixCreateInput,
 } from '@/lib/pixSicredi'
+import { loadPixPendingForEmpresa } from '@/lib/pixSicrediPending'
 import type { Atividade } from '@/types/database'
 
 type AssociadoCtx = AssociadoAtividadeCtx & {
@@ -173,6 +174,13 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    const pending = loadPixPendingForEmpresa(empresaId, ['atividade'])
+    if (!pending) return
+    setPixTitle(pending.title)
+    setPixInput(pending.input)
+  }, [empresaId])
 
   async function confirmarParticipacao(item: AtividadeCardItem) {
     if (!associado || item.confirmado) return
