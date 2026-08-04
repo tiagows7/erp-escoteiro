@@ -269,12 +269,26 @@ export function navItemsForProfile(
         label: 'Atividades',
         permission: 'atividades.view',
       },
+      {
+        type: 'link',
+        to: '/projetos',
+        label: 'Projetos',
+        permission: 'projetos.view',
+      },
     ]
     const keys = profile?.menu_keys
     if (Array.isArray(keys) && keys.length > 0) {
-      return associadoMenus.filter(
+      const filtered = associadoMenus.filter(
         (item) => item.type === 'link' && keys.includes(item.to),
       )
+      // Projetos: sempre visível para associado (somente leitura).
+      if (!filtered.some((item) => item.type === 'link' && item.to === '/projetos')) {
+        const projetos = associadoMenus.find(
+          (item) => item.type === 'link' && item.to === '/projetos',
+        )
+        if (projetos) filtered.push(projetos)
+      }
+      return filtered
     }
     return associadoMenus
   }

@@ -218,6 +218,7 @@ export function DespesaFormPage() {
       despesa_ramo: projeto.ramo != null ? String(projeto.ramo) : '',
       despesa_secao: projeto.secao != null ? String(projeto.secao) : '',
       despesa_secaonome: '',
+      despesa_valor: '0,00',
       despesa_finalidade:
         prev.despesa_finalidade.trim() ||
         `Projeto: ${projeto.descricao}`,

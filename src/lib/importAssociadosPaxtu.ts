@@ -534,19 +534,40 @@ async function ensureUsuarioFromAssociado(opts: {
   const password = passwordFromNascimento(opts.dataNascimento)
   if (!password) return { status: 'skipped' }
 
+  const portalMenus = associadoPortalMenuKeys()
+
   const { data: existing } = await opts.client
     .from('profiles')
-    .select('id')
+    .select('id, menu_keys')
     .eq('registro', registroStr)
     .maybeSingle()
 
-  if (existing?.id) return { status: 'skipped' }
+  if (existing?.id) {
+    // Reimportação: garante menus do portal (inclui Projetos).
+    const atual = Array.isArray(existing.menu_keys)
+      ? existing.menu_keys.map((k) => String(k))
+      : []
+    const merged = [...new Set([...atual, ...portalMenus])]
+    const same =
+      merged.length === atual.length &&
+      merged.every((k) => atual.includes(k))
+    if (!same) {
+      const { error: menuError } = await opts.client
+        .from('profiles')
+        .update({ menu_keys: merged })
+        .eq('id', existing.id)
+      if (menuError) {
+        return { status: 'failed', error: menuError.message }
+      }
+    }
+    return { status: 'skipped' }
+  }
 
   const codigoRamo =
     opts.ramo != null && opts.ramo >= 1 && opts.ramo <= 4 ? opts.ramo : null
 
   // Sem e-mail do associado: Auth usa r{registro}@usuarios.local (login por registro)
-  // Menus: Dashboard, Portal, Conquistas e Atividades.
+  // Menus: Dashboard, Portal, Conquistas, Atividades e Projetos.
   const result = await createUsuario({
     nome: opts.nome,
     registro: registroStr,
@@ -555,7 +576,7 @@ async function ensureUsuarioFromAssociado(opts: {
     ativo: true,
     codigo_ramo: codigoRamo,
     codigo_secao: opts.secao,
-    menu_keys: associadoPortalMenuKeys(),
+    menu_keys: portalMenus,
   })
 
   if (!result.ok) {

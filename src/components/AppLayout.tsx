@@ -10,6 +10,7 @@ import {
   filterNavItemsByMenuKeys,
   profileUsesMenuKeys,
 } from '@/lib/menuAccess'
+import { isAssociadoLogin } from '@/lib/roles'
 
 function groupHasVisibleChild(
   group: NavGroupItem,
@@ -44,7 +45,8 @@ export function AppLayout() {
 
   const allItems = useMemo(() => {
     const base = navItemsForProfile(profile)
-    if (!profileUsesMenuKeys(profile)) return base
+    // Associado: navItemsForProfile já aplica menu_keys (+ Projetos).
+    if (isAssociadoLogin(profile) || !profileUsesMenuKeys(profile)) return base
     return filterNavItemsByMenuKeys(base, profile?.menu_keys)
   }, [profile])
 

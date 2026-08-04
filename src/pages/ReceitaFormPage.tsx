@@ -205,9 +205,7 @@ export function ReceitaFormPage() {
       receita_secao: projeto.secao != null ? String(projeto.secao) : '',
       receita_descricao:
         prev.receita_descricao.trim() || `Projeto: ${projeto.descricao}`,
-      receita_valor:
-        prev.receita_valor.trim() ||
-        formatMoney(Number(projeto.valor ?? 0)).replace('R$', '').trim(),
+      receita_valor: '0,00',
     }))
   }, [isNew, projetoIdParam, projetos])
 

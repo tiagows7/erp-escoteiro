@@ -21,6 +21,7 @@ export const ASSOCIADO_PORTAL_MENU_KEYS = [
   '/portal-transparencia',
   '/conquistas',
   '/atividades',
+  '/projetos',
 ] as const
 
 export type AssociadoPortalMenuKey =

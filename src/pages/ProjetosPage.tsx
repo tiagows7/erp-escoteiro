@@ -6,7 +6,8 @@ import { AddIcon } from '@/components/AddIcon'
 import { AlertMessage } from '@/components/AlertMessage'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 import { formatMoney } from '@/lib/despesas'
-import { staffRamoScope } from '@/lib/roles'
+import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
+import { filtroAtividadesRamoOuGrupo } from '@/lib/atividadeVisibilidade'
 import type { Projeto, Ramo } from '@/types/database'
 
 type Secao = { secao_id: number; nome: string; ramo: number | null }
@@ -42,8 +43,9 @@ function saldoTone(value: number): 'ok' | 'warn' | 'bad' {
 
 export function ProjetosPage() {
   const { empresa, profile, hasPermission } = useAuth()
-  const canWrite = hasPermission('projetos.write')
-  const canFinanceiro = hasPermission('financeiro.write')
+  const associadoLogin = isAssociadoLogin(profile)
+  const canWrite = !associadoLogin && hasPermission('projetos.write')
+  const canFinanceiro = !associadoLogin && hasPermission('financeiro.write')
   const empresaId = empresa?.id
   const ramoScoped = useMemo(() => staffRamoScope(profile), [profile])
   const flashTick = useFlashSuccess()
@@ -75,14 +77,30 @@ export function ProjetosPage() {
     void (async () => {
       setLoading(true)
 
+      let associadoRamo: number | null = null
+      if (associadoLogin && profile?.registro) {
+        const registroNum = Number(String(profile.registro).replace(/\D/g, ''))
+        if (Number.isFinite(registroNum) && registroNum > 0) {
+          const { data: assoc } = await supabase
+            .from('associados')
+            .select('ramo')
+            .eq('empresa_id', empresaId)
+            .eq('registro', registroNum)
+            .maybeSingle()
+          associadoRamo = (assoc?.ramo as number | null) ?? null
+        }
+      }
+
       let query = supabase
         .from('projetos')
         .select('projeto_id, empresa_id, ramo, secao, descricao, valor, created_at')
         .eq('empresa_id', empresaId)
         .order('created_at', { ascending: false })
 
-      if (ramoScoped != null) {
-        query = query.or(`ramo.eq.${ramoScoped},ramo.is.null`)
+      if (associadoLogin && associadoRamo != null) {
+        query = query.or(filtroAtividadesRamoOuGrupo(associadoRamo))
+      } else if (ramoScoped != null) {
+        query = query.or(filtroAtividadesRamoOuGrupo(ramoScoped))
       }
 
       const [ramosRes, secoesRes, listRes, receitasRes, despesasRes] =
@@ -157,7 +175,7 @@ export function ProjetosPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, ramoScoped, flashTick])
+  }, [empresaId, ramoScoped, associadoLogin, profile?.registro, flashTick])
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
@@ -186,7 +204,10 @@ export function ProjetosPage() {
         <div>
           <h2>Projetos</h2>
           <p>
-            Projetos do grupo <strong>{empresa?.nome}</strong>
+            {associadoLogin
+              ? 'Resumo de receitas e despesas dos projetos do seu ramo'
+              : `Projetos do grupo `}
+            {!associadoLogin ? <strong>{empresa?.nome}</strong> : null}
           </p>
         </div>
         {canWrite ? (
@@ -261,7 +282,7 @@ export function ProjetosPage() {
                       className="btn btn-soft"
                       to={`/projetos/${row.projeto_id}`}
                     >
-                      Abrir
+                      {associadoLogin ? 'Ver resumo' : 'Abrir'}
                     </Link>
                     {canFinanceiro ? (
                       <>

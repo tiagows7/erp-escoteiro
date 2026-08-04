@@ -3,9 +3,10 @@ import { useAuth } from '@/contexts/AuthContext'
 import {
   firstAllowedMenuPath,
   pathAllowedByMenuKeys,
+  pathMatchesMenuKey,
   profileUsesMenuKeys,
 } from '@/lib/menuAccess'
-import { isGrupoAdmin, type Permission } from '@/lib/roles'
+import { isAssociadoLogin, isGrupoAdmin, type Permission } from '@/lib/roles'
 
 type Props = {
   permission?: Permission
@@ -43,16 +44,23 @@ export function RequirePermission({
     return <Navigate to="/" replace />
   }
 
-  if (
-    profileUsesMenuKeys(profile) &&
-    !pathAllowedByMenuKeys(location.pathname, profile?.menu_keys)
-  ) {
-    return (
-      <Navigate
-        to={firstAllowedMenuPath(profile?.menu_keys)}
-        replace
-      />
+  if (profileUsesMenuKeys(profile)) {
+    const menuOk = pathAllowedByMenuKeys(
+      location.pathname,
+      profile?.menu_keys,
     )
+    // Associado: Projetos sempre liberado (somente leitura).
+    const associadoProjetos =
+      isAssociadoLogin(profile) &&
+      pathMatchesMenuKey(location.pathname, '/projetos')
+    if (!menuOk && !associadoProjetos) {
+      return (
+        <Navigate
+          to={firstAllowedMenuPath(profile?.menu_keys)}
+          replace
+        />
+      )
+    }
   }
 
   return children
