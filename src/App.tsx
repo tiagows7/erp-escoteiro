@@ -22,8 +22,9 @@ import {
   EntradaEstoquePage,
   EventosPage,
   VendasPage,
-  ProjetosPage,
 } from '@/pages/placeholders'
+import { ProjetosPage } from '@/pages/ProjetosPage'
+import { ProjetoFormPage } from '@/pages/ProjetoFormPage'
 import { UsuariosPage } from '@/pages/UsuariosPage'
 import { UsuarioFormPage } from '@/pages/UsuarioFormPage'
 import { FornecedoresPage } from '@/pages/FornecedoresPage'
@@ -361,6 +362,14 @@ export default function App() {
               element={
                 <RequirePermission permission="projetos.view">
                   <ProjetosPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="projetos/:id"
+              element={
+                <RequirePermission permission="projetos.view">
+                  <ProjetoFormPage />
                 </RequirePermission>
               }
             />

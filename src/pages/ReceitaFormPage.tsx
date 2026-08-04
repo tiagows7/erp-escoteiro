@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -29,6 +29,11 @@ import {
   loadAtividadesLookup,
   type AtividadeLookup,
 } from '@/lib/atividadesLookup'
+import {
+  loadProjetosLookup,
+  projetoLabel,
+  type ProjetoLookup,
+} from '@/lib/projetosLookup'
 import type { Ramo } from '@/types/database'
 
 type Lookup = { id: number; nome: string; ramo?: number | null }
@@ -39,6 +44,7 @@ const emptyForm = {
   receita_ramo: '',
   receita_secao: '',
   atividade_id: '',
+  projeto_id: '',
   receita_emissao: '',
   receita_vencimento: '',
   receita_valor: '',
@@ -60,6 +66,7 @@ function todayISO() {
 
 export function ReceitaFormPage() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
   const isNew = !id || id === 'novo'
   const navigate = useNavigate()
   const { empresa, profile, hasPermission } = useAuth()
@@ -67,6 +74,7 @@ export function ReceitaFormPage() {
   const empresaId = empresa?.id
   const scope = useMemo(() => resolveFinanceiroScope(profile), [profile])
   const toast = useToast()
+  const projetoIdParam = searchParams.get('projeto_id')
 
   const [form, setForm] = useState({
     ...emptyForm,
@@ -81,6 +89,7 @@ export function ReceitaFormPage() {
   const [secoes, setSecoes] = useState<Lookup[]>([])
   const [associados, setAssociados] = useState<Lookup[]>([])
   const [atividades, setAtividades] = useState<AtividadeLookup[]>([])
+  const [projetos, setProjetos] = useState<ProjetoLookup[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
@@ -157,12 +166,53 @@ export function ReceitaFormPage() {
     return list
   }, [atividades, form.receita_ramo, form.receita_secao])
 
+  const projetosFiltrados = useMemo(() => {
+    let list = projetos
+    if (form.receita_ramo) {
+      list = list.filter(
+        (p) => p.ramo == null || p.ramo === Number(form.receita_ramo),
+      )
+    }
+    if (form.receita_secao) {
+      list = list.filter(
+        (p) => p.secao == null || p.secao === Number(form.receita_secao),
+      )
+    }
+    return list
+  }, [projetos, form.receita_ramo, form.receita_secao])
+
   useEffect(() => {
     if (!empresaId) return
     void loadAtividadesLookup(empresaId, { scope }).then((res) => {
       if (!res.error) setAtividades(res.data)
     })
+    void loadProjetosLookup(empresaId, { scope }).then((res) => {
+      if (!res.error) setProjetos(res.data)
+    })
   }, [empresaId, scope])
+
+  useEffect(() => {
+    if (!isNew || !projetoIdParam || projetos.length === 0) return
+    const pid = Number(projetoIdParam)
+    if (!Number.isFinite(pid) || pid <= 0) return
+    const projeto = projetos.find((p) => p.projeto_id === pid)
+    if (!projeto) return
+    setForm((prev) => ({
+      ...prev,
+      projeto_id: String(projeto.projeto_id),
+      receita_ramo:
+        prev.receita_ramo ||
+        (projeto.ramo != null ? String(projeto.ramo) : prev.receita_ramo),
+      receita_secao:
+        prev.receita_secao ||
+        (projeto.secao != null ? String(projeto.secao) : prev.receita_secao),
+      receita_descricao:
+        prev.receita_descricao.trim() || `Projeto: ${projeto.descricao}`,
+      receita_valor:
+        prev.receita_valor.trim() ||
+        formatMoney(Number(projeto.valor ?? 0)).replace('R$', '').trim(),
+    }))
+  }, [isNew, projetoIdParam, projetos])
 
   useEffect(() => {
     if (isNew || !empresaId) return
@@ -172,7 +222,7 @@ export function ReceitaFormPage() {
       const { data, error: loadError } = await supabase
         .from('receitas')
         .select(
-          'receita_id, receita_descricao, associado_id, receita_ramo, receita_secao, atividade_id, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, receita_observacao, receita_origem, receita_documento',
+          'receita_id, receita_descricao, associado_id, receita_ramo, receita_secao, atividade_id, projeto_id, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, receita_observacao, receita_origem, receita_documento',
         )
         .eq('receita_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -206,6 +256,7 @@ export function ReceitaFormPage() {
         receita_ramo: data.receita_ramo?.toString() ?? '',
         receita_secao: data.receita_secao?.toString() ?? '',
         atividade_id: data.atividade_id?.toString() ?? '',
+        projeto_id: data.projeto_id?.toString() ?? '',
         receita_emissao: data.receita_emissao?.slice(0, 10) ?? '',
         receita_vencimento: data.receita_vencimento?.slice(0, 10) ?? '',
         receita_valor: data.receita_valor != null ? String(data.receita_valor) : '',
@@ -283,6 +334,7 @@ export function ReceitaFormPage() {
           receita_ramo: ramoPayload,
           receita_secao: secaoPayload,
           atividade_id: numOrNull(form.atividade_id),
+          projeto_id: numOrNull(form.projeto_id),
           receita_emissao: strOrNull(form.receita_emissao),
           receita_vencimento: strOrNull(form.receita_vencimento),
           receita_valor: valor,
@@ -333,6 +385,7 @@ export function ReceitaFormPage() {
           receita_ramo: ramoPayload,
           receita_secao: secaoPayload,
           atividade_id: numOrNull(form.atividade_id),
+          projeto_id: numOrNull(form.projeto_id),
           receita_emissao: strOrNull(form.receita_emissao),
           receita_vencimento: strOrNull(form.receita_vencimento),
           receita_valor: valor,
@@ -550,7 +603,7 @@ export function ReceitaFormPage() {
             )}
           </div>
 
-          <div className="field field-span-2">
+          <div className="field">
             <label htmlFor="atividade_id">Atividade</label>
             <select
               id="atividade_id"
@@ -573,6 +626,35 @@ export function ReceitaFormPage() {
               {atividadesFiltradas.map((a) => (
                 <option key={a.atividade_id} value={a.atividade_id}>
                   {atividadeLabel(a)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="projeto_id">Projeto</label>
+            <select
+              id="projeto_id"
+              className="select"
+              value={form.projeto_id}
+              onChange={(e) => {
+                const value = e.target.value
+                update('projeto_id', value)
+                if (!value) return
+                const proj = projetos.find(
+                  (p) => p.projeto_id === Number(value),
+                )
+                if (!proj || scope) return
+                if (proj.ramo != null) update('receita_ramo', String(proj.ramo))
+                if (proj.secao != null)
+                  update('receita_secao', String(proj.secao))
+              }}
+              disabled={disabled || isPaid}
+            >
+              <option value="">Nenhum</option>
+              {projetosFiltrados.map((p) => (
+                <option key={p.projeto_id} value={p.projeto_id}>
+                  {projetoLabel(p)}
                 </option>
               ))}
             </select>

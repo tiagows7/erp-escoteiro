@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -25,6 +25,11 @@ import {
   loadAtividadesLookup,
   type AtividadeLookup,
 } from '@/lib/atividadesLookup'
+import {
+  loadProjetosLookup,
+  projetoLabel,
+  type ProjetoLookup,
+} from '@/lib/projetosLookup'
 import type { Ramo } from '@/types/database'
 
 type Lookup = { id: number; nome: string; ramo?: number | null; secao?: number | null }
@@ -35,6 +40,7 @@ const emptyForm = {
   despesa_secao: '',
   despesa_secaonome: '',
   atividade_id: '',
+  projeto_id: '',
   despesa_numeronota: '',
   despesa_emissao: '',
   despesa_vencimento: '',
@@ -57,6 +63,7 @@ function todayISO() {
 
 export function DespesaFormPage() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
   const isNew = !id || id === 'novo'
   const navigate = useNavigate()
   const { empresa, profile, hasPermission } = useAuth()
@@ -64,6 +71,7 @@ export function DespesaFormPage() {
   const empresaId = empresa?.id
   const scope = useMemo(() => resolveFinanceiroScope(profile), [profile])
   const toast = useToast()
+  const projetoIdParam = searchParams.get('projeto_id')
 
   const [form, setForm] = useState({
     ...emptyForm,
@@ -78,6 +86,7 @@ export function DespesaFormPage() {
   const [patrulhas, setPatrulhas] = useState<Lookup[]>([])
   const [fornecedores, setFornecedores] = useState<Lookup[]>([])
   const [atividades, setAtividades] = useState<AtividadeLookup[]>([])
+  const [projetos, setProjetos] = useState<ProjetoLookup[]>([])
   const [documentoUrls, setDocumentoUrls] = useState<string[]>([])
   const [notaFiles, setNotaFiles] = useState<File[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -171,12 +180,51 @@ export function DespesaFormPage() {
     return list
   }, [atividades, form.despesa_ramo, form.despesa_secao])
 
+  const projetosFiltrados = useMemo(() => {
+    let list = projetos
+    if (form.despesa_ramo) {
+      list = list.filter(
+        (p) => p.ramo == null || p.ramo === Number(form.despesa_ramo),
+      )
+    }
+    if (form.despesa_secao) {
+      list = list.filter(
+        (p) => p.secao == null || p.secao === Number(form.despesa_secao),
+      )
+    }
+    return list
+  }, [projetos, form.despesa_ramo, form.despesa_secao])
+
   useEffect(() => {
     if (!empresaId) return
     void loadAtividadesLookup(empresaId, { scope }).then((res) => {
       if (!res.error) setAtividades(res.data)
     })
+    void loadProjetosLookup(empresaId, { scope }).then((res) => {
+      if (!res.error) setProjetos(res.data)
+    })
   }, [empresaId, scope])
+
+  useEffect(() => {
+    if (!isNew || !projetoIdParam || projetos.length === 0) return
+    const pid = Number(projetoIdParam)
+    if (!Number.isFinite(pid) || pid <= 0) return
+    const projeto = projetos.find((p) => p.projeto_id === pid)
+    if (!projeto) return
+    setForm((prev) => ({
+      ...prev,
+      projeto_id: String(projeto.projeto_id),
+      despesa_ramo:
+        prev.despesa_ramo ||
+        (projeto.ramo != null ? String(projeto.ramo) : prev.despesa_ramo),
+      despesa_secao:
+        prev.despesa_secao ||
+        (projeto.secao != null ? String(projeto.secao) : prev.despesa_secao),
+      despesa_finalidade:
+        prev.despesa_finalidade.trim() ||
+        `Projeto: ${projeto.descricao}`,
+    }))
+  }, [isNew, projetoIdParam, projetos])
 
   useEffect(() => {
     if (isNew || !empresaId) return
@@ -186,7 +234,7 @@ export function DespesaFormPage() {
       const { data, error: loadError } = await supabase
         .from('despesas')
         .select(
-          'despesa_id, despesa_fornecedor, despesa_ramo, despesa_secao, despesa_secaonome, atividade_id, despesa_numeronota, despesa_emissao, despesa_vencimento, despesa_valor, despesa_saldo, despesa_situacao, despesa_finalidade, despesa_documento',
+          'despesa_id, despesa_fornecedor, despesa_ramo, despesa_secao, despesa_secaonome, atividade_id, projeto_id, despesa_numeronota, despesa_emissao, despesa_vencimento, despesa_valor, despesa_saldo, despesa_situacao, despesa_finalidade, despesa_documento',
         )
         .eq('despesa_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -220,6 +268,7 @@ export function DespesaFormPage() {
         despesa_secao: data.despesa_secao?.toString() ?? '',
         despesa_secaonome: data.despesa_secaonome?.toString() ?? '',
         atividade_id: data.atividade_id?.toString() ?? '',
+        projeto_id: data.projeto_id?.toString() ?? '',
         despesa_numeronota: data.despesa_numeronota ?? '',
         despesa_emissao: data.despesa_emissao?.slice(0, 10) ?? '',
         despesa_vencimento: data.despesa_vencimento?.slice(0, 10) ?? '',
@@ -287,6 +336,7 @@ export function DespesaFormPage() {
           despesa_secao: secaoPayload,
           despesa_secaonome: numOrNull(form.despesa_secaonome),
           atividade_id: numOrNull(form.atividade_id),
+          projeto_id: numOrNull(form.projeto_id),
           despesa_numeronota: strOrNull(form.despesa_numeronota),
           despesa_emissao: strOrNull(form.despesa_emissao),
           despesa_vencimento: strOrNull(form.despesa_vencimento),
@@ -332,6 +382,7 @@ export function DespesaFormPage() {
           despesa_secao: secaoPayload,
           despesa_secaonome: numOrNull(form.despesa_secaonome),
           atividade_id: numOrNull(form.atividade_id),
+          projeto_id: numOrNull(form.projeto_id),
           despesa_numeronota: strOrNull(form.despesa_numeronota),
           despesa_emissao: strOrNull(form.despesa_emissao),
           despesa_vencimento: strOrNull(form.despesa_vencimento),
@@ -535,7 +586,7 @@ export function DespesaFormPage() {
             </select>
           </div>
 
-          <div className="field field-span-2">
+          <div className="field">
             <label htmlFor="atividade_id">Atividade</label>
             <select
               id="atividade_id"
@@ -558,6 +609,35 @@ export function DespesaFormPage() {
               {atividadesFiltradas.map((a) => (
                 <option key={a.atividade_id} value={a.atividade_id}>
                   {atividadeLabel(a)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="projeto_id">Projeto</label>
+            <select
+              id="projeto_id"
+              className="select"
+              value={form.projeto_id}
+              onChange={(e) => {
+                const value = e.target.value
+                update('projeto_id', value)
+                if (!value) return
+                const proj = projetos.find(
+                  (p) => p.projeto_id === Number(value),
+                )
+                if (!proj || scope) return
+                if (proj.ramo != null) update('despesa_ramo', String(proj.ramo))
+                if (proj.secao != null)
+                  update('despesa_secao', String(proj.secao))
+              }}
+              disabled={disabled || isPaid}
+            >
+              <option value="">Nenhum</option>
+              {projetosFiltrados.map((p) => (
+                <option key={p.projeto_id} value={p.projeto_id}>
+                  {projetoLabel(p)}
                 </option>
               ))}
             </select>

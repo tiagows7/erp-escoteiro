@@ -188,6 +188,16 @@ export type Atividade = {
   created_at: string | null
 }
 
+export type Projeto = {
+  projeto_id: number
+  empresa_id: number
+  ramo: number | null
+  secao: number | null
+  descricao: string
+  valor: number
+  created_at: string | null
+}
+
 export type AtividadeConfirmacao = {
   confirmacao_id: number
   empresa_id: number

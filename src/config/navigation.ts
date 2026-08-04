@@ -195,12 +195,13 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Atividades',
     permission: 'atividades.view',
   },
-  {
-    type: 'link',
-    to: '/eventos',
-    label: 'Eventos',
-    permission: 'eventos.view',
-  },
+  // Eventos oculto por enquanto
+  // {
+  //   type: 'link',
+  //   to: '/eventos',
+  //   label: 'Eventos',
+  //   permission: 'eventos.view',
+  // },
   // Vendas oculto por enquanto
   // {
   //   type: 'link',
@@ -208,13 +209,12 @@ export const NAV_ITEMS: NavItem[] = [
   //   label: 'Vendas',
   //   permission: 'vendas.view',
   // },
-  // Projetos oculto por enquanto
-  // {
-  //   type: 'link',
-  //   to: '/projetos',
-  //   label: 'Projetos',
-  //   permission: 'projetos.view',
-  // },
+  {
+    type: 'link',
+    to: '/projetos',
+    label: 'Projetos',
+    permission: 'projetos.view',
+  },
   {
     type: 'link',
     to: '/grupos',
