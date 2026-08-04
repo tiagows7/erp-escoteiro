@@ -237,7 +237,10 @@ export const NAV_ITEMS: NavItem[] = [
 
 /** Menu do associado (login por registro): dashboard + atividades + portal. */
 export function navItemsForProfile(
-  profile: Pick<Profile, 'registro' | 'codigo_ramo' | 'role'> | null,
+  profile: Pick<
+    Profile,
+    'registro' | 'codigo_ramo' | 'role' | 'menu_keys'
+  > | null,
 ): NavItem[] {
   if (isAssociadoLogin(profile)) {
     return [

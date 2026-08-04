@@ -11,6 +11,7 @@ export type CreateUsuarioInput = {
   codigo_ramo?: number | null
   codigo_secao?: number | null
   codigo_secao_nome?: number | null
+  menu_keys?: string[] | null
 }
 
 export type CreateUsuarioResult = {
@@ -189,6 +190,7 @@ async function createViaSignUpFallback(
       codigo_ramo: input.codigo_ramo ?? null,
       codigo_secao: input.codigo_secao ?? null,
       codigo_secao_nome: input.codigo_secao_nome ?? null,
+      menu_keys: input.menu_keys ?? null,
     })
     .select('id, nome, email, role, ativo')
     .single()

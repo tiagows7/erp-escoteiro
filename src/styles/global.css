@@ -2806,6 +2806,40 @@ table.data tbody tr:hover {
   font-size: 0.9rem;
 }
 
+.login-whatsapp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem 1rem;
+  margin-top: 1.5rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid rgba(210, 230, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(10, 28, 52, 0.35);
+  text-align: center;
+  animation: rise 700ms ease both;
+  animation-delay: 120ms;
+}
+
+.login-whatsapp p {
+  margin: 0;
+  color: var(--login-muted);
+  font-size: 0.92rem;
+}
+
+.login-whatsapp-btn {
+  background: #1f8f4e;
+  color: #f4fff8;
+  border: 1px solid rgba(180, 255, 210, 0.22);
+  text-decoration: none;
+}
+
+.login-whatsapp-btn:hover {
+  background: #187a42;
+  color: #fff;
+}
+
 .login-footer {
   position: relative;
   z-index: 1;
@@ -3487,6 +3521,71 @@ table.data tbody tr:hover {
   gap: 1rem;
   align-items: end;
   padding-bottom: 0.35rem;
+}
+
+.usuario-menus-panel {
+  margin-top: 1.35rem;
+  padding-top: 1.15rem;
+  border-top: 1px solid var(--line);
+}
+
+.usuario-menus-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.usuario-menus-head h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+}
+
+.usuario-menus-head .muted {
+  margin: 0;
+  max-width: 42rem;
+}
+
+.usuario-menus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.usuario-menus-groups {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.usuario-menus-group {
+  margin: 0;
+  padding: 0.85rem 1rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.usuario-menus-group legend {
+  padding: 0 0.35rem;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--forest);
+}
+
+.usuario-menus-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.45rem 0.85rem;
+}
+
+.usuario-menus-checks label {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+  font-weight: 500;
+  font-size: 0.92rem;
 }
 
 .field-checks label {

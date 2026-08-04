@@ -16,6 +16,7 @@ import {
   type AppRole,
   type Permission,
 } from '@/lib/roles'
+import { normalizeMenuKeys } from '@/lib/menuAccess'
 import type { Empresa, Profile } from '@/types/database'
 
 type AuthState = {
@@ -59,6 +60,7 @@ function mapProfile(row: Record<string, unknown>): Profile {
       row.registro != null && String(row.registro).trim()
         ? String(row.registro).trim()
         : null,
+    menu_keys: normalizeMenuKeys(row.menu_keys),
   }
 }
 

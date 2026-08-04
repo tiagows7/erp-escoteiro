@@ -1,5 +1,10 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import {
+  firstAllowedMenuPath,
+  pathAllowedByMenuKeys,
+  profileUsesMenuKeys,
+} from '@/lib/menuAccess'
 import { isGrupoAdmin, type Permission } from '@/lib/roles'
 
 type Props = {
@@ -17,7 +22,8 @@ export function RequirePermission({
   grupoAdmin,
   children,
 }: Props) {
-  const { loading, hasPermission, hasAnyPermission, role } = useAuth()
+  const { loading, hasPermission, hasAnyPermission, role, profile } = useAuth()
+  const location = useLocation()
 
   if (loading) {
     return <div className="loading">Carregando permissões…</div>
@@ -35,6 +41,18 @@ export function RequirePermission({
 
   if (!allowed) {
     return <Navigate to="/" replace />
+  }
+
+  if (
+    profileUsesMenuKeys(profile) &&
+    !pathAllowedByMenuKeys(location.pathname, profile?.menu_keys)
+  ) {
+    return (
+      <Navigate
+        to={firstAllowedMenuPath(profile?.menu_keys)}
+        replace
+      />
+    )
   }
 
   return children

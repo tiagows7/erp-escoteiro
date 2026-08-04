@@ -2,6 +2,14 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { buildWhatsAppUrl } from '@/lib/whatsapp'
+
+const CONTATO_WHATSAPP = '51984158948'
+const CONTATO_WHATSAPP_URL =
+  buildWhatsAppUrl({
+    phone: CONTATO_WHATSAPP,
+    text: 'Olá! Gostaria de saber mais sobre o ERP Escoteiro.',
+  }) ?? `https://wa.me/55${CONTATO_WHATSAPP}`
 
 const LOGIN_KEY = 'erp-escoteiro:last-login'
 
@@ -208,6 +216,18 @@ export function LoginPage() {
             </li>
           ))}
         </ul>
+
+        <aside className="login-whatsapp">
+          <p>Dúvidas ou interesse no sistema?</p>
+          <a
+            className="btn login-whatsapp-btn"
+            href={CONTATO_WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Falar no WhatsApp
+          </a>
+        </aside>
       </main>
 
       <p className="login-footer">

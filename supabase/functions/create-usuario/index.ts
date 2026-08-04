@@ -24,6 +24,7 @@ type Payload = {
   codigo_ramo?: number | null
   codigo_secao?: number | null
   codigo_secao_nome?: number | null
+  menu_keys?: string[] | null
 }
 
 Deno.serve(async (req) => {
@@ -144,6 +145,9 @@ Deno.serve(async (req) => {
         codigo_ramo: body.codigo_ramo ?? null,
         codigo_secao: body.codigo_secao ?? null,
         codigo_secao_nome: body.codigo_secao_nome ?? null,
+        menu_keys: Array.isArray(body.menu_keys)
+          ? body.menu_keys.map((k) => String(k).trim()).filter(Boolean)
+          : null,
       })
       .select('id, nome, email, role, ativo, registro')
       .single()

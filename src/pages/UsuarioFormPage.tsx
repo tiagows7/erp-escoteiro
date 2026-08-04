@@ -1,10 +1,15 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { createUsuario, updateUsuarioSenha } from '@/lib/createUsuario'
+import {
+  defaultMenuKeysForRole,
+  menuAccessCatalog,
+  normalizeMenuKeys,
+} from '@/lib/menuAccess'
 import {
   ROLE_LABELS,
   type AppRole,
@@ -32,6 +37,7 @@ const emptyForm = {
   ativo: true,
   codigo_ramo: '',
   codigo_secao: '',
+  menu_keys: defaultMenuKeysForRole('escotista') as string[],
 }
 
 function roleToTipo(role: AppRole): string {
@@ -100,7 +106,7 @@ export function UsuarioFormPage() {
       const { data, error: loadError } = await supabase
         .from('profiles')
         .select(
-          'id, nome, email, username, registro, role, ativo, codigo_ramo, codigo_secao',
+          'id, nome, email, username, registro, role, ativo, codigo_ramo, codigo_secao, menu_keys',
         )
         .eq('id', id)
         .eq('empresa_id', empresaId)
@@ -118,6 +124,8 @@ export function UsuarioFormPage() {
         emailDb.includes('@') && !emailDb.endsWith('@usuarios.local')
           ? emailDb
           : ''
+      const role = normalizeRole(data.role as string)
+      const savedMenus = normalizeMenuKeys(data.menu_keys)
 
       setForm({
         nome: data.nome ?? '',
@@ -125,10 +133,11 @@ export function UsuarioFormPage() {
         registro: data.registro ?? '',
         password: '',
         passwordConfirm: '',
-        role: normalizeRole(data.role as string),
+        role,
         ativo: data.ativo !== false,
         codigo_ramo: data.codigo_ramo?.toString() ?? '',
         codigo_secao: data.codigo_secao?.toString() ?? '',
+        menu_keys: savedMenus ?? defaultMenuKeysForRole(role),
       })
       setLoading(false)
     })()
@@ -157,12 +166,24 @@ export function UsuarioFormPage() {
       return
     }
 
+    const registroDigits = form.registro.replace(/\D/g, '')
+    const isAssociado = !!registroDigits
+    const menuKeysToSave = isAssociado
+      ? null
+      : form.menu_keys.length > 0
+        ? form.menu_keys
+        : null
+    if (!isAssociado && (!menuKeysToSave || menuKeysToSave.length === 0)) {
+      setError('Marque pelo menos um menu de acesso para o usuário.')
+      return
+    }
+
     setSaving(true)
     setError(null)
 
     if (isNew) {
       const email = form.email.trim().toLowerCase()
-      const registro = form.registro.replace(/\D/g, '')
+      const registro = registroDigits
       if (!email && !registro) {
         setSaving(false)
         setError('Informe o e-mail ou o número de registro.')
@@ -188,6 +209,7 @@ export function UsuarioFormPage() {
         ativo: form.ativo,
         codigo_ramo: form.codigo_ramo ? Number(form.codigo_ramo) : null,
         codigo_secao: form.codigo_secao ? Number(form.codigo_secao) : null,
+        menu_keys: menuKeysToSave,
       })
 
       setSaving(false)
@@ -217,7 +239,7 @@ export function UsuarioFormPage() {
       }
     }
 
-    const registro = form.registro.replace(/\D/g, '') || null
+    const registro = registroDigits || null
     const { error: updateError } = await supabase
       .from('profiles')
       .update({
@@ -229,6 +251,7 @@ export function UsuarioFormPage() {
         ativo: form.ativo,
         codigo_ramo: form.codigo_ramo ? Number(form.codigo_ramo) : null,
         codigo_secao: form.codigo_secao ? Number(form.codigo_secao) : null,
+        menu_keys: menuKeysToSave,
       })
       .eq('id', id)
       .eq('empresa_id', empresaId)
@@ -307,6 +330,41 @@ export function UsuarioFormPage() {
   }
 
   const disabled = saving || !canWrite
+  const isAssociadoForm = !!form.registro.trim()
+
+  const menuGroups = useMemo(() => {
+    const catalog = menuAccessCatalog().filter((opt) => {
+      if (!opt.grupoAdminOnly) return true
+      return form.role === 'admin'
+    })
+    const map = new Map<string, typeof catalog>()
+    for (const opt of catalog) {
+      const list = map.get(opt.group) ?? []
+      list.push(opt)
+      map.set(opt.group, list)
+    }
+    return [...map.entries()]
+  }, [form.role])
+
+  function toggleMenuKey(key: string) {
+    setForm((prev) => {
+      const has = prev.menu_keys.includes(key)
+      return {
+        ...prev,
+        menu_keys: has
+          ? prev.menu_keys.filter((k) => k !== key)
+          : [...prev.menu_keys, key],
+      }
+    })
+  }
+
+  function setAllMenus(checked: boolean) {
+    const keys = menuGroups.flatMap(([, opts]) => opts.map((o) => o.key))
+    setForm((prev) => ({
+      ...prev,
+      menu_keys: checked ? keys : [],
+    }))
+  }
 
   return (
     <>
@@ -458,12 +516,14 @@ export function UsuarioFormPage() {
               id="role"
               className="select"
               value={form.role}
-              onChange={(e) =>
+              onChange={(e) => {
+                const role = e.target.value as AppRole
                 setForm((prev) => ({
                   ...prev,
-                  role: e.target.value as AppRole,
+                  role,
+                  menu_keys: defaultMenuKeysForRole(role),
                 }))
-              }
+              }}
               disabled={disabled}
             >
               {GROUP_ROLES.map((role) => (
@@ -473,7 +533,8 @@ export function UsuarioFormPage() {
               ))}
             </select>
             <span className="field-hint">
-              Define o que o usuário pode ver e alterar no sistema.
+              Define o nível padrão de permissões; os menus abaixo podem restringir
+              o que aparece para o usuário.
             </span>
           </div>
 
@@ -549,6 +610,75 @@ export function UsuarioFormPage() {
             </label>
           </div>
         </div>
+
+        <section className="usuario-menus-panel">
+          <div className="usuario-menus-head">
+            <div>
+              <h3>Menus com acesso</h3>
+              <p className="muted">
+                {isAssociadoForm
+                  ? 'Login por registro (associado) usa um menu fixo: Dashboard, Portal, Conquistas e Atividades.'
+                  : 'Marque os menus que este usuário poderá ver e abrir. O papel continua limitando o que ele pode alterar.'}
+              </p>
+            </div>
+            {!isAssociadoForm ? (
+              <div className="usuario-menus-actions">
+                <button
+                  type="button"
+                  className="btn btn-soft"
+                  disabled={disabled}
+                  onClick={() => setAllMenus(true)}
+                >
+                  Marcar todos
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-soft"
+                  disabled={disabled}
+                  onClick={() => setAllMenus(false)}
+                >
+                  Limpar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-soft"
+                  disabled={disabled}
+                  onClick={() =>
+                    setForm((prev) => ({
+                      ...prev,
+                      menu_keys: defaultMenuKeysForRole(prev.role),
+                    }))
+                  }
+                >
+                  Padrão do papel
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          {isAssociadoForm ? null : (
+            <div className="usuario-menus-groups">
+              {menuGroups.map(([group, opts]) => (
+                <fieldset key={group} className="usuario-menus-group">
+                  <legend>{group}</legend>
+                  <div className="usuario-menus-checks">
+                    {opts.map((opt) => (
+                      <label key={opt.key}>
+                        <input
+                          type="checkbox"
+                          checked={form.menu_keys.includes(opt.key)}
+                          onChange={() => toggleMenuKey(opt.key)}
+                          disabled={disabled}
+                        />
+                        {opt.label}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ))}
+            </div>
+          )}
+        </section>
 
         <div className="form-actions">
           {canWrite ? (

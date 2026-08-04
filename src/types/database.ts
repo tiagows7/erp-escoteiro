@@ -60,6 +60,11 @@ export type Profile = {
   codigo_secao: number | null
   codigo_secao_nome: number | null
   registro: string | null
+  /**
+   * Rotas de menu liberadas. `null` = acesso padrão do papel.
+   * Associados (login por registro) ignoram este campo.
+   */
+  menu_keys: string[] | null
 }
 
 export type Empresa = {

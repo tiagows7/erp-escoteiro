@@ -6,6 +6,10 @@ import {
   type NavGroupItem,
   type NavLinkItem,
 } from '@/config/navigation'
+import {
+  filterNavItemsByMenuKeys,
+  profileUsesMenuKeys,
+} from '@/lib/menuAccess'
 
 function groupHasVisibleChild(
   group: NavGroupItem,
@@ -38,7 +42,11 @@ export function AppLayout() {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
   const [menuOpen, setMenuOpen] = useState(false)
 
-  const allItems = useMemo(() => navItemsForProfile(profile), [profile])
+  const allItems = useMemo(() => {
+    const base = navItemsForProfile(profile)
+    if (!profileUsesMenuKeys(profile)) return base
+    return filterNavItemsByMenuKeys(base, profile?.menu_keys)
+  }, [profile])
 
   const items = useMemo(() => {
     return allItems.filter((item) => {
