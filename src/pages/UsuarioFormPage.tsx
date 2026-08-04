@@ -315,6 +315,20 @@ export function UsuarioFormPage() {
     })
   }
 
+  const menuGroups = useMemo(() => {
+    const catalog = menuAccessCatalog().filter((opt) => {
+      if (!opt.grupoAdminOnly) return true
+      return form.role === 'admin'
+    })
+    const map = new Map<string, typeof catalog>()
+    for (const opt of catalog) {
+      const list = map.get(opt.group) ?? []
+      list.push(opt)
+      map.set(opt.group, list)
+    }
+    return [...map.entries()]
+  }, [form.role])
+
   if (!empresaId) {
     return (
       <section className="panel">
@@ -331,20 +345,6 @@ export function UsuarioFormPage() {
 
   const disabled = saving || !canWrite
   const isAssociadoForm = !!form.registro.trim()
-
-  const menuGroups = useMemo(() => {
-    const catalog = menuAccessCatalog().filter((opt) => {
-      if (!opt.grupoAdminOnly) return true
-      return form.role === 'admin'
-    })
-    const map = new Map<string, typeof catalog>()
-    for (const opt of catalog) {
-      const list = map.get(opt.group) ?? []
-      list.push(opt)
-      map.set(opt.group, list)
-    }
-    return [...map.entries()]
-  }, [form.role])
 
   function toggleMenuKey(key: string) {
     setForm((prev) => {

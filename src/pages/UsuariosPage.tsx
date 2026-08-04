@@ -70,14 +70,16 @@ export function UsuariosPage() {
 
     const term = q.trim().toLowerCase()
     if (!term) return list
-    return list.filter(
-      (r) =>
-        r.nome.toLowerCase().includes(term) ||
+    return list.filter((r) => {
+      const papel = String(ROLE_LABELS[r.role] ?? r.role ?? '').toLowerCase()
+      return (
+        (r.nome ?? '').toLowerCase().includes(term) ||
         (r.email ?? '').toLowerCase().includes(term) ||
         (r.username ?? '').toLowerCase().includes(term) ||
         (r.registro ?? '').includes(term) ||
-        (ROLE_LABELS[r.role] ?? r.role).toLowerCase().includes(term),
-    )
+        papel.includes(term)
+      )
+    })
   }, [rows, q, filtroAtivo])
 
   if (!empresaId) {
@@ -179,7 +181,7 @@ export function UsuariosPage() {
                         ? row.email
                         : '—'}
                     </td>
-                    <td>{ROLE_LABELS[row.role] ?? row.role}</td>
+                    <td>{ROLE_LABELS[row.role] ?? row.role ?? '—'}</td>
                     <td>
                       {row.ativo === false ? (
                         <span className="badge">Inativo</span>
