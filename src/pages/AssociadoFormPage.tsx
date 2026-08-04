@@ -1,10 +1,16 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { loadCidades, loadEstados } from '@/lib/brasilLocalidades'
+import {
+  formatLgpdAceite,
+  isMenorDeIdade,
+  registrarConsentimentoLgpd,
+  textoConsentimentoLgpd,
+} from '@/lib/lgpdConsent'
 import type { Ramo } from '@/types/database'
 
 type Lookup = { id: number; nome: string }
@@ -92,6 +98,9 @@ export function AssociadoFormPage() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
+  const [lgpdAceite, setLgpdAceite] = useState(false)
+  const [lgpdAceiteEm, setLgpdAceiteEm] = useState<string | null>(null)
+  const [lgpdAceiteIp, setLgpdAceiteIp] = useState<string | null>(null)
 
   useEffect(() => {
     if (!empresaId) return
@@ -252,6 +261,13 @@ export function AssociadoFormPage() {
         responsavel_email: data.responsavel_email ?? '',
         responsavel_cpf: data.responsavel_cpf ?? '',
       })
+      setLgpdAceiteEm(
+        (data as { lgpd_aceite_em?: string | null }).lgpd_aceite_em ?? null,
+      )
+      setLgpdAceiteIp(
+        (data as { lgpd_aceite_ip?: string | null }).lgpd_aceite_ip ?? null,
+      )
+      setLgpdAceite(false)
       setLoading(false)
     })()
 
@@ -259,6 +275,18 @@ export function AssociadoFormPage() {
       mounted = false
     }
   }, [id, isNew, empresaId])
+
+  const menorIdade = useMemo(
+    () => isMenorDeIdade(form.data_nascimento),
+    [form.data_nascimento],
+  )
+  const textoLgpd = useMemo(
+    () => textoConsentimentoLgpd(menorIdade),
+    [menorIdade],
+  )
+  const jaTemAceite = !!lgpdAceiteEm
+  /** Novo cadastro ou edição sem aceite prévio (obrigatório, sobretudo para menores). */
+  const exigeConsentimento = isNew || !jaTemAceite
 
   function update<K extends keyof typeof emptyForm>(
     key: K,
@@ -280,6 +308,12 @@ export function AssociadoFormPage() {
     if (!form.nome.trim()) {
       setError('Informe o nome do associado.')
       setTab('geral')
+      return
+    }
+    if (exigeConsentimento && !lgpdAceite) {
+      setError(
+        'É obrigatório marcar o consentimento com os Termos de Uso e a Política de Privacidade.',
+      )
       return
     }
 
@@ -355,13 +389,30 @@ export function AssociadoFormPage() {
           .select('associado_id')
           .single()
 
-    setSaving(false)
-
     if (result.error) {
+      setSaving(false)
       setError(result.error.message)
       return
     }
 
+    const associadoId = Number(result.data?.associado_id)
+    if (lgpdAceite && Number.isFinite(associadoId) && associadoId > 0) {
+      const consent = await registrarConsentimentoLgpd({
+        associadoId,
+        empresaId,
+        menorIdade,
+        textoConsentimento: textoLgpd,
+      })
+      if (!consent.ok) {
+        setSaving(false)
+        setError(
+          `Associado salvo, mas o aceite LGPD não foi registrado: ${consent.error}`,
+        )
+        return
+      }
+    }
+
+    setSaving(false)
     navigate('/associados', {
       state: { flashSuccess: 'Salvo com sucesso!' },
     })
@@ -1006,6 +1057,50 @@ export function AssociadoFormPage() {
             </div>
           </div>
         ) : null}
+
+        <section className="lgpd-consent-panel">
+          <h3>Termos e privacidade (LGPD)</h3>
+          {jaTemAceite ? (
+            <p className="muted lgpd-consent-registered">
+              Consentimento registrado:{' '}
+              {formatLgpdAceite(lgpdAceiteEm, lgpdAceiteIp) ?? '—'}
+            </p>
+          ) : null}
+          {exigeConsentimento || canWrite ? (
+            <>
+              <p className="muted">
+                Consulte os{' '}
+                <Link to="/termos-de-uso" target="_blank" rel="noreferrer">
+                  Termos de Uso
+                </Link>{' '}
+                e a{' '}
+                <Link
+                  to="/politica-de-privacidade"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Política de Privacidade
+                </Link>
+                {menorIdade
+                  ? '. Para menores de idade, o responsável legal deve autorizar o tratamento dos dados.'
+                  : '.'}
+              </p>
+              <label className="lgpd-consent-check">
+                <input
+                  type="checkbox"
+                  checked={lgpdAceite}
+                  onChange={(e) => setLgpdAceite(e.target.checked)}
+                  disabled={disabled || (!exigeConsentimento && jaTemAceite)}
+                  required={exigeConsentimento}
+                />
+                <span>
+                  {textoLgpd}
+                  {exigeConsentimento ? ' *' : ''}
+                </span>
+              </label>
+            </>
+          ) : null}
+        </section>
 
         <div className="form-actions">
           {canWrite ? (

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { buildWhatsAppUrl } from '@/lib/whatsapp'
@@ -230,9 +230,14 @@ export function LoginPage() {
         </aside>
       </main>
 
-      <p className="login-footer">
-        ERP Escoteiro · Gestão digital para grupos escoteiros
-      </p>
+      <footer className="login-footer">
+        <p>ERP Escoteiro · Gestão digital para grupos escoteiros</p>
+        <nav className="login-footer-links" aria-label="Documentos legais">
+          <Link to="/termos-de-uso">Termos de Uso</Link>
+          <span aria-hidden="true">·</span>
+          <Link to="/politica-de-privacidade">Política de Privacidade</Link>
+        </nav>
+      </footer>
     </div>
   )
 }

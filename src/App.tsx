@@ -5,6 +5,8 @@ import { AppLayout } from '@/components/AppLayout'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { RequirePermission } from '@/components/RequirePermission'
 import { LoginPage } from '@/pages/LoginPage'
+import { TermosUsoPage } from '@/pages/TermosUsoPage'
+import { PrivacidadePage } from '@/pages/PrivacidadePage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { AssociadosPage } from '@/pages/AssociadosPage'
 import { AssociadoFormPage } from '@/pages/AssociadoFormPage'
@@ -56,6 +58,11 @@ export default function App() {
         <ToastProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/termos-de-uso" element={<TermosUsoPage />} />
+          <Route
+            path="/politica-de-privacidade"
+            element={<PrivacidadePage />}
+          />
           <Route
             path="/transparencia/:slug"
             element={<PortalTransparenciaPage />}

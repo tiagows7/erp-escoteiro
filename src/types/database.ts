@@ -44,6 +44,11 @@ export type Associado = {
   conquista_insignia_bp_data: string | null
   conquista_insignia_madeira: boolean | null
   conquista_insignia_madeira_data: string | null
+  lgpd_aceite_em: string | null
+  lgpd_aceite_ip: string | null
+  lgpd_aceite_por: string | null
+  lgpd_aceite_versao: string | null
+  lgpd_aceite_texto: string | null
 }
 
 export type Profile = {

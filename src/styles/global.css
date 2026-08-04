@@ -2852,6 +2852,131 @@ table.data tbody tr:hover {
   animation-delay: 140ms;
 }
 
+.login-footer p {
+  margin: 0;
+}
+
+.login-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.login-footer-links a {
+  color: rgba(210, 230, 255, 0.88);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.login-footer-links a:hover {
+  color: #fff;
+}
+
+.legal-page {
+  --legal-ink: #eaf1ff;
+  --legal-muted: rgba(214, 226, 248, 0.78);
+  min-height: 100vh;
+  padding: 1.5rem 1rem 2.5rem;
+  color: var(--legal-ink);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(56, 120, 200, 0.28), transparent 55%),
+    radial-gradient(900px 500px at 90% 0%, rgba(30, 90, 70, 0.22), transparent 50%),
+    linear-gradient(160deg, #071525 0%, #0d2438 45%, #102a22 100%);
+}
+
+.legal-atmosphere {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 36px 36px;
+  opacity: 0.35;
+}
+
+.legal-shell {
+  position: relative;
+  z-index: 1;
+  width: min(760px, 100%);
+  margin: 0 auto;
+}
+
+.legal-header {
+  margin-bottom: 1.25rem;
+}
+
+.legal-back {
+  display: inline-block;
+  margin-bottom: 0.85rem;
+  color: rgba(210, 230, 255, 0.9);
+  font-size: 0.92rem;
+  text-decoration: none;
+}
+
+.legal-back:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.legal-header h1 {
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.55rem, 3vw, 2rem);
+  letter-spacing: -0.02em;
+}
+
+.legal-header .muted {
+  margin: 0;
+  color: var(--legal-muted);
+}
+
+.legal-content {
+  padding: 1.25rem 1.35rem 1.5rem;
+  border: 1px solid rgba(210, 230, 255, 0.14);
+  border-radius: 16px;
+  background: rgba(8, 24, 42, 0.55);
+  line-height: 1.65;
+}
+
+.legal-content h2 {
+  margin: 1.35rem 0 0.55rem;
+  font-size: 1.05rem;
+}
+
+.legal-content p,
+.legal-content ul {
+  margin: 0 0 0.75rem;
+  color: rgba(232, 240, 255, 0.9);
+}
+
+.legal-content ul {
+  padding-left: 1.2rem;
+}
+
+.legal-content li + li {
+  margin-top: 0.4rem;
+}
+
+.legal-content a {
+  color: #9fd0ff;
+}
+
+.legal-foot-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-top: 1.25rem;
+  justify-content: center;
+}
+
+.legal-foot-nav a {
+  color: rgba(210, 230, 255, 0.9);
+  font-size: 0.92rem;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -3586,6 +3711,45 @@ table.data tbody tr:hover {
   align-items: center;
   font-weight: 500;
   font-size: 0.92rem;
+}
+
+.lgpd-consent-panel {
+  margin-top: 1.35rem;
+  padding: 1rem 1.1rem 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.lgpd-consent-panel h3 {
+  margin: 0 0 0.45rem;
+  font-size: 1.02rem;
+}
+
+.lgpd-consent-panel .muted {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+}
+
+.lgpd-consent-registered {
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  background: rgba(40, 120, 70, 0.08);
+  color: var(--forest) !important;
+}
+
+.lgpd-consent-check {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  font-size: 0.94rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.lgpd-consent-check input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
 }
 
 .field-checks label {
