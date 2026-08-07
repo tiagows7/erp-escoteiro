@@ -218,7 +218,10 @@ export function ConquistasPanel({ empresaId, alwaysOpen = false }: Props) {
                     {list.map((pessoa) => {
                       const dataLabel = formatDate(pessoa.data)
                       return (
-                        <li key={`${col.id}-${pessoa.associado_id}`}>
+                        <li
+                          key={`${col.id}-${pessoa.associado_id}`}
+                          className="conquista-pessoa-card"
+                        >
                           <div className="conquistas-lista-item">
                             {canOpenAssociado ? (
                               <Link to={`/associados/${pessoa.associado_id}`}>
