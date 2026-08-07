@@ -630,8 +630,13 @@ button {
   min-width: 0;
 }
 
+.conquistas-lista-secao,
 .conquistas-lista-data {
   font-size: 0.8rem;
+}
+
+.conquistas-lista-secao {
+  font-weight: 600;
 }
 
 .conquistas-lista a {

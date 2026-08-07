@@ -7,6 +7,7 @@ type ConquistaPessoa = {
   associado_id: number
   nome: string
   registro: number | null
+  secaoNome: string | null
   data: string | null
 }
 
@@ -89,41 +90,58 @@ export function ConquistasPanel({ empresaId, alwaysOpen = false }: Props) {
     setLoading(true)
     setError(null)
 
-    const { data, error: queryError } = await supabase
-      .from('associados')
-      .select(
-        `associado_id, nome, registro,
-         conquista_cruzeiro_do_sul, conquista_lis_de_ouro,
-         conquista_escoteiro_patria, conquista_insignia_bp,
-         conquista_insignia_madeira,
-         conquista_cruzeiro_do_sul_data, conquista_lis_de_ouro_data,
-         conquista_escoteiro_patria_data, conquista_insignia_bp_data,
-         conquista_insignia_madeira_data`,
-      )
-      .eq('empresa_id', empresaId)
-      .eq('ativo', true)
-      .or(
-        'conquista_cruzeiro_do_sul.eq.true,conquista_lis_de_ouro.eq.true,conquista_escoteiro_patria.eq.true,conquista_insignia_bp.eq.true,conquista_insignia_madeira.eq.true',
-      )
+    const [assocRes, secoesRes] = await Promise.all([
+      supabase
+        .from('associados')
+        .select(
+          `associado_id, nome, registro, secao,
+           conquista_cruzeiro_do_sul, conquista_lis_de_ouro,
+           conquista_escoteiro_patria, conquista_insignia_bp,
+           conquista_insignia_madeira,
+           conquista_cruzeiro_do_sul_data, conquista_lis_de_ouro_data,
+           conquista_escoteiro_patria_data, conquista_insignia_bp_data,
+           conquista_insignia_madeira_data`,
+        )
+        .eq('empresa_id', empresaId)
+        .eq('ativo', true)
+        .or(
+          'conquista_cruzeiro_do_sul.eq.true,conquista_lis_de_ouro.eq.true,conquista_escoteiro_patria.eq.true,conquista_insignia_bp.eq.true,conquista_insignia_madeira.eq.true',
+        ),
+      supabase
+        .from('secao')
+        .select('secao_id, nome')
+        .eq('empresa_id', empresaId),
+    ])
 
-    if (queryError) {
-      setError(queryError.message)
+    if (assocRes.error) {
+      setError(assocRes.error.message)
       setPorColuna(Object.fromEntries(COLUNAS.map((c) => [c.id, []])))
       setLoading(false)
       return
     }
 
+    const secaoMap = new Map(
+      (secoesRes.data ?? []).map((s) => [
+        s.secao_id as number,
+        (s.nome as string) ?? `Seção ${s.secao_id}`,
+      ]),
+    )
+
     const next: Record<string, ConquistaPessoa[]> = Object.fromEntries(
       COLUNAS.map((c) => [c.id, []]),
     )
 
-    for (const row of data ?? []) {
+    for (const row of assocRes.data ?? []) {
+      const secaoId = (row.secao as number | null) ?? null
+      const secaoNome =
+        secaoId != null ? (secaoMap.get(secaoId) ?? `Seção ${secaoId}`) : null
       for (const col of COLUNAS) {
         if (row[col.field] !== true) continue
         next[col.id].push({
           associado_id: row.associado_id as number,
           nome: (row.nome as string) ?? `Associado #${row.associado_id}`,
           registro: (row.registro as number | null) ?? null,
+          secaoNome,
           data: (row[col.dateField] as string | null) ?? null,
         })
       }
@@ -236,6 +254,9 @@ export function ConquistasPanel({ empresaId, alwaysOpen = false }: Props) {
                               <span className="muted"> · {pessoa.registro}</span>
                             ) : null}
                           </div>
+                          <span className="conquistas-lista-secao muted">
+                            {pessoa.secaoNome ?? 'Sem seção'}
+                          </span>
                           <span className="conquistas-lista-data muted">
                             {dataLabel ?? 'Sem data'}
                           </span>
