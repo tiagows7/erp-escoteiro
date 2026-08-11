@@ -4,15 +4,16 @@ import { formatMoney } from '@/lib/receitas'
 import type { PixCobrancaResumo } from '@/lib/pixSicredi'
 import {
   checkPixSicrediPublicStatus,
-  createPixSicrediPublicAcao,
+  createPixSicrediPublic,
   pixPublicPaymentKey,
-  type PixPublicAcaoInput,
+  type PixPublicInput,
 } from '@/lib/pixSicrediPublic'
 
 type Props = {
   open: boolean
   title: string
-  input: PixPublicAcaoInput | null
+  input: PixPublicInput | null
+  paidMessage?: string
   onClose: () => void
   onPaid: () => void
 }
@@ -21,6 +22,7 @@ export function PixSicrediPublicCheckoutModal({
   open,
   title,
   input,
+  paidMessage = 'Pagamento confirmado. Seus números foram reservados.',
   onClose,
   onPaid,
 }: Props) {
@@ -62,7 +64,7 @@ export function PixSicrediPublicCheckoutModal({
       setCobranca(null)
       setQrDataUrl(null)
 
-      const created = await createPixSicrediPublicAcao(input)
+      const created = await createPixSicrediPublic(input)
       if (cancelled) {
         if (sessionKeyRef.current === key && readyKeyRef.current !== key) {
           sessionKeyRef.current = null
@@ -133,7 +135,7 @@ export function PixSicrediPublicCheckoutModal({
 
       if (result.paid) {
         setPhase('paid')
-        setMessage('Pagamento confirmado. Seus números foram reservados.')
+        setMessage(paidMessage)
         if (!paidNotified.current) {
           paidNotified.current = true
           onPaidRef.current()

@@ -254,10 +254,11 @@ export type VendaEvento = {
   valor_convite: number
   data_evento: string | null
   imagem_url: string | null
+  link_token: string
   created_at: string | null
 }
 
-export type VendaEventoFormaPagamento = 'dinheiro' | 'pix_direto'
+export type VendaEventoFormaPagamento = 'dinheiro' | 'pix_direto' | 'pix'
 
 export type VendaEventoCompra = {
   compra_id: number
@@ -268,6 +269,7 @@ export type VendaEventoCompra = {
   valor: number
   forma_pagamento: VendaEventoFormaPagamento | null
   vendido_por: string | null
+  pix_cobranca_id: number | null
   vendido_em: string
   created_at: string | null
 }

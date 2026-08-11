@@ -297,7 +297,7 @@ export function navItemsForProfile(
       {
         type: 'link',
         to: '/vendas/eventos',
-        label: 'Eventos',
+        label: 'Comprar convites',
         permission: 'vendas.view',
       },
     ]
@@ -306,13 +306,15 @@ export function navItemsForProfile(
       const filtered = associadoMenus.filter(
         (item) => item.type === 'link' && keys.includes(item.to),
       )
-      // Projetos: sempre visível para associado (somente leitura).
+      // Projetos e compra de convites: sempre visíveis para associado.
       // Ação entre amigos: só aparece se tiver faixa (filtrado no AppLayout).
-      if (!filtered.some((item) => item.type === 'link' && item.to === '/projetos')) {
-        const projetos = associadoMenus.find(
-          (item) => item.type === 'link' && item.to === '/projetos',
-        )
-        if (projetos) filtered.push(projetos)
+      for (const alwaysTo of ['/projetos', '/vendas/eventos'] as const) {
+        if (!filtered.some((item) => item.type === 'link' && item.to === alwaysTo)) {
+          const item = associadoMenus.find(
+            (entry) => entry.type === 'link' && entry.to === alwaysTo,
+          )
+          if (item) filtered.push(item)
+        }
       }
       return filtered
     }

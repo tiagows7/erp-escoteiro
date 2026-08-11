@@ -9,6 +9,7 @@ import {
   comprarConvitesEvento,
   totalConvitesEvento,
 } from '@/lib/vendaEventos'
+import { linkPublicoVendaEvento } from '@/lib/vendaEventosPublic'
 import { isAssociadoLogin } from '@/lib/roles'
 import type {
   VendaEvento,
@@ -63,7 +64,7 @@ export function VendaEventoVendaPage() {
       supabase
         .from('venda_eventos')
         .select(
-          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, created_at',
+          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, link_token, created_at',
         )
         .eq('evento_id', eventoId)
         .eq('empresa_id', empresaId)
@@ -119,6 +120,23 @@ export function VendaEventoVendaPage() {
     setFormaPagamento(null)
     setUltimaNumeracao(null)
     setError(null)
+  }
+
+  async function copiarLink(token: string | null | undefined) {
+    if (!token) {
+      toast.error('Atenção', 'Link ainda não disponível para este evento.')
+      return
+    }
+    const url = linkPublicoVendaEvento(token)
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success(
+        'Link copiado!',
+        'Envie para quem for comprar os convites fora do app.',
+      )
+    } catch {
+      window.prompt('Copie o link:', url)
+    }
   }
 
   async function onComprar(event: FormEvent) {
@@ -202,7 +220,7 @@ export function VendaEventoVendaPage() {
     <>
       <header className="page-header">
         <div>
-          <h2>Vender convites</h2>
+          <h2>{associadoLogin ? 'Comprar convites' : 'Vender convites'}</h2>
           <p>
             {evento.nome} · {formatMoney(valorUnitario)} cada
             {evento.data_evento
@@ -211,6 +229,15 @@ export function VendaEventoVendaPage() {
           </p>
         </div>
         <div className="page-header-actions actions-pair">
+          {evento.link_token ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void copiarLink(evento.link_token)}
+            >
+              Copiar link de compra
+            </button>
+          ) : null}
           {canStaffEdit ? (
             <Link
               className="btn btn-soft"
@@ -372,10 +399,14 @@ export function VendaEventoVendaPage() {
                 >
                   {saving
                     ? 'Salvando…'
-                    : quantidade === 1
-                      ? 'Confirmar 1 convite'
-                      : `Confirmar ${quantidade} convites`}
-                </button>
+                    : associadoLogin
+                      ? quantidade === 1
+                        ? 'Comprar 1 convite'
+                        : `Comprar ${quantidade} convites`
+                      : quantidade === 1
+                        ? 'Confirmar 1 convite'
+                        : `Confirmar ${quantidade} convites`}
+                  </button>
                 <button
                   type="button"
                   className="btn btn-soft"

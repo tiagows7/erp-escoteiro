@@ -2,12 +2,28 @@ import { supabase } from '@/lib/supabase'
 import type { PixCobrancaResumo } from '@/lib/pixSicredi'
 
 export type PixPublicAcaoInput = {
+  kind?: 'acao'
   linkToken: string
   numeros: number[]
   compradorNome: string
   compradorTelefone: string
   valor: number
   descricao: string
+}
+
+export type PixPublicEventoInput = {
+  kind: 'evento'
+  linkToken: string
+  nomes: string[]
+  compradorTelefone: string
+  valor: number
+  descricao: string
+}
+
+export type PixPublicInput = PixPublicAcaoInput | PixPublicEventoInput
+
+function isEventoInput(input: PixPublicInput): input is PixPublicEventoInput {
+  return input.kind === 'evento'
 }
 
 async function readFunctionsError(error: unknown): Promise<string | null> {
@@ -22,8 +38,18 @@ async function readFunctionsError(error: unknown): Promise<string | null> {
   return null
 }
 
-export function pixPublicPaymentKey(input: PixPublicAcaoInput): string {
+export function pixPublicPaymentKey(input: PixPublicInput): string {
+  if (isEventoInput(input)) {
+    return [
+      'evento',
+      input.linkToken,
+      input.valor,
+      input.nomes.join('|'),
+      input.compradorTelefone.trim(),
+    ].join('|')
+  }
   return [
+    'acao',
     input.linkToken,
     input.valor,
     [...input.numeros].sort((a, b) => a - b).join(','),
@@ -32,21 +58,31 @@ export function pixPublicPaymentKey(input: PixPublicAcaoInput): string {
   ].join('|')
 }
 
-export async function createPixSicrediPublicAcao(
-  input: PixPublicAcaoInput,
+export async function createPixSicrediPublic(
+  input: PixPublicInput,
 ): Promise<
   | { ok: true; cobranca: PixCobrancaResumo }
   | { ok: false; error: string; configured?: boolean }
 > {
+  const body = isEventoInput(input)
+    ? {
+        action: 'create_public_evento',
+        link_token: input.linkToken,
+        nomes: input.nomes,
+        comprador_telefone: input.compradorTelefone,
+        descricao: input.descricao,
+      }
+    : {
+        action: 'create_public',
+        link_token: input.linkToken,
+        numeros: input.numeros,
+        comprador_nome: input.compradorNome,
+        comprador_telefone: input.compradorTelefone,
+        descricao: input.descricao,
+      }
+
   const { data, error } = await supabase.functions.invoke('pix-sicredi', {
-    body: {
-      action: 'create_public',
-      link_token: input.linkToken,
-      numeros: input.numeros,
-      comprador_nome: input.compradorNome,
-      comprador_telefone: input.compradorTelefone,
-      descricao: input.descricao,
-    },
+    body,
   })
 
   if (error) {
@@ -71,6 +107,16 @@ export async function createPixSicrediPublicAcao(
   }
 
   return { ok: true, cobranca: data.cobranca as PixCobrancaResumo }
+}
+
+/** @deprecated use createPixSicrediPublic */
+export async function createPixSicrediPublicAcao(
+  input: PixPublicAcaoInput,
+): Promise<
+  | { ok: true; cobranca: PixCobrancaResumo }
+  | { ok: false; error: string; configured?: boolean }
+> {
+  return createPixSicrediPublic(input)
 }
 
 export async function checkPixSicrediPublicStatus(

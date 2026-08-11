@@ -90,6 +90,22 @@ export function AppLayout() {
       })
     }
 
+    // Associado: sempre pode comprar convites de eventos.
+    if (
+      isAssociadoLogin(profile) &&
+      hasPermission('vendas.view') &&
+      !filtered.some(
+        (item) => item.type === 'link' && item.to === '/vendas/eventos',
+      )
+    ) {
+      filtered.push({
+        type: 'link',
+        to: '/vendas/eventos',
+        label: 'Comprar convites',
+        permission: 'vendas.view',
+      })
+    }
+
     return filtered
   }, [allItems, hasPermission, profile, acaoMenuLoading, temAcao])
 

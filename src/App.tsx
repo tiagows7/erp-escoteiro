@@ -31,6 +31,7 @@ import { AcaoEntreAmigosPublicPage } from '@/pages/AcaoEntreAmigosPublicPage'
 import { VendaEventosPage } from '@/pages/VendaEventosPage'
 import { VendaEventoFormPage } from '@/pages/VendaEventoFormPage'
 import { VendaEventoVendaPage } from '@/pages/VendaEventoVendaPage'
+import { VendaEventoPublicPage } from '@/pages/VendaEventoPublicPage'
 import { UsuariosPage } from '@/pages/UsuariosPage'
 import { UsuarioFormPage } from '@/pages/UsuarioFormPage'
 import { FornecedoresPage } from '@/pages/FornecedoresPage'
@@ -77,6 +78,10 @@ export default function App() {
           <Route
             path="/rifa/:token"
             element={<AcaoEntreAmigosPublicPage />}
+          />
+          <Route
+            path="/ingresso/:token"
+            element={<VendaEventoPublicPage />}
           />
           <Route
             element={

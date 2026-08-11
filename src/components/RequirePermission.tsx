@@ -64,10 +64,11 @@ export function RequirePermission({
       location.pathname,
       profile?.menu_keys,
     )
-    // Associado: Projetos sempre liberado; ação só se tiver faixa.
+    // Associado: Projetos e Eventos/convites sempre liberados; ação só se tiver faixa.
     const associadoExtra =
       isAssociadoLogin(profile) &&
       (pathMatchesMenuKey(location.pathname, '/projetos') ||
+        pathMatchesMenuKey(location.pathname, '/vendas/eventos') ||
         (isAcaoPath && temAcao))
     if (!menuOk && !associadoExtra) {
       return (

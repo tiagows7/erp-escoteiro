@@ -6,7 +6,9 @@ import { AddIcon } from '@/components/AddIcon'
 import { AlertMessage } from '@/components/AlertMessage'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 import { formatMoney } from '@/lib/despesas'
+import { useToast } from '@/contexts/ToastContext'
 import { totalConvitesEvento } from '@/lib/vendaEventos'
+import { linkPublicoVendaEvento } from '@/lib/vendaEventosPublic'
 import { isAssociadoLogin } from '@/lib/roles'
 import type { VendaEvento } from '@/types/database'
 
@@ -28,6 +30,7 @@ export function VendaEventosPage() {
   const canWrite = !associadoLogin && hasPermission('vendas.write')
   const empresaId = empresa?.id
   const flashTick = useFlashSuccess()
+  const toast = useToast()
 
   const [rows, setRows] = useState<EventoRow[]>([])
   const [q, setQ] = useState('')
@@ -48,7 +51,7 @@ export function VendaEventosPage() {
         supabase
           .from('venda_eventos')
           .select(
-            'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, created_at',
+            'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, link_token, created_at',
           )
           .eq('empresa_id', empresaId)
           .order('nome'),
@@ -98,6 +101,20 @@ export function VendaEventosPage() {
     return rows.filter((r) => r.nome.toLowerCase().includes(term))
   }, [rows, q])
 
+  async function copiarLink(token: string | null | undefined) {
+    if (!token) {
+      toast.error('Atenção', 'Link ainda não disponível para este evento.')
+      return
+    }
+    const url = linkPublicoVendaEvento(token)
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success('Link copiado!', 'Envie para compra fora do app.')
+    } catch {
+      window.prompt('Copie o link:', url)
+    }
+  }
+
   if (!empresaId) {
     return (
       <section className="panel">
@@ -112,8 +129,12 @@ export function VendaEventosPage() {
     <>
       <header className="page-header">
         <div>
-          <h2>Eventos</h2>
-          <p>Venda de convites numerados para conferência no dia</p>
+          <h2>{associadoLogin ? 'Comprar convites' : 'Eventos'}</h2>
+          <p>
+            {associadoLogin
+              ? 'Escolha o evento e compre a quantidade de convites desejada'
+              : 'Venda de convites numerados para conferência no dia'}
+          </p>
         </div>
         <div className="page-header-actions actions-pair">
           {canWrite ? (
@@ -184,8 +205,15 @@ export function VendaEventosPage() {
                         className="btn btn-primary"
                         to={`/vendas/eventos/${row.evento_id}/vender`}
                       >
-                        Vender
+                        {associadoLogin ? 'Comprar' : 'Vender'}
                       </Link>
+                      <button
+                        type="button"
+                        className="btn btn-soft"
+                        onClick={() => void copiarLink(row.link_token)}
+                      >
+                        Link
+                      </button>
                       {canWrite ? (
                         <Link
                           className="btn btn-soft"

@@ -40,6 +40,14 @@ type CreatePublicBody = {
   descricao?: string
 }
 
+type CreatePublicEventoBody = {
+  action: 'create_public_evento'
+  link_token: string
+  nomes: string[]
+  comprador_telefone: string
+  descricao?: string
+}
+
 type StatusPublicBody = {
   action: 'status_public'
   cobranca_id: number
@@ -51,6 +59,7 @@ type PixRequestBody =
   | StatusBody
   | ConfigBody
   | CreatePublicBody
+  | CreatePublicEventoBody
   | StatusPublicBody
 
 function tipoUsaPixRamo(tipo: string): boolean {
@@ -891,6 +900,8 @@ async function concluirEBaixar(
     })
   } else if (tipo === 'acao_entre_amigos') {
     await baixarAcaoEntreAmigos(admin, cob)
+  } else if (tipo === 'venda_evento') {
+    await baixarVendaEvento(admin, cob)
   }
 
   const { error } = await admin
@@ -907,6 +918,105 @@ async function concluirEBaixar(
 
   if (error) throw new Error(error.message)
   return { paid: true, baixado: true }
+}
+
+async function baixarVendaEvento(
+  admin: ReturnType<typeof createClient>,
+  cob: Record<string, unknown>,
+) {
+  const empresaId = cob.empresa_id as number
+  const eventoId = cob.evento_id as number
+  const cobrancaId = cob.id as number
+  const telefone = String(cob.comprador_telefone ?? '').trim()
+  const nomes = Array.isArray(cob.nomes)
+    ? (cob.nomes as unknown[])
+        .map((n) => String(n ?? '').trim())
+        .filter(Boolean)
+        .map((n) => n.slice(0, 200))
+    : []
+  const valorTotal = Number(cob.valor)
+
+  if (!eventoId || nomes.length === 0) {
+    throw new Error('Cobrança de evento incompleta.')
+  }
+
+  const { count: existing } = await admin
+    .from('venda_evento_compra')
+    .select('compra_id', { count: 'exact', head: true })
+    .eq('pix_cobranca_id', cobrancaId)
+  if ((existing ?? 0) > 0) return
+
+  const { data: evento, error: eventoError } = await admin
+    .from('venda_eventos')
+    .select('evento_id, empresa_id, numero_inicial, numero_final')
+    .eq('evento_id', eventoId)
+    .eq('empresa_id', empresaId)
+    .maybeSingle()
+
+  if (eventoError || !evento) {
+    throw new Error(eventoError?.message ?? 'Evento não encontrado.')
+  }
+
+  const { data: ocupados } = await admin
+    .from('venda_evento_convite')
+    .select('numero')
+    .eq('evento_id', eventoId)
+
+  const ocupadosSet = new Set(
+    (ocupados ?? []).map((r) => Number(r.numero)),
+  )
+  const livres: number[] = []
+  for (
+    let n = Number(evento.numero_inicial);
+    n <= Number(evento.numero_final);
+    n += 1
+  ) {
+    if (!ocupadosSet.has(n)) {
+      livres.push(n)
+      if (livres.length >= nomes.length) break
+    }
+  }
+
+  if (livres.length < nomes.length) {
+    throw new Error(
+      `Só há ${livres.length} convite(s) disponível(is) após o pagamento.`,
+    )
+  }
+
+  const { data: compra, error: compraError } = await admin
+    .from('venda_evento_compra')
+    .insert({
+      empresa_id: empresaId,
+      evento_id: eventoId,
+      quantidade: nomes.length,
+      comprador_telefone: telefone ? telefone.slice(0, 40) : null,
+      valor: valorTotal,
+      forma_pagamento: 'pix',
+      vendido_por: null,
+      pix_cobranca_id: cobrancaId,
+    })
+    .select('compra_id')
+    .single()
+
+  if (compraError || !compra) {
+    throw new Error(compraError?.message ?? 'Falha ao gravar compra.')
+  }
+
+  const rows = nomes.map((nome, i) => ({
+    empresa_id: empresaId,
+    evento_id: eventoId,
+    compra_id: compra.compra_id,
+    numero: livres[i],
+    nome,
+  }))
+
+  const { error: conviteError } = await admin
+    .from('venda_evento_convite')
+    .insert(rows)
+
+  if (conviteError) {
+    throw new Error(conviteError.message)
+  }
 }
 
 async function baixarAcaoEntreAmigos(
@@ -1146,6 +1256,126 @@ Deno.serve(async (req) => {
         return json({ ok: true, configured: true, cobranca: row })
       }
 
+      if (peek?.action === 'create_public_evento') {
+        const body = peek as CreatePublicEventoBody
+        const token = String(body.link_token ?? '').trim()
+        const fone = String(body.comprador_telefone ?? '').trim()
+        const nomesOrdered = (Array.isArray(body.nomes) ? body.nomes : [])
+          .map((n) => String(n ?? '').trim())
+          .filter(Boolean)
+          .map((n) => n.slice(0, 200))
+
+        if (!token) return json({ error: 'Link inválido.' }, 400)
+        if (!fone) {
+          return json({ error: 'Informe o telefone do comprador.' }, 400)
+        }
+        if (nomesOrdered.length === 0) {
+          return json({ error: 'Informe ao menos um nome.' }, 400)
+        }
+
+        const { data: evento, error: eventoError } = await admin
+          .from('venda_eventos')
+          .select(
+            'evento_id, empresa_id, nome, valor_convite, numero_inicial, numero_final, link_token',
+          )
+          .eq('link_token', token)
+          .maybeSingle()
+
+        if (eventoError || !evento) {
+          return json({ error: 'Link inválido ou expirado.' }, 404)
+        }
+
+        const total =
+          Number(evento.numero_final) - Number(evento.numero_inicial) + 1
+        const { count: vendidos } = await admin
+          .from('venda_evento_convite')
+          .select('convite_id', { count: 'exact', head: true })
+          .eq('evento_id', evento.evento_id)
+        const disponiveis = Math.max(0, total - (vendidos ?? 0))
+
+        if (nomesOrdered.length > disponiveis) {
+          return json(
+            {
+              error: `Só há ${disponiveis} convite(s) disponível(is).`,
+            },
+            409,
+          )
+        }
+
+        const valorUnit = Number(evento.valor_convite ?? 0)
+        if (!Number.isFinite(valorUnit) || valorUnit <= 0) {
+          return json(
+            { error: 'Valor do convite não configurado neste evento.' },
+            400,
+          )
+        }
+        const valor =
+          Math.round(valorUnit * nomesOrdered.length * 100) / 100
+
+        const resolved = await resolveSicrediConfig(admin, {
+          empresaId: evento.empresa_id as number,
+          tipo: 'venda_evento',
+          ramoId: null,
+        })
+        if (!resolved.cfg) {
+          return json(
+            {
+              error:
+                resolved.hint ||
+                'PIX Sicredi não configurado para este grupo.',
+              configured: false,
+            },
+            503,
+          )
+        }
+
+        const cfg = resolved.cfg
+        const txid = generateTxid()
+        const descricao =
+          body.descricao?.trim() ||
+          `${evento.nome} · ${nomesOrdered.length} convite(s)`
+
+        const cobRes = await createCob(cfg, { valor, descricao, txid })
+        const status = String(cobRes.status ?? 'ATIVA')
+
+        const { data: row, error: insertError } = await admin
+          .from('pix_cobrancas')
+          .insert({
+            empresa_id: evento.empresa_id,
+            associado_id: null,
+            created_by: null,
+            tipo: 'venda_evento',
+            receita_ids: [],
+            atividade_id: null,
+            ramo_id: null,
+            evento_id: evento.evento_id,
+            link_token: token,
+            nomes: nomesOrdered,
+            comprador_telefone: fone.slice(0, 40),
+            comprador_nome: nomesOrdered[0] ?? null,
+            valor,
+            txid: cobRes.txid ?? txid,
+            status,
+            pix_copia_e_cola: cobRes.pixCopiaECola ?? null,
+            location: cobRes.location ?? null,
+            descricao,
+            raw_create: cobRes,
+          })
+          .select(
+            'id, txid, status, valor, pix_copia_e_cola, location, descricao, created_at',
+          )
+          .single()
+
+        if (insertError || !row) {
+          return json(
+            { error: insertError?.message ?? 'Falha ao salvar cobrança.' },
+            400,
+          )
+        }
+
+        return json({ ok: true, configured: true, cobranca: row })
+      }
+
       if (peek?.action === 'status_public') {
         const body = peek as StatusPublicBody
         const cobrancaId = Number(body.cobranca_id)
@@ -1158,7 +1388,7 @@ Deno.serve(async (req) => {
           .from('pix_cobrancas')
           .select('*')
           .eq('id', cobrancaId)
-          .eq('tipo', 'acao_entre_amigos')
+          .in('tipo', ['acao_entre_amigos', 'venda_evento'])
           .eq('link_token', token)
           .maybeSingle()
 
@@ -1186,7 +1416,7 @@ Deno.serve(async (req) => {
 
         const resolved = await resolveSicrediConfig(admin, {
           empresaId: cob.empresa_id as number,
-          tipo: 'acao_entre_amigos',
+          tipo: String(cob.tipo),
           ramoId: (cob.ramo_id as number | null) ?? null,
         })
         if (!resolved.cfg) {
