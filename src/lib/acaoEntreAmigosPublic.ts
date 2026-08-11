@@ -9,6 +9,7 @@ export type AcaoPublicInfo = {
   vendedor_nome: string
   empresa_nome: string
   numeros_vendidos: number[]
+  imagem_url: string | null
 }
 
 export function linkPublicoAcaoEntreAmigos(token: string): string {
@@ -40,6 +41,7 @@ export async function fetchAcaoPublicInfo(
       numeros_vendidos: Array.isArray(row.numeros_vendidos)
         ? row.numeros_vendidos.map((n: unknown) => Number(n))
         : [],
+      imagem_url: row.imagem_url ? String(row.imagem_url) : null,
     },
     error: null,
   }

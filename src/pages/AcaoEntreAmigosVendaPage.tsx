@@ -125,7 +125,7 @@ export function AcaoEntreAmigosVendaPage() {
         supabase
           .from('acao_entre_amigos')
           .select(
-            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, created_at',
+            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, imagem_url, created_at',
           )
           .eq('acao_id', acaoId)
           .eq('empresa_id', empresaId)
@@ -465,6 +465,16 @@ export function AcaoEntreAmigosVendaPage() {
           </Link>
         </div>
       </header>
+
+      {acao.imagem_url ? (
+        <div className="acao-imagem-banner-wrap">
+          <img
+            className="acao-imagem-banner"
+            src={acao.imagem_url}
+            alt={`Imagem da ação ${acao.nome}`}
+          />
+        </div>
+      ) : null}
 
       {error ? (
         <AlertMessage tone="error" title="Atenção">

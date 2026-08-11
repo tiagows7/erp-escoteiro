@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -10,6 +16,7 @@ import {
 } from '@/lib/acaoEntreAmigos'
 import { formatMoney, parseMoneyInput } from '@/lib/despesas'
 import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
+import { uploadAcaoEntreAmigosImagem } from '@/lib/uploadAcaoEntreAmigosImagem'
 import type { AcaoEntreAmigosFaixa, Ramo } from '@/types/database'
 
 type Secao = { secao_id: number; nome: string; ramo: number | null }
@@ -80,6 +87,10 @@ export function AcaoEntreAmigosFormPage() {
   const [saving, setSaving] = useState(false)
   const [savingFaixa, setSavingFaixa] = useState(false)
   const [loading, setLoading] = useState(!isNew)
+  const [imagemUrl, setImagemUrl] = useState<string | null>(null)
+  const [imagemFile, setImagemFile] = useState<File | null>(null)
+  const [imagemPreview, setImagemPreview] = useState<string | null>(null)
+  const imagemInputRef = useRef<HTMLInputElement>(null)
 
   const ramoId = form.ramo ? Number(form.ramo) : null
   const secaoId = form.secao ? Number(form.secao) : null
@@ -208,7 +219,7 @@ export function AcaoEntreAmigosFormPage() {
       const { data, error: loadError } = await supabase
         .from('acao_entre_amigos')
         .select(
-          'acao_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero',
+          'acao_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, imagem_url',
         )
         .eq('acao_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -238,6 +249,9 @@ export function AcaoEntreAmigosFormPage() {
           .replace('R$', '')
           .trim(),
       })
+      setImagemUrl(data.imagem_url ?? null)
+      setImagemPreview(data.imagem_url ?? null)
+      setImagemFile(null)
       await loadFaixas(Number(id))
       setLoading(false)
     })()
@@ -260,6 +274,14 @@ export function AcaoEntreAmigosFormPage() {
       }
       return next
     })
+  }
+
+  function onImagemFileChange(file: File | null) {
+    if (imagemPreview && imagemPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(imagemPreview)
+    }
+    setImagemFile(file)
+    setImagemPreview(file ? URL.createObjectURL(file) : imagemUrl)
   }
 
   async function onSubmit(event: FormEvent) {
@@ -333,15 +355,41 @@ export function AcaoEntreAmigosFormPage() {
           .select('acao_id')
           .single()
 
-    setSaving(false)
-
     if (result.error) {
+      setSaving(false)
       setError(result.error.message)
       return
     }
 
-    if (isNew && result.data?.acao_id) {
-      navigate(`/vendas/acao-entre-amigos/${result.data.acao_id}`, {
+    const acaoIdSalva = Number(result.data?.acao_id ?? id)
+    if (imagemFile && Number.isFinite(acaoIdSalva) && acaoIdSalva > 0) {
+      const imgOk = await uploadAcaoEntreAmigosImagem(
+        empresaId,
+        acaoIdSalva,
+        imagemFile,
+      )
+      if ('error' in imgOk) {
+        setSaving(false)
+        setError(`Ação salva, mas a imagem falhou: ${imgOk.error}`)
+        if (isNew) {
+          navigate(`/vendas/acao-entre-amigos/${acaoIdSalva}`, {
+            state: {
+              flashSuccess:
+                'Ação salva! Agora atribua as faixas. A imagem pode ser enviada na edição.',
+            },
+          })
+        }
+        return
+      }
+      setImagemUrl(imgOk.url)
+      setImagemPreview(imgOk.url)
+      setImagemFile(null)
+    }
+
+    setSaving(false)
+
+    if (isNew && acaoIdSalva > 0) {
+      navigate(`/vendas/acao-entre-amigos/${acaoIdSalva}`, {
         state: {
           flashSuccess:
             'Ação salva! Agora atribua as faixas de números aos jovens.',
@@ -635,6 +683,54 @@ export function AcaoEntreAmigosFormPage() {
             {qtdePreview != null ? (
               <span className="field-hint">{qtdePreview} número(s) na faixa</span>
             ) : null}
+          </div>
+
+          <div className="field field-span-2">
+            <label htmlFor="acao-imagem">Imagem da ação</label>
+            <div className="logo-upload-field">
+              {imagemPreview ? (
+                <img
+                  className="acao-imagem-preview"
+                  src={imagemPreview}
+                  alt="Pré-visualização da imagem da ação"
+                />
+              ) : (
+                <div className="logo-preview logo-preview-placeholder">
+                  Sem imagem
+                </div>
+              )}
+              <div>
+                <input
+                  ref={imagemInputRef}
+                  id="acao-imagem"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  disabled={disabled}
+                  onChange={(e) =>
+                    onImagemFileChange(e.target.files?.[0] ?? null)
+                  }
+                />
+                <span className="field-hint">
+                  PNG, JPG, WEBP ou GIF · máx. 2 MB. Aparece na tela de vender e
+                  no link público.
+                </span>
+                {imagemFile ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ marginTop: '0.4rem' }}
+                    onClick={() => {
+                      onImagemFileChange(null)
+                      if (imagemInputRef.current) {
+                        imagemInputRef.current.value = ''
+                      }
+                    }}
+                  >
+                    Remover seleção
+                  </button>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
 

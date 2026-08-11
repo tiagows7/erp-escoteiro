@@ -3928,8 +3928,35 @@ table.data tbody tr:hover {
     linear-gradient(180deg, #f7faf7 0%, #eef3ef 100%);
 }
 
+.acao-imagem-preview {
+  width: min(100%, 280px);
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+
+.acao-imagem-banner-wrap {
+  margin: 0 0 1rem;
+}
+
+.acao-imagem-banner {
+  display: block;
+  width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+
 .public-rifa-header {
   margin-bottom: 1rem;
+}
+
+.public-rifa-header .acao-imagem-banner {
+  margin-bottom: 0.85rem;
 }
 
 .public-rifa-header h1 {

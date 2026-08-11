@@ -208,6 +208,7 @@ export type AcaoEntreAmigos = {
   numero_inicial: number
   numero_final: number
   valor_numero: number
+  imagem_url: string | null
   created_at: string | null
 }
 

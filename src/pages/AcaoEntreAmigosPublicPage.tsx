@@ -130,6 +130,13 @@ export function AcaoEntreAmigosPublicPage() {
   return (
     <div className="public-rifa-page">
       <header className="public-rifa-header">
+        {info.imagem_url ? (
+          <img
+            className="acao-imagem-banner"
+            src={info.imagem_url}
+            alt={`Imagem da ação ${info.acao_nome}`}
+          />
+        ) : null}
         <p className="muted">{info.empresa_nome}</p>
         <h1>{info.acao_nome}</h1>
         <p>
