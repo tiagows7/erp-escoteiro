@@ -31,8 +31,8 @@ const SISTEMA_DESTAQUES = [
     texto: 'Despesas e receitas vinculadas, resumo financeiro e encerramento.',
   },
   {
-    titulo: 'Projetos e rifas',
-    texto: 'Ação entre amigos e projetos com venda e encerramento ao final.',
+    titulo: 'Projetos e ação entre amigos',
+    texto: 'Campanhas com venda de números e encerramento ao final.',
   },
   {
     titulo: 'Portal da Transparência',

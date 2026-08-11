@@ -4,10 +4,13 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { PixSicrediPublicCheckoutModal } from '@/components/PixSicrediPublicCheckoutModal'
 import { numerosDaFaixa } from '@/lib/acaoEntreAmigos'
 import { linkPublicoAcaoEntreAmigos } from '@/lib/acaoEntreAmigosPublic'
 import { formatMoney } from '@/lib/despesas'
 import { isEncerrado } from '@/lib/encerrado'
+import { empresaTemPixParaEscopo } from '@/lib/pixSicredi'
+import type { PixPublicAcaoInput } from '@/lib/pixSicrediPublic'
 import {
   financeiroScopeFromProfile,
   isAssociadoLogin,
@@ -20,10 +23,7 @@ import type {
   AcaoEntreAmigosVenda,
 } from '@/types/database'
 
-type FormaPagamentoApp = Extract<
-  AcaoEntreAmigosFormaPagamento,
-  'dinheiro' | 'pix_direto'
->
+type FormaPagamentoApp = AcaoEntreAmigosFormaPagamento
 
 function labelFormaPagamento(
   forma: AcaoEntreAmigosFormaPagamento | null | undefined,
@@ -75,6 +75,9 @@ export function AcaoEntreAmigosVendaPage() {
   const [compradorTelefone, setCompradorTelefone] = useState('')
   const [formaPagamento, setFormaPagamento] =
     useState<FormaPagamentoApp | null>(null)
+  const [pixOnlineDisponivel, setPixOnlineDisponivel] = useState(false)
+  const [pixOpen, setPixOpen] = useState(false)
+  const [pixInput, setPixInput] = useState<PixPublicAcaoInput | null>(null)
   const [saving, setSaving] = useState(false)
 
   const vendidos = useMemo(
@@ -277,8 +280,16 @@ export function AcaoEntreAmigosVendaPage() {
       setStaffFaixas(faixasList)
     }
 
-    setAcao(acaoRes.data as AcaoEntreAmigos)
+    const acaoRow = acaoRes.data as AcaoEntreAmigos
+    setAcao(acaoRow)
     setVendas(vendasRows)
+    setPixOnlineDisponivel(
+      await empresaTemPixParaEscopo({
+        empresaId,
+        ramoId: acaoRow.ramo,
+        secaoId: acaoRow.secao,
+      }),
+    )
     setError(null)
     setLoading(false)
   }
@@ -294,6 +305,16 @@ export function AcaoEntreAmigosVendaPage() {
     ramoScoped,
     secaoScoped,
   ])
+
+  function linkTokenParaNumeros(numeros: number[]): string | null {
+    if (associadoLogin) {
+      return faixa?.link_token ?? null
+    }
+    const match = staffFaixas.find((f) =>
+      numeros.every((n) => n >= f.numero_inicial && n <= f.numero_final),
+    )
+    return match?.link_token ?? null
+  }
 
   function toggleNumero(numero: number) {
     if (vendidos.has(numero)) return
@@ -346,7 +367,9 @@ export function AcaoEntreAmigosVendaPage() {
       return
     }
     if (!formaPagamento) {
-      setError('Selecione a forma de pagamento: Dinheiro ou PIX direto.')
+      setError(
+        'Selecione a forma de pagamento: Dinheiro, PIX online ou PIX direto.',
+      )
       return
     }
     if (associadoLogin && associadoId == null) {
@@ -360,12 +383,48 @@ export function AcaoEntreAmigosVendaPage() {
       return
     }
 
-    setSaving(true)
-    setError(null)
-
     const nome = compradorNome.trim()
     const telefone = compradorTelefone.trim()
     const valorUnitario = Number(acao.valor_numero ?? 0)
+
+    if (formaPagamento === 'pix') {
+      if (!pixOnlineDisponivel) {
+        setError(
+          'PIX online indisponível. Cadastre o PIX Sicredi do grupo ou da seção desta ação.',
+        )
+        return
+      }
+      if (!Number.isFinite(valorUnitario) || valorUnitario <= 0) {
+        setError('Esta ação ainda não tem valor de número configurado.')
+        return
+      }
+      const linkToken = linkTokenParaNumeros(disponiveis)
+      if (!linkToken) {
+        setError(
+          associadoLogin
+            ? 'Link de pagamento desta faixa ainda não está disponível.'
+            : 'Selecione números de uma mesma faixa de jovem para pagar com PIX online (ou use o link público).',
+        )
+        return
+      }
+      const valor =
+        Math.round(valorUnitario * disponiveis.length * 100) / 100
+      setError(null)
+      setPixInput({
+        linkToken,
+        numeros: disponiveis,
+        compradorNome: nome,
+        compradorTelefone: telefone,
+        valor,
+        descricao: `${acao.nome} · nº ${disponiveis.join(', ')}`,
+      })
+      setPixOpen(true)
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+
     const rows = disponiveis.map((numero) => ({
       empresa_id: empresaId,
       acao_id: acao.acao_id,
@@ -661,8 +720,8 @@ export function AcaoEntreAmigosVendaPage() {
               </p>
               <p className="field-hint">
                 Preencha uma vez: o mesmo nome, telefone e forma de pagamento
-                serão gravados em todos os números selecionados. PIX direto
-                registra o recebimento sem abrir a cobrança Sicredi.
+                serão gravados em todos os números selecionados. PIX online gera
+                a cobrança Sicredi; PIX direto registra o recebimento na hora.
               </p>
               <form
                 className="form-grid form-grid-2"
@@ -675,7 +734,7 @@ export function AcaoEntreAmigosVendaPage() {
                     className="input"
                     value={compradorNome}
                     onChange={(e) => setCompradorNome(e.target.value)}
-                    disabled={saving}
+                    disabled={saving || pixOpen}
                     required
                     autoFocus
                   />
@@ -687,7 +746,7 @@ export function AcaoEntreAmigosVendaPage() {
                     className="input"
                     value={compradorTelefone}
                     onChange={(e) => setCompradorTelefone(e.target.value)}
-                    disabled={saving}
+                    disabled={saving || pixOpen}
                     required
                     inputMode="tel"
                     placeholder="(00) 00000-0000"
@@ -703,10 +762,25 @@ export function AcaoEntreAmigosVendaPage() {
                           ? 'btn-primary'
                           : 'btn-soft'
                       }`}
-                      disabled={saving}
+                      disabled={saving || pixOpen}
                       onClick={() => setFormaPagamento('dinheiro')}
                     >
                       Dinheiro
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${
+                        formaPagamento === 'pix' ? 'btn-primary' : 'btn-soft'
+                      }`}
+                      disabled={saving || pixOpen || !pixOnlineDisponivel}
+                      onClick={() => setFormaPagamento('pix')}
+                      title={
+                        pixOnlineDisponivel
+                          ? 'Gera cobrança PIX Sicredi'
+                          : 'Cadastre o PIX do grupo ou da seção desta ação'
+                      }
+                    >
+                      PIX online
                     </button>
                     <button
                       type="button"
@@ -715,29 +789,42 @@ export function AcaoEntreAmigosVendaPage() {
                           ? 'btn-primary'
                           : 'btn-soft'
                       }`}
-                      disabled={saving}
+                      disabled={saving || pixOpen}
                       onClick={() => setFormaPagamento('pix_direto')}
                     >
                       PIX direto
                     </button>
                   </div>
+                  {!pixOnlineDisponivel ? (
+                    <p className="field-hint" style={{ marginBottom: 0 }}>
+                      PIX online fica disponível quando houver PIX Sicredi do
+                      grupo ou da seção informada nesta ação.
+                    </p>
+                  ) : formaPagamento === 'pix' ? (
+                    <p className="field-hint" style={{ marginBottom: 0 }}>
+                      Abre a cobrança PIX Sicredi. Após o pagamento, os números
+                      são confirmados automaticamente.
+                    </p>
+                  ) : null}
                 </div>
                 <div className="form-actions field-span-2">
                   <button
                     className="btn btn-primary"
                     type="submit"
-                    disabled={saving || !formaPagamento}
+                    disabled={saving || pixOpen || !formaPagamento}
                   >
                     {saving
                       ? 'Salvando…'
-                      : selectedNumeros.length === 1
-                        ? 'Confirmar venda'
-                        : `Confirmar ${selectedNumeros.length} vendas`}
+                      : formaPagamento === 'pix'
+                        ? 'Pagar com PIX'
+                        : selectedNumeros.length === 1
+                          ? 'Confirmar venda'
+                          : `Confirmar ${selectedNumeros.length} vendas`}
                   </button>
                   <button
                     type="button"
                     className="btn btn-soft"
-                    disabled={saving}
+                    disabled={saving || pixOpen}
                     onClick={limparSelecao}
                   >
                     Limpar seleção
@@ -792,6 +879,26 @@ export function AcaoEntreAmigosVendaPage() {
           </section>
         </>
       )}
+
+      <PixSicrediPublicCheckoutModal
+        open={pixOpen}
+        title="Pagamento PIX"
+        input={pixInput}
+        onClose={() => {
+          setPixOpen(false)
+          setPixInput(null)
+        }}
+        onPaid={async () => {
+          setPixOpen(false)
+          setPixInput(null)
+          limparSelecao()
+          toast.success(
+            'Pagamento confirmado!',
+            'Os números foram registrados nesta ação.',
+          )
+          await reload()
+        }}
+      />
     </>
   )
 }

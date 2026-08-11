@@ -95,6 +95,7 @@ type DbSicrediRow = {
 type DbContaBancariaPix = {
   id?: number
   ramo_id?: number | null
+  secao_id?: number | null
   api_client_id?: string | null
   api_client_secret?: string | null
   api_pix_chave?: string | null
@@ -179,11 +180,12 @@ async function resolveConfigFromContas(
   admin: ReturnType<typeof createClient>,
   empresaId: number,
   ramoId: number | null,
+  secaoId: number | null = null,
 ): Promise<{ cfg: SicrediConfig | null; hint: string | null }> {
   const { data: contas, error } = await admin
     .from('empresa_conta_bancaria')
     .select(
-      'id, ramo_id, api_client_id, api_client_secret, api_pix_chave, api_pix_cert, api_pix_key, api_pix_base_url, api_pix_ativo',
+      'id, ramo_id, secao_id, api_client_id, api_client_secret, api_pix_chave, api_pix_cert, api_pix_key, api_pix_base_url, api_pix_ativo',
     )
     .eq('empresa_id', empresaId)
     .order('id', { ascending: true })
@@ -203,29 +205,51 @@ async function resolveConfigFromContas(
     }
   }
 
+  // Preferência: seção → ramo (sem seção) → grupo.
+  const ordered: DbContaBancariaPix[] = []
+  const seen = new Set<number>()
+  const pushAll = (rows: DbContaBancariaPix[]) => {
+    for (const row of rows) {
+      const id = Number(row.id ?? 0)
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      ordered.push(row)
+    }
+  }
+
+  if (secaoId != null) {
+    pushAll(list.filter((c) => c.secao_id === secaoId))
+  }
+  if (ramoId != null) {
+    pushAll(
+      list.filter((c) => c.ramo_id === ramoId && c.secao_id == null),
+    )
+  }
+  pushAll(list.filter((c) => c.ramo_id == null && c.secao_id == null))
+
+  // Mensalidade / escopo só-grupo: não usar contas de ramo/seção.
   const candidatos =
-    ramoId != null
-      ? [
-          ...list.filter((c) => c.ramo_id === ramoId),
-          ...list.filter((c) => c.ramo_id == null),
-        ]
-      : list.filter((c) => c.ramo_id == null)
+    ramoId == null && secaoId == null
+      ? list.filter((c) => c.ramo_id == null && c.secao_id == null)
+      : ordered
 
   if (candidatos.length === 0) {
     return {
       cfg: null,
       hint:
-        ramoId != null
-          ? 'Cadastre uma conta bancária do ramo (ou do grupo, sem ramo) com PIX ativo.'
+        secaoId != null || ramoId != null
+          ? 'Cadastre uma conta bancária da seção, do ramo ou do grupo com PIX ativo.'
           : 'Para mensalidades, cadastre uma conta bancária do grupo (sem ramo) com PIX ativo.',
     }
   }
 
   for (const row of candidatos) {
     const source =
-      row.ramo_id != null
-        ? `conta:${row.id}:ramo:${row.ramo_id}`
-        : `conta:${row.id}:grupo`
+      row.secao_id != null
+        ? `conta:${row.id}:secao:${row.secao_id}`
+        : row.ramo_id != null
+          ? `conta:${row.id}:ramo:${row.ramo_id}`
+          : `conta:${row.id}:grupo`
     const cfg = configFromContaBancaria(row, source)
     if (cfg) return { cfg, hint: null }
   }
@@ -294,18 +318,30 @@ async function resolveSicrediConfig(
     tipo: string
     atividadeId?: number | null
     ramoId?: number | null
+    secaoId?: number | null
   },
 ): Promise<{ cfg: SicrediConfig | null; hint: string | null }> {
   let ramoId = opts.ramoId ?? null
+  let secaoId = opts.secaoId ?? null
 
   if (opts.tipo === 'atividade' && ramoId == null && opts.atividadeId) {
     const { data: ativ } = await admin
       .from('atividades')
-      .select('ramo')
+      .select('ramo, secao')
       .eq('empresa_id', opts.empresaId)
       .eq('atividade_id', opts.atividadeId)
       .maybeSingle()
     ramoId = (ativ?.ramo as number | null) ?? null
+    if (secaoId == null) secaoId = (ativ?.secao as number | null) ?? null
+  }
+
+  if (ramoId == null && secaoId != null) {
+    const { data: secaoRow } = await admin
+      .from('secao')
+      .select('ramo')
+      .eq('secao_id', secaoId)
+      .maybeSingle()
+    ramoId = (secaoRow?.ramo as number | null) ?? null
   }
 
   // Preferência: credenciais no cadastro de bancos.
@@ -313,6 +349,7 @@ async function resolveSicrediConfig(
     admin,
     opts.empresaId,
     tipoUsaPixRamo(opts.tipo) ? ramoId : null,
+    tipoUsaPixRamo(opts.tipo) ? secaoId : null,
   )
   if (fromConta.cfg) return fromConta
 
@@ -1150,7 +1187,9 @@ Deno.serve(async (req) => {
 
         const { data: acao, error: acaoError } = await admin
           .from('acao_entre_amigos')
-          .select('acao_id, empresa_id, nome, valor_numero, ramo, encerrado_em')
+          .select(
+            'acao_id, empresa_id, nome, valor_numero, ramo, secao, encerrado_em',
+          )
           .eq('acao_id', faixa.acao_id)
           .eq('empresa_id', faixa.empresa_id)
           .maybeSingle()
@@ -1199,19 +1238,29 @@ Deno.serve(async (req) => {
           )
         }
         const valor = Math.round(valorUnit * numeros.length * 100) / 100
-        const ramoId = (acao.ramo as number | null) ?? null
+        let ramoId = (acao.ramo as number | null) ?? null
+        const secaoId = (acao.secao as number | null) ?? null
+        if (ramoId == null && secaoId != null) {
+          const { data: secaoRow } = await admin
+            .from('secao')
+            .select('ramo')
+            .eq('secao_id', secaoId)
+            .maybeSingle()
+          ramoId = (secaoRow?.ramo as number | null) ?? null
+        }
 
         const resolved = await resolveSicrediConfig(admin, {
           empresaId: faixa.empresa_id as number,
           tipo: 'acao_entre_amigos',
           ramoId,
+          secaoId,
         })
         if (!resolved.cfg) {
           return json(
             {
               error:
                 resolved.hint ||
-                'PIX Sicredi não configurado para este ramo/grupo.',
+                'PIX Sicredi não configurado para a seção/grupo desta ação.',
               configured: false,
             },
             503,
@@ -1325,14 +1374,15 @@ Deno.serve(async (req) => {
         const valor =
           Math.round(valorUnit * nomesOrdered.length * 100) / 100
 
-        // Seção implica o ramo do cadastro; PIX usa a conta desse ramo.
+        // Preferência: PIX da seção → ramo → grupo.
         let ramoId = (evento.ramo as number | null) ?? null
-        if (ramoId == null && evento.secao != null) {
+        const secaoId = (evento.secao as number | null) ?? null
+        if (ramoId == null && secaoId != null) {
           const { data: secaoRow } = await admin
             .from('secao')
             .select('ramo')
             .eq('empresa_id', evento.empresa_id)
-            .eq('secao_id', evento.secao)
+            .eq('secao_id', secaoId)
             .maybeSingle()
           ramoId = (secaoRow?.ramo as number | null) ?? null
         }
@@ -1341,13 +1391,14 @@ Deno.serve(async (req) => {
           empresaId: evento.empresa_id as number,
           tipo: 'venda_evento',
           ramoId,
+          secaoId,
         })
         if (!resolved.cfg) {
           return json(
             {
               error:
                 resolved.hint ||
-                (ramoId != null
+                (secaoId != null || ramoId != null
                   ? 'PIX Sicredi não configurado para o ramo/seção deste evento.'
                   : 'PIX Sicredi não configurado para este grupo.'),
               configured: false,

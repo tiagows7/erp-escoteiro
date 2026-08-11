@@ -16,19 +16,56 @@ function chavePixInformada(
 export async function empresaTemChavePixInformada(
   empresaId: number,
 ): Promise<boolean> {
+  return empresaTemPixParaEscopo({ empresaId })
+}
+
+/**
+ * PIX disponível para o escopo da venda:
+ * - seção da ação (conta com secao_id)
+ * - ramo da ação (conta do ramo sem seção)
+ * - grupo (conta sem ramo/seção)
+ * Sem ramo/seção no escopo → só conta do grupo.
+ */
+export async function empresaTemPixParaEscopo(opts: {
+  empresaId: number
+  ramoId?: number | null
+  secaoId?: number | null
+}): Promise<boolean> {
+  const empresaId = opts.empresaId
+  const ramoId = opts.ramoId ?? null
+  const secaoId = opts.secaoId ?? null
+
   try {
     const { data: contas } = await supabase
       .from('empresa_conta_bancaria')
-      .select('api_pix_chave, api_pix_ativo')
+      .select('ramo_id, secao_id, api_pix_chave, api_pix_ativo')
       .eq('empresa_id', empresaId)
       .eq('api_pix_ativo', true)
 
+    const list = ((contas ?? []) as {
+      ramo_id: number | null
+      secao_id: number | null
+      api_pix_chave: string | null
+      api_pix_ativo: boolean | null
+    }[]).filter((row) =>
+      chavePixInformada(row.api_pix_chave, row.api_pix_ativo),
+    )
+
+    if (secaoId != null && list.some((c) => c.secao_id === secaoId)) {
+      return true
+    }
     if (
-      ((contas ?? []) as {
-        api_pix_chave: string | null
-        api_pix_ativo: boolean | null
-      }[]).some((row) => chavePixInformada(row.api_pix_chave, row.api_pix_ativo))
+      ramoId != null &&
+      list.some((c) => c.ramo_id === ramoId && c.secao_id == null)
     ) {
+      return true
+    }
+    if (list.some((c) => c.ramo_id == null && c.secao_id == null)) {
+      return true
+    }
+
+    // Escopo amplo (qualquer PIX) — usado por empresaTemChavePixInformada.
+    if (ramoId == null && secaoId == null && list.length > 0) {
       return true
     }
 
@@ -38,10 +75,18 @@ export async function empresaTemChavePixInformada(
         .select('sicredi_pix_chave, sicredi_pix_ativo')
         .eq('id', empresaId)
         .maybeSingle(),
-      supabase
-        .from('empresa_ramo_pix_sicredi')
-        .select('sicredi_pix_chave, sicredi_pix_ativo')
-        .eq('empresa_id', empresaId),
+      ramoId != null
+        ? supabase
+            .from('empresa_ramo_pix_sicredi')
+            .select('sicredi_pix_chave, sicredi_pix_ativo')
+            .eq('empresa_id', empresaId)
+            .eq('ramo_id', ramoId)
+        : ramoId == null && secaoId == null
+          ? supabase
+              .from('empresa_ramo_pix_sicredi')
+              .select('sicredi_pix_chave, sicredi_pix_ativo')
+              .eq('empresa_id', empresaId)
+          : Promise.resolve({ data: [] as unknown[] }),
     ])
 
     if (chavePixInformada(emp?.sicredi_pix_chave, emp?.sicredi_pix_ativo)) {
