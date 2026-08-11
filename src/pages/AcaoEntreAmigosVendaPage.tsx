@@ -466,16 +466,6 @@ export function AcaoEntreAmigosVendaPage() {
         </div>
       </header>
 
-      {acao.imagem_url ? (
-        <div className="acao-imagem-banner-wrap">
-          <img
-            className="acao-imagem-banner"
-            src={acao.imagem_url}
-            alt={`Imagem da ação ${acao.nome}`}
-          />
-        </div>
-      ) : null}
-
       {error ? (
         <AlertMessage tone="error" title="Atenção">
           {error}
@@ -569,43 +559,60 @@ export function AcaoEntreAmigosVendaPage() {
           ) : null}
 
           <section className="panel">
-            <p className="muted" style={{ marginTop: 0 }}>
-              {vendidosNaFaixa} de {numeros.length} número(s) vendido(s). Toque
-              em um ou mais números disponíveis; o nome e telefone preenchidos
-              valem para todos.
-            </p>
-            {selectedNumeros.length > 0 ? (
-              <p className="field-hint" style={{ marginTop: 0 }}>
-                Selecionados: {selectedNumeros.join(', ')} (
-                {selectedNumeros.length})
-              </p>
-            ) : null}
-            <div className="acao-numeros-grid">
-              {numeros.map((numero) => {
-                const venda = vendidos.get(numero)
-                const sold = !!venda
-                const selected = selectedNumeros.includes(numero)
-                return (
-                  <button
-                    key={numero}
-                    type="button"
-                    className={`acao-numero-btn ${sold ? 'is-sold' : ''} ${
-                      selected ? 'is-selected' : ''
-                    }`}
-                    disabled={sold || saving}
-                    onClick={() => toggleNumero(numero)}
-                    title={
-                      sold
-                        ? `${venda.comprador_nome} · ${venda.comprador_telefone}`
-                        : selected
-                          ? `Remover nº ${numero} da seleção`
-                          : `Selecionar nº ${numero}`
-                    }
-                  >
-                    {numero}
-                  </button>
-                )
-              })}
+            <div
+              className={`acao-venda-layout ${
+                acao.imagem_url ? 'has-imagem' : ''
+              }`}
+            >
+              {acao.imagem_url ? (
+                <div className="acao-imagem-side">
+                  <img
+                    className="acao-imagem-banner"
+                    src={acao.imagem_url}
+                    alt={`Imagem da ação ${acao.nome}`}
+                  />
+                </div>
+              ) : null}
+              <div className="acao-venda-numeros">
+                <p className="muted" style={{ marginTop: 0 }}>
+                  {vendidosNaFaixa} de {numeros.length} número(s) vendido(s).
+                  Toque em um ou mais números disponíveis; o nome e telefone
+                  preenchidos valem para todos.
+                </p>
+                {selectedNumeros.length > 0 ? (
+                  <p className="field-hint" style={{ marginTop: 0 }}>
+                    Selecionados: {selectedNumeros.join(', ')} (
+                    {selectedNumeros.length})
+                  </p>
+                ) : null}
+                <div className="acao-numeros-grid">
+                  {numeros.map((numero) => {
+                    const venda = vendidos.get(numero)
+                    const sold = !!venda
+                    const selected = selectedNumeros.includes(numero)
+                    return (
+                      <button
+                        key={numero}
+                        type="button"
+                        className={`acao-numero-btn ${sold ? 'is-sold' : ''} ${
+                          selected ? 'is-selected' : ''
+                        }`}
+                        disabled={sold || saving}
+                        onClick={() => toggleNumero(numero)}
+                        title={
+                          sold
+                            ? `${venda.comprador_nome} · ${venda.comprador_telefone}`
+                            : selected
+                              ? `Remover nº ${numero} da seleção`
+                              : `Selecionar nº ${numero}`
+                        }
+                      >
+                        {numero}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           </section>
 

@@ -3920,7 +3920,7 @@ table.data tbody tr:hover {
 
 .public-rifa-page {
   min-height: 100vh;
-  max-width: 720px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 1.25rem 1rem 2.5rem;
   background:
@@ -3931,32 +3931,58 @@ table.data tbody tr:hover {
 .acao-imagem-preview {
   width: min(100%, 280px);
   max-height: 160px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--bg-elevated);
 }
 
-.acao-imagem-banner-wrap {
-  margin: 0 0 1rem;
+.acao-venda-layout {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+
+.acao-venda-layout.has-imagem {
+  grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
+}
+
+.acao-imagem-side {
+  margin: 0;
 }
 
 .acao-imagem-banner {
   display: block;
   width: 100%;
-  max-height: 240px;
-  object-fit: cover;
+  max-height: 320px;
+  object-fit: contain;
+  object-position: center;
   border-radius: 14px;
   border: 1px solid var(--line);
   background: var(--bg-elevated);
 }
 
-.public-rifa-header {
-  margin-bottom: 1rem;
+.acao-venda-numeros {
+  min-width: 0;
 }
 
-.public-rifa-header .acao-imagem-banner {
-  margin-bottom: 0.85rem;
+@media (max-width: 720px) {
+  .acao-venda-layout.has-imagem {
+    grid-template-columns: 1fr;
+  }
+
+  .acao-imagem-side {
+    max-width: 220px;
+    margin-inline: auto;
+  }
+
+  .acao-imagem-banner {
+    max-height: 180px;
+  }
+}
+
+.public-rifa-header {
+  margin-bottom: 1rem;
 }
 
 .public-rifa-header h1 {

@@ -130,13 +130,6 @@ export function AcaoEntreAmigosPublicPage() {
   return (
     <div className="public-rifa-page">
       <header className="public-rifa-header">
-        {info.imagem_url ? (
-          <img
-            className="acao-imagem-banner"
-            src={info.imagem_url}
-            alt={`Imagem da ação ${info.acao_nome}`}
-          />
-        ) : null}
         <p className="muted">{info.empresa_nome}</p>
         <h1>{info.acao_nome}</h1>
         <p>
@@ -157,33 +150,49 @@ export function AcaoEntreAmigosPublicPage() {
       ) : null}
 
       <section className="panel">
-        <p className="muted" style={{ marginTop: 0 }}>
-          {vendidosCount} de {numeros.length} número(s) já vendido(s). Selecione
-          os números, informe seus dados e pague via PIX para confirmar.
-        </p>
-        {selectedNumeros.length > 0 ? (
-          <p className="field-hint">
-            Selecionados: {selectedNumeros.join(', ')}
-          </p>
-        ) : null}
-        <div className="acao-numeros-grid">
-          {numeros.map((numero) => {
-            const sold = vendidos.has(numero)
-            const selected = selectedNumeros.includes(numero)
-            return (
-              <button
-                key={numero}
-                type="button"
-                className={`acao-numero-btn ${sold ? 'is-sold' : ''} ${
-                  selected ? 'is-selected' : ''
-                }`}
-                disabled={sold || pixOpen}
-                onClick={() => toggleNumero(numero)}
-              >
-                {numero}
-              </button>
-            )
-          })}
+        <div
+          className={`acao-venda-layout ${info.imagem_url ? 'has-imagem' : ''}`}
+        >
+          {info.imagem_url ? (
+            <div className="acao-imagem-side">
+              <img
+                className="acao-imagem-banner"
+                src={info.imagem_url}
+                alt={`Imagem da ação ${info.acao_nome}`}
+              />
+            </div>
+          ) : null}
+          <div className="acao-venda-numeros">
+            <p className="muted" style={{ marginTop: 0 }}>
+              {vendidosCount} de {numeros.length} número(s) já vendido(s).
+              Selecione os números, informe seus dados e pague via PIX para
+              confirmar.
+            </p>
+            {selectedNumeros.length > 0 ? (
+              <p className="field-hint">
+                Selecionados: {selectedNumeros.join(', ')}
+              </p>
+            ) : null}
+            <div className="acao-numeros-grid">
+              {numeros.map((numero) => {
+                const sold = vendidos.has(numero)
+                const selected = selectedNumeros.includes(numero)
+                return (
+                  <button
+                    key={numero}
+                    type="button"
+                    className={`acao-numero-btn ${sold ? 'is-sold' : ''} ${
+                      selected ? 'is-selected' : ''
+                    }`}
+                    disabled={sold || pixOpen}
+                    onClick={() => toggleNumero(numero)}
+                  >
+                    {numero}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </div>
       </section>
 
