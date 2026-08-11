@@ -1,9 +1,10 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
+import { createClient } from 'npm:@supabase/supabase-js@2.49.8'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
     'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 type CreateBody = {
@@ -45,7 +46,7 @@ type StatusPublicBody = {
   link_token: string
 }
 
-type Body =
+type PixRequestBody =
   | CreateBody
   | StatusBody
   | ConfigBody
@@ -1000,7 +1001,7 @@ Deno.serve(async (req) => {
       const peek = (await req
         .clone()
         .json()
-        .catch(() => null)) as Body | null
+        .catch(() => null)) as PixRequestBody | null
 
       if (peek?.action === 'create_public') {
         const body = peek as CreatePublicBody
@@ -1260,7 +1261,7 @@ Deno.serve(async (req) => {
     } = await callerClient.auth.getUser()
     if (userError || !user) return json({ error: 'Sessão inválida.' }, 401)
 
-    const body = (await req.json()) as Body
+    const body = (await req.json()) as PixRequestBody
 
     const { data: profile } = await admin
       .from('profiles')
