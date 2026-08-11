@@ -90,20 +90,51 @@ export function AppLayout() {
       })
     }
 
-    // Associado: sempre pode comprar convites de eventos.
-    if (
-      isAssociadoLogin(profile) &&
-      hasPermission('vendas.view') &&
-      !filtered.some(
-        (item) => item.type === 'link' && item.to === '/vendas/eventos',
+    // Eventos: sempre visível para quem tem vendas.view (todos os usuários).
+    if (hasPermission('vendas.view')) {
+      const hasEventosLink = filtered.some(
+        (item) =>
+          (item.type === 'link' && item.to === '/vendas/eventos') ||
+          (item.type === 'group' &&
+            item.children.some((c) => c.to === '/vendas/eventos')),
       )
-    ) {
-      filtered.push({
-        type: 'link',
-        to: '/vendas/eventos',
-        label: 'Comprar convites',
-        permission: 'vendas.view',
-      })
+      if (!hasEventosLink) {
+        if (isAssociadoLogin(profile)) {
+          filtered.push({
+            type: 'link',
+            to: '/vendas/eventos',
+            label: 'Comprar convites',
+            permission: 'vendas.view',
+          })
+        } else {
+          const vendasIdx = filtered.findIndex(
+            (item) => item.type === 'group' && item.id === 'vendas',
+          )
+          const eventoChild = {
+            type: 'link' as const,
+            to: '/vendas/eventos',
+            label: 'Eventos',
+            permission: 'vendas.view' as const,
+          }
+          if (vendasIdx >= 0) {
+            const group = filtered[vendasIdx]
+            if (group.type === 'group') {
+              filtered[vendasIdx] = {
+                ...group,
+                children: [...group.children, eventoChild],
+              }
+            }
+          } else {
+            filtered.push({
+              type: 'group',
+              id: 'vendas',
+              label: 'Vendas',
+              anyOf: ['vendas.view'],
+              children: [eventoChild],
+            })
+          }
+        }
+      }
     }
 
     return filtered

@@ -64,13 +64,14 @@ export function RequirePermission({
       location.pathname,
       profile?.menu_keys,
     )
-    // Associado: Projetos e Eventos/convites sempre liberados; ação só se tiver faixa.
-    const associadoExtra =
-      isAssociadoLogin(profile) &&
-      (pathMatchesMenuKey(location.pathname, '/projetos') ||
-        pathMatchesMenuKey(location.pathname, '/vendas/eventos') ||
-        (isAcaoPath && temAcao))
-    if (!menuOk && !associadoExtra) {
+    // Eventos: sempre liberado para quem tem vendas.view.
+    // Associado: Projetos sempre; ação só se tiver faixa.
+    const menuBypass =
+      pathMatchesMenuKey(location.pathname, '/vendas/eventos') ||
+      (isAssociadoLogin(profile) &&
+        (pathMatchesMenuKey(location.pathname, '/projetos') ||
+          (isAcaoPath && temAcao)))
+    if (!menuOk && !menuBypass) {
       return (
         <Navigate
           to={firstAllowedMenuPath(profile?.menu_keys)}

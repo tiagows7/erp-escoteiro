@@ -128,6 +128,9 @@ export function firstAllowedMenuPath(
   return menuKeys[0] ?? '/'
 }
 
+/** Menus sempre liberados mesmo com menu_keys restrito. */
+export const ALWAYS_VISIBLE_MENU_KEYS = ['/vendas/eventos'] as const
+
 export function filterNavItemsByMenuKeys(
   items: NavItem[],
   menuKeys: string[] | null | undefined,
@@ -137,10 +140,19 @@ export function filterNavItemsByMenuKeys(
   return items
     .map((item) => {
       if (item.type === 'link') {
-        return menuKeys.includes(item.to) ? item : null
+        return menuKeys.includes(item.to) ||
+          ALWAYS_VISIBLE_MENU_KEYS.includes(
+            item.to as (typeof ALWAYS_VISIBLE_MENU_KEYS)[number],
+          )
+          ? item
+          : null
       }
-      const children = item.children.filter((child) =>
-        menuKeys.includes(child.to),
+      const children = item.children.filter(
+        (child) =>
+          menuKeys.includes(child.to) ||
+          ALWAYS_VISIBLE_MENU_KEYS.includes(
+            child.to as (typeof ALWAYS_VISIBLE_MENU_KEYS)[number],
+          ),
       )
       if (children.length === 0) return null
       return { ...item, children }

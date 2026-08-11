@@ -63,7 +63,11 @@ type PixRequestBody =
   | StatusPublicBody
 
 function tipoUsaPixRamo(tipo: string): boolean {
-  return tipo === 'atividade' || tipo === 'acao_entre_amigos'
+  return (
+    tipo === 'atividade' ||
+    tipo === 'acao_entre_amigos' ||
+    tipo === 'venda_evento'
+  )
 }
 
 type SicrediConfig = {
@@ -1276,7 +1280,7 @@ Deno.serve(async (req) => {
         const { data: evento, error: eventoError } = await admin
           .from('venda_eventos')
           .select(
-            'evento_id, empresa_id, nome, valor_convite, numero_inicial, numero_final, link_token',
+            'evento_id, empresa_id, nome, valor_convite, numero_inicial, numero_final, link_token, ramo, secao',
           )
           .eq('link_token', token)
           .maybeSingle()
@@ -1312,17 +1316,31 @@ Deno.serve(async (req) => {
         const valor =
           Math.round(valorUnit * nomesOrdered.length * 100) / 100
 
+        // Seção implica o ramo do cadastro; PIX usa a conta desse ramo.
+        let ramoId = (evento.ramo as number | null) ?? null
+        if (ramoId == null && evento.secao != null) {
+          const { data: secaoRow } = await admin
+            .from('secao')
+            .select('ramo')
+            .eq('empresa_id', evento.empresa_id)
+            .eq('secao_id', evento.secao)
+            .maybeSingle()
+          ramoId = (secaoRow?.ramo as number | null) ?? null
+        }
+
         const resolved = await resolveSicrediConfig(admin, {
           empresaId: evento.empresa_id as number,
           tipo: 'venda_evento',
-          ramoId: null,
+          ramoId,
         })
         if (!resolved.cfg) {
           return json(
             {
               error:
                 resolved.hint ||
-                'PIX Sicredi não configurado para este grupo.',
+                (ramoId != null
+                  ? 'PIX Sicredi não configurado para o ramo/seção deste evento.'
+                  : 'PIX Sicredi não configurado para este grupo.'),
               configured: false,
             },
             503,
@@ -1347,7 +1365,7 @@ Deno.serve(async (req) => {
             tipo: 'venda_evento',
             receita_ids: [],
             atividade_id: null,
-            ramo_id: null,
+            ramo_id: ramoId,
             evento_id: evento.evento_id,
             link_token: token,
             nomes: nomesOrdered,

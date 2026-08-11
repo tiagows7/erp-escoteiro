@@ -248,6 +248,9 @@ export type AcaoEntreAmigosVenda = {
 export type VendaEvento = {
   evento_id: number
   empresa_id: number
+  ramo: number | null
+  secao: number | null
+  patrulha_matilha: number | null
   nome: string
   numero_inicial: number
   numero_final: number

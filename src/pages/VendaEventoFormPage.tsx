@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -12,14 +13,37 @@ import { AlertMessage } from '@/components/AlertMessage'
 import { formatMoney, parseMoneyInput } from '@/lib/despesas'
 import { totalConvitesEvento } from '@/lib/vendaEventos'
 import { uploadVendaEventoImagem } from '@/lib/uploadVendaEventoImagem'
-import { isAssociadoLogin } from '@/lib/roles'
+import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
+import type { Ramo } from '@/types/database'
+
+type Secao = { secao_id: number; nome: string; ramo: number | null }
+type Patrulha = {
+  secaonome_id: number
+  nome: string
+  ramo: number | null
+  secao: number | null
+}
 
 const emptyForm = {
+  ramo: '',
+  secao: '',
+  patrulha_matilha: '',
   nome: '',
   numero_inicial: '1',
   numero_final: '100',
   valor_convite: '0,00',
   data_evento: '',
+}
+
+function unidadeLabel(ramoId: number | null): string {
+  switch (ramoId) {
+    case 1:
+      return 'Matilha'
+    case 4:
+      return 'Clã'
+    default:
+      return 'Patrulha'
+  }
 }
 
 export function VendaEventoFormPage() {
@@ -30,9 +54,13 @@ export function VendaEventoFormPage() {
   const associadoLogin = isAssociadoLogin(profile)
   const canWrite = !associadoLogin && hasPermission('vendas.write')
   const empresaId = empresa?.id
+  const ramoScoped = useMemo(() => staffRamoScope(profile), [profile])
   const toast = useToast()
 
   const [form, setForm] = useState(emptyForm)
+  const [ramos, setRamos] = useState<Ramo[]>([])
+  const [secoes, setSecoes] = useState<Secao[]>([])
+  const [patrulhas, setPatrulhas] = useState<Patrulha[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
@@ -41,6 +69,51 @@ export function VendaEventoFormPage() {
   const [imagemPreview, setImagemPreview] = useState<string | null>(null)
   const imagemInputRef = useRef<HTMLInputElement>(null)
 
+  const ramoId = form.ramo ? Number(form.ramo) : null
+  const secaoId = form.secao ? Number(form.secao) : null
+
+  const secoesDoRamo = useMemo(() => {
+    if (ramoId == null) return []
+    return secoes.filter((s) => s.ramo === ramoId)
+  }, [ramoId, secoes])
+
+  const patrulhasDaSecao = useMemo(() => {
+    if (ramoId == null || secaoId == null) return []
+    return patrulhas.filter((p) => p.ramo === ramoId && p.secao === secaoId)
+  }, [ramoId, secaoId, patrulhas])
+
+  const temPatrulha = patrulhasDaSecao.length > 0
+  const labelUnidade = unidadeLabel(ramoId)
+
+  useEffect(() => {
+    if (ramoScoped == null || !isNew) return
+    setForm((prev) => ({ ...prev, ramo: String(ramoScoped) }))
+  }, [ramoScoped, isNew])
+
+  useEffect(() => {
+    if (!empresaId) return
+    void Promise.all([
+      supabase
+        .from('ramos')
+        .select('ramo_id, nome, idade_inicio, idade_fim')
+        .order('ramo_id'),
+      supabase
+        .from('secao')
+        .select('secao_id, nome, ramo')
+        .eq('empresa_id', empresaId)
+        .order('nome'),
+      supabase
+        .from('secao_nome')
+        .select('secaonome_id, nome, ramo, secao')
+        .eq('empresa_id', empresaId)
+        .order('nome'),
+    ]).then(([r, s, p]) => {
+      setRamos((r.data as Ramo[]) ?? [])
+      setSecoes((s.data as Secao[]) ?? [])
+      setPatrulhas((p.data as Patrulha[]) ?? [])
+    })
+  }, [empresaId])
+
   useEffect(() => {
     if (isNew || !empresaId) return
     let mounted = true
@@ -48,7 +121,7 @@ export function VendaEventoFormPage() {
       const { data, error: loadError } = await supabase
         .from('venda_eventos')
         .select(
-          'evento_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url',
+          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url',
         )
         .eq('evento_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -61,7 +134,16 @@ export function VendaEventoFormPage() {
         return
       }
 
+      if (ramoScoped != null && data.ramo != null && data.ramo !== ramoScoped) {
+        setError('Este evento não pertence ao seu ramo.')
+        setLoading(false)
+        return
+      }
+
       setForm({
+        ramo: data.ramo?.toString() ?? '',
+        secao: data.secao?.toString() ?? '',
+        patrulha_matilha: data.patrulha_matilha?.toString() ?? '',
         nome: data.nome ?? '',
         numero_inicial: String(data.numero_inicial ?? 1),
         numero_final: String(data.numero_final ?? 1),
@@ -80,14 +162,24 @@ export function VendaEventoFormPage() {
     return () => {
       mounted = false
     }
-  }, [id, isNew, empresaId])
+  }, [id, isNew, empresaId, ramoScoped])
 
   if (associadoLogin && isNew) {
     return <Navigate to="/vendas/eventos" replace />
   }
 
   function update(field: keyof typeof emptyForm, value: string) {
-    setForm((prev) => ({ ...prev, [field]: value }))
+    setForm((prev) => {
+      const next = { ...prev, [field]: value }
+      if (field === 'ramo') {
+        next.secao = ''
+        next.patrulha_matilha = ''
+      }
+      if (field === 'secao') {
+        next.patrulha_matilha = ''
+      }
+      return next
+    })
   }
 
   function onImagemFileChange(file: File | null) {
@@ -127,8 +219,20 @@ export function VendaEventoFormPage() {
     setSaving(true)
     setError(null)
 
+    const ramoValue =
+      ramoScoped != null
+        ? ramoScoped
+        : form.ramo
+          ? Number(form.ramo)
+          : null
+
     const payload = {
       empresa_id: empresaId,
+      ramo: ramoValue,
+      secao: form.secao ? Number(form.secao) : null,
+      patrulha_matilha: form.patrulha_matilha
+        ? Number(form.patrulha_matilha)
+        : null,
       nome: form.nome.trim(),
       numero_inicial: numeroInicial,
       numero_final: numeroFinal,
@@ -168,7 +272,9 @@ export function VendaEventoFormPage() {
         setError(`Evento salvo, mas a imagem falhou: ${imgOk.error}`)
         if (isNew) {
           navigate(`/vendas/eventos/${eventoIdSalvo}`, {
-            state: { flashSuccess: 'Evento salvo. Ajuste a imagem se precisar.' },
+            state: {
+              flashSuccess: 'Evento salvo. Ajuste a imagem se precisar.',
+            },
           })
         }
         return
@@ -240,7 +346,7 @@ export function VendaEventoFormPage() {
       <header className="page-header">
         <div>
           <h2>{isNew ? 'Novo evento' : 'Editar evento'}</h2>
-          <p>Nome, faixa de convites e valor unitário</p>
+          <p>Nome, ramo/seção, faixa de convites e valor unitário</p>
         </div>
         <div className="page-header-actions actions-pair">
           {!isNew ? (
@@ -277,6 +383,75 @@ export function VendaEventoFormPage() {
               placeholder="Ex.: Jantar beneficente 2026"
             />
           </div>
+
+          <div className="field">
+            <label htmlFor="ramo">Ramo</label>
+            <select
+              id="ramo"
+              className="select"
+              value={form.ramo}
+              onChange={(e) => update('ramo', e.target.value)}
+              disabled={disabled || ramoScoped != null}
+            >
+              <option value="">Grupo todo (todos os ramos)</option>
+              {ramos
+                .filter((r) =>
+                  ramoScoped != null
+                    ? r.ramo_id === ramoScoped
+                    : r.ramo_id >= 1 && r.ramo_id <= 5,
+                )
+                .map((r) => (
+                  <option key={r.ramo_id} value={r.ramo_id}>
+                    {r.nome}
+                  </option>
+                ))}
+            </select>
+            <span className="field-hint">
+              Com ramo/seção, o PIX do link público usa a conta desse ramo.
+            </span>
+          </div>
+
+          <div className="field">
+            <label htmlFor="secao">Seção</label>
+            <select
+              id="secao"
+              className="select"
+              value={form.secao}
+              onChange={(e) => update('secao', e.target.value)}
+              disabled={disabled || !form.ramo}
+            >
+              <option value="">
+                {form.ramo
+                  ? 'Toda a seção / nenhuma'
+                  : 'Grupo todo (sem seção)'}
+              </option>
+              {secoesDoRamo.map((s) => (
+                <option key={s.secao_id} value={s.secao_id}>
+                  {s.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {temPatrulha ? (
+            <div className="field">
+              <label htmlFor="patrulha_matilha">{labelUnidade}</label>
+              <select
+                id="patrulha_matilha"
+                className="select"
+                value={form.patrulha_matilha}
+                onChange={(e) => update('patrulha_matilha', e.target.value)}
+                disabled={disabled || !form.secao}
+              >
+                <option value="">Toda a seção (opcional)</option>
+                {patrulhasDaSecao.map((p) => (
+                  <option key={p.secaonome_id} value={p.secaonome_id}>
+                    {p.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           <div className="field">
             <label htmlFor="data_evento">Data do evento</label>
