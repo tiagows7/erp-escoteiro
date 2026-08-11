@@ -11,6 +11,7 @@ import {
   comprarConvitesEvento,
   totalConvitesEvento,
 } from '@/lib/vendaEventos'
+import { isEncerrado } from '@/lib/encerrado'
 import { linkPublicoVendaEvento } from '@/lib/vendaEventosPublic'
 import { isAssociadoLogin } from '@/lib/roles'
 import type {
@@ -68,7 +69,7 @@ export function VendaEventoVendaPage() {
       supabase
         .from('venda_eventos')
         .select(
-          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, link_token, created_at',
+          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, link_token, encerrado_em, created_at',
         )
         .eq('evento_id', eventoId)
         .eq('empresa_id', empresaId)
@@ -175,6 +176,10 @@ export function VendaEventoVendaPage() {
   async function onComprar(event: FormEvent) {
     event.preventDefault()
     if (!evento) return
+    if (isEncerrado(evento.encerrado_em)) {
+      setError('Este evento está encerrado — não é possível comprar.')
+      return
+    }
 
     if (quantidade < 1) {
       setError('Informe a quantidade de convites.')
@@ -280,11 +285,22 @@ export function VendaEventoVendaPage() {
     )
   }
 
+  const encerrado = isEncerrado(evento.encerrado_em)
+
   return (
     <>
       <header className="page-header">
         <div>
-          <h2>{associadoLogin ? 'Comprar convites' : 'Vender convites'}</h2>
+          <h2>
+            {encerrado
+              ? 'Lista de convites'
+              : associadoLogin
+                ? 'Comprar convites'
+                : 'Vender convites'}{' '}
+            {encerrado ? (
+              <span className="badge badge-danger">Encerrado</span>
+            ) : null}
+          </h2>
           <p>
             {evento.nome} · {formatMoney(valorUnitario)} cada
             {evento.data_evento
@@ -293,7 +309,7 @@ export function VendaEventoVendaPage() {
           </p>
         </div>
         <div className="page-header-actions actions-pair">
-          {evento.link_token ? (
+          {evento.link_token && !encerrado ? (
             <button
               type="button"
               className="btn btn-primary"
@@ -307,7 +323,7 @@ export function VendaEventoVendaPage() {
               className="btn btn-soft"
               to={`/vendas/eventos/${evento.evento_id}`}
             >
-              Editar evento
+              {encerrado ? 'Ver evento' : 'Editar evento'}
             </Link>
           ) : null}
           <Link className="btn btn-soft" to="/vendas/eventos">
@@ -319,6 +335,11 @@ export function VendaEventoVendaPage() {
       {error ? (
         <AlertMessage tone="error" title="Atenção">
           {error}
+        </AlertMessage>
+      ) : null}
+      {encerrado ? (
+        <AlertMessage tone="info" title="Evento encerrado">
+          Não é possível comprar ou vender novos convites.
         </AlertMessage>
       ) : null}
 
@@ -347,11 +368,15 @@ export function VendaEventoVendaPage() {
               disponível(is) · faixa {evento.numero_inicial}–
               {evento.numero_final}
             </p>
-            <p className="field-hint">
-              Informe a quantidade. Em seguida preencha o nome de cada convite;
-              a numeração é atribuída automaticamente na ordem disponível.
-            </p>
+            {!encerrado ? (
+              <p className="field-hint">
+                Informe a quantidade. Em seguida preencha o nome de cada
+                convite; a numeração é atribuída automaticamente na ordem
+                disponível.
+              </p>
+            ) : null}
 
+            {!encerrado ? (
             <form
               className="form-grid form-grid-2"
               onSubmit={(e) => void onComprar(e)}
@@ -515,6 +540,7 @@ export function VendaEventoVendaPage() {
                 </button>
               </div>
             </form>
+            ) : null}
           </div>
         </div>
       </section>

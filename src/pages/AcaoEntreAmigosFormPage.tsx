@@ -15,6 +15,7 @@ import {
   faixaDentroDaAcao,
 } from '@/lib/acaoEntreAmigos'
 import { formatMoney, parseMoneyInput } from '@/lib/despesas'
+import { isEncerrado } from '@/lib/encerrado'
 import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
 import { uploadAcaoEntreAmigosImagem } from '@/lib/uploadAcaoEntreAmigosImagem'
 import type { AcaoEntreAmigosFaixa, Ramo } from '@/types/database'
@@ -91,6 +92,7 @@ export function AcaoEntreAmigosFormPage() {
   const [imagemUrl, setImagemUrl] = useState<string | null>(null)
   const [imagemFile, setImagemFile] = useState<File | null>(null)
   const [imagemPreview, setImagemPreview] = useState<string | null>(null)
+  const [encerradoEm, setEncerradoEm] = useState<string | null>(null)
   const imagemInputRef = useRef<HTMLInputElement>(null)
 
   const ramoId = form.ramo ? Number(form.ramo) : null
@@ -220,7 +222,7 @@ export function AcaoEntreAmigosFormPage() {
       const { data, error: loadError } = await supabase
         .from('acao_entre_amigos')
         .select(
-          'acao_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, imagem_url',
+          'acao_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, imagem_url, encerrado_em',
         )
         .eq('acao_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -256,6 +258,7 @@ export function AcaoEntreAmigosFormPage() {
       setImagemUrl(data.imagem_url ?? null)
       setImagemPreview(data.imagem_url ?? null)
       setImagemFile(null)
+      setEncerradoEm((data.encerrado_em as string | null) ?? null)
       await loadFaixas(Number(id))
       setLoading(false)
     })()
@@ -288,10 +291,41 @@ export function AcaoEntreAmigosFormPage() {
     setImagemPreview(file ? URL.createObjectURL(file) : imagemUrl)
   }
 
+  async function onEncerrar() {
+    if (!canWrite || isNew || !empresaId || isEncerrado(encerradoEm)) return
+    const ok = await toast.confirm({
+      title: 'Encerrar ação entre amigos?',
+      message:
+        'Depois de encerrada, não será possível vender números nem alterar o cadastro — só visualizar.',
+      confirmLabel: 'Encerrar',
+      danger: true,
+    })
+    if (!ok) return
+
+    const { error: upError, data } = await supabase
+      .from('acao_entre_amigos')
+      .update({ encerrado_em: new Date().toISOString() })
+      .eq('acao_id', Number(id))
+      .eq('empresa_id', empresaId)
+      .select('encerrado_em')
+      .single()
+
+    if (upError || !data) {
+      setError(upError?.message ?? 'Não foi possível encerrar a ação.')
+      return
+    }
+    setEncerradoEm((data.encerrado_em as string | null) ?? null)
+    toast.success('Ação encerrada', 'Agora só é possível visualizar.')
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     if (!canWrite) {
       setError('Sem permissão para alterar ações entre amigos.')
+      return
+    }
+    if (!isNew && isEncerrado(encerradoEm)) {
+      setError('Ação encerrada — somente visualização.')
       return
     }
     if (!empresaId) {
@@ -409,6 +443,10 @@ export function AcaoEntreAmigosFormPage() {
   async function onAddFaixa(event: FormEvent) {
     event.preventDefault()
     if (!canWrite || isNew || !empresaId) return
+    if (isEncerrado(encerradoEm)) {
+      setFaixaError('Ação encerrada — não é possível alterar faixas.')
+      return
+    }
 
     const associadoId = Number(faixaForm.associado_id)
     const ini = Number(String(faixaForm.numero_inicial).replace(/\D/g, ''))
@@ -462,6 +500,10 @@ export function AcaoEntreAmigosFormPage() {
 
   async function onDeleteFaixa(faixaId: number) {
     if (!canWrite || !empresaId) return
+    if (isEncerrado(encerradoEm)) {
+      setFaixaError('Ação encerrada — não é possível alterar faixas.')
+      return
+    }
     const ok = await toast.confirm({
       title: 'Remover faixa do jovem?',
       message: 'Os números voltam a ficar sem responsável.',
@@ -485,6 +527,10 @@ export function AcaoEntreAmigosFormPage() {
 
   async function onDelete() {
     if (!canWrite || isNew || !empresaId) return
+    if (isEncerrado(encerradoEm)) {
+      setError('Ação encerrada — não é possível excluir.')
+      return
+    }
     const ok = await toast.confirm({
       title: 'Excluir ação entre amigos?',
       message: 'Faixas e vendas vinculadas também serão removidas.',
@@ -532,7 +578,8 @@ export function AcaoEntreAmigosFormPage() {
     return <div className="loading">Carregando ação…</div>
   }
 
-  const disabled = saving || !canWrite
+  const encerrado = isEncerrado(encerradoEm)
+  const disabled = saving || !canWrite || encerrado
   const qtdePreview = (() => {
     const a = Number(String(form.numero_inicial).replace(/\D/g, ''))
     const b = Number(String(form.numero_final).replace(/\D/g, ''))
@@ -544,10 +591,23 @@ export function AcaoEntreAmigosFormPage() {
     <>
       <header className="page-header">
         <div>
-          <h2>{isNew ? 'Nova ação entre amigos' : 'Editar ação entre amigos'}</h2>
-          <p>Nome, valor do número, faixa geral e atribuição aos jovens</p>
+          <h2>
+            {isNew
+              ? 'Nova ação entre amigos'
+              : encerrado
+                ? 'Ação entre amigos'
+                : 'Editar ação entre amigos'}{' '}
+            {encerrado ? (
+              <span className="badge badge-danger">Encerrado</span>
+            ) : null}
+          </h2>
+          <p>
+            {encerrado
+              ? 'Somente visualização — vendas e alterações bloqueadas.'
+              : 'Nome, valor do número, faixa geral e atribuição aos jovens'}
+          </p>
         </div>
-        <div className="page-header-actions actions-pair">
+        <div className="page-header-actions">
           {!isNew ? (
             <Link
               className="btn btn-primary"
@@ -555,6 +615,15 @@ export function AcaoEntreAmigosFormPage() {
             >
               Ver vendas
             </Link>
+          ) : null}
+          {!isNew && canWrite && !encerrado ? (
+            <button
+              type="button"
+              className="btn btn-soft"
+              onClick={() => void onEncerrar()}
+            >
+              Encerrar
+            </button>
           ) : null}
           <Link className="btn btn-soft" to="/vendas/acao-entre-amigos">
             Voltar
@@ -566,6 +635,11 @@ export function AcaoEntreAmigosFormPage() {
         {error ? (
           <AlertMessage tone="error" title="Atenção">
             {error}
+          </AlertMessage>
+        ) : null}
+        {encerrado ? (
+          <AlertMessage tone="info" title="Ação encerrada">
+            Não é possível alterar o cadastro, faixas ou vender novos números.
           </AlertMessage>
         ) : null}
 
@@ -752,7 +826,7 @@ export function AcaoEntreAmigosFormPage() {
         </div>
 
         <div className="form-actions">
-          {canWrite ? (
+          {canWrite && !encerrado ? (
             <>
               <button className="btn btn-primary" type="submit" disabled={saving}>
                 {saving ? 'Salvando…' : 'Salvar'}
@@ -769,7 +843,11 @@ export function AcaoEntreAmigosFormPage() {
               ) : null}
             </>
           ) : (
-            <p className="muted">Modo leitura — sem permissão para salvar.</p>
+            <p className="muted">
+              {encerrado
+                ? 'Ação encerrada — somente visualização.'
+                : 'Modo leitura — sem permissão para salvar.'}
+            </p>
           )}
           <Link className="btn btn-soft" to="/vendas/acao-entre-amigos">
             Cancelar
@@ -790,7 +868,7 @@ export function AcaoEntreAmigosFormPage() {
             </AlertMessage>
           ) : null}
 
-          {canWrite ? (
+          {canWrite && !encerrado ? (
             <form
               className="form-grid form-grid-2"
               onSubmit={(e) => void onAddFaixa(e)}
@@ -892,7 +970,7 @@ export function AcaoEntreAmigosFormPage() {
                       </td>
                       <td>{f.numero_final - f.numero_inicial + 1}</td>
                       <td>
-                        {canWrite ? (
+                        {canWrite && !encerrado ? (
                           <button
                             type="button"
                             className="btn btn-soft"

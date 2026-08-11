@@ -34,6 +34,11 @@ import {
   projetoLabel,
   type ProjetoLookup,
 } from '@/lib/projetosLookup'
+import {
+  eventoLabel,
+  loadEventosLookup,
+  type EventoLookup,
+} from '@/lib/eventosLookup'
 import type { Ramo } from '@/types/database'
 
 type Lookup = { id: number; nome: string; ramo?: number | null }
@@ -45,6 +50,7 @@ const emptyForm = {
   receita_secao: '',
   atividade_id: '',
   projeto_id: '',
+  evento_id: '',
   receita_emissao: '',
   receita_vencimento: '',
   receita_valor: '',
@@ -75,7 +81,10 @@ export function ReceitaFormPage() {
   const scope = useMemo(() => resolveFinanceiroScope(profile), [profile])
   const toast = useToast()
   const projetoIdParam = searchParams.get('projeto_id')
+  const eventoIdParam = searchParams.get('evento_id')
   const lockedByProjeto = isNew && !!projetoIdParam
+  const lockedByEvento = isNew && !!eventoIdParam
+  const lockedByVinculo = lockedByProjeto || lockedByEvento
 
   const [form, setForm] = useState({
     ...emptyForm,
@@ -91,6 +100,7 @@ export function ReceitaFormPage() {
   const [associados, setAssociados] = useState<Lookup[]>([])
   const [atividades, setAtividades] = useState<AtividadeLookup[]>([])
   const [projetos, setProjetos] = useState<ProjetoLookup[]>([])
+  const [eventos, setEventos] = useState<EventoLookup[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
@@ -98,14 +108,14 @@ export function ReceitaFormPage() {
   const [docFiles, setDocFiles] = useState<File[]>([])
 
   useEffect(() => {
-    if (!scope || !isNew || lockedByProjeto) return
+    if (!scope || !isNew || lockedByVinculo) return
     setForm((prev) => ({
       ...prev,
       receita_ramo: String(scope.ramo),
       receita_secao:
         scope.secao != null ? String(scope.secao) : prev.receita_secao,
     }))
-  }, [scope, isNew, lockedByProjeto])
+  }, [scope, isNew, lockedByVinculo])
 
   useEffect(() => {
     if (!empresaId) return
@@ -182,6 +192,21 @@ export function ReceitaFormPage() {
     return list
   }, [projetos, form.receita_ramo, form.receita_secao])
 
+  const eventosFiltrados = useMemo(() => {
+    let list = eventos
+    if (form.receita_ramo) {
+      list = list.filter(
+        (e) => e.ramo == null || e.ramo === Number(form.receita_ramo),
+      )
+    }
+    if (form.receita_secao) {
+      list = list.filter(
+        (e) => e.secao == null || e.secao === Number(form.receita_secao),
+      )
+    }
+    return list
+  }, [eventos, form.receita_ramo, form.receita_secao])
+
   useEffect(() => {
     if (!empresaId) return
     void loadAtividadesLookup(empresaId, { scope }).then((res) => {
@@ -190,24 +215,100 @@ export function ReceitaFormPage() {
     void loadProjetosLookup(empresaId, { scope }).then((res) => {
       if (!res.error) setProjetos(res.data)
     })
+    void loadEventosLookup(empresaId, { scope }).then((res) => {
+      if (!res.error) setEventos(res.data)
+    })
   }, [empresaId, scope])
 
   useEffect(() => {
-    if (!isNew || !projetoIdParam || projetos.length === 0) return
+    if (!isNew || !projetoIdParam || !empresaId) return
     const pid = Number(projetoIdParam)
     if (!Number.isFinite(pid) || pid <= 0) return
-    const projeto = projetos.find((p) => p.projeto_id === pid)
-    if (!projeto) return
-    setForm((prev) => ({
-      ...prev,
-      projeto_id: String(projeto.projeto_id),
-      receita_ramo: projeto.ramo != null ? String(projeto.ramo) : '',
-      receita_secao: projeto.secao != null ? String(projeto.secao) : '',
-      receita_descricao:
-        prev.receita_descricao.trim() || `Projeto: ${projeto.descricao}`,
-      receita_valor: '0,00',
-    }))
-  }, [isNew, projetoIdParam, projetos])
+
+    const fromList = projetos.find((p) => p.projeto_id === pid)
+    if (fromList) {
+      setForm((prev) => ({
+        ...prev,
+        projeto_id: String(fromList.projeto_id),
+        receita_ramo: fromList.ramo != null ? String(fromList.ramo) : '',
+        receita_secao: fromList.secao != null ? String(fromList.secao) : '',
+        receita_descricao:
+          prev.receita_descricao.trim() || `Projeto: ${fromList.descricao}`,
+        receita_valor: '0,00',
+      }))
+      return
+    }
+
+    void supabase
+      .from('projetos')
+      .select('projeto_id, descricao, ramo, secao, encerrado_em')
+      .eq('empresa_id', empresaId)
+      .eq('projeto_id', pid)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return
+        if (data.encerrado_em) {
+          setError(
+            'Este projeto está encerrado — não é possível lançar receitas.',
+          )
+          return
+        }
+        setForm((prev) => ({
+          ...prev,
+          projeto_id: String(data.projeto_id),
+          receita_ramo: data.ramo != null ? String(data.ramo) : '',
+          receita_secao: data.secao != null ? String(data.secao) : '',
+          receita_descricao:
+            prev.receita_descricao.trim() || `Projeto: ${data.descricao}`,
+          receita_valor: '0,00',
+        }))
+      })
+  }, [isNew, projetoIdParam, projetos, empresaId])
+
+  useEffect(() => {
+    if (!isNew || !eventoIdParam || !empresaId) return
+    const eid = Number(eventoIdParam)
+    if (!Number.isFinite(eid) || eid <= 0) return
+
+    const fromList = eventos.find((e) => e.evento_id === eid)
+    if (fromList) {
+      setForm((prev) => ({
+        ...prev,
+        evento_id: String(fromList.evento_id),
+        receita_ramo: fromList.ramo != null ? String(fromList.ramo) : '',
+        receita_secao: fromList.secao != null ? String(fromList.secao) : '',
+        receita_descricao:
+          prev.receita_descricao.trim() || `Evento: ${fromList.nome}`,
+        receita_valor: '0,00',
+      }))
+      return
+    }
+
+    void supabase
+      .from('venda_eventos')
+      .select('evento_id, nome, ramo, secao, encerrado_em')
+      .eq('empresa_id', empresaId)
+      .eq('evento_id', eid)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return
+        if (data.encerrado_em) {
+          setError(
+            'Este evento está encerrado — não é possível lançar receitas.',
+          )
+          return
+        }
+        setForm((prev) => ({
+          ...prev,
+          evento_id: String(data.evento_id),
+          receita_ramo: data.ramo != null ? String(data.ramo) : '',
+          receita_secao: data.secao != null ? String(data.secao) : '',
+          receita_descricao:
+            prev.receita_descricao.trim() || `Evento: ${data.nome}`,
+          receita_valor: '0,00',
+        }))
+      })
+  }, [isNew, eventoIdParam, eventos, empresaId])
 
   useEffect(() => {
     if (isNew || !empresaId) return
@@ -217,7 +318,7 @@ export function ReceitaFormPage() {
       const { data, error: loadError } = await supabase
         .from('receitas')
         .select(
-          'receita_id, receita_descricao, associado_id, receita_ramo, receita_secao, atividade_id, projeto_id, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, receita_observacao, receita_origem, receita_documento',
+          'receita_id, receita_descricao, associado_id, receita_ramo, receita_secao, atividade_id, projeto_id, evento_id, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, receita_observacao, receita_origem, receita_documento',
         )
         .eq('receita_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -252,6 +353,7 @@ export function ReceitaFormPage() {
         receita_secao: data.receita_secao?.toString() ?? '',
         atividade_id: data.atividade_id?.toString() ?? '',
         projeto_id: data.projeto_id?.toString() ?? '',
+        evento_id: data.evento_id?.toString() ?? '',
         receita_emissao: data.receita_emissao?.slice(0, 10) ?? '',
         receita_vencimento: data.receita_vencimento?.slice(0, 10) ?? '',
         receita_valor: data.receita_valor != null ? String(data.receita_valor) : '',
@@ -306,14 +408,14 @@ export function ReceitaFormPage() {
     // Mensalidade = conta do grupo (caixa 0); não cai nos ramos.
     const ramoPayload = isMensalidadeSave
       ? null
-      : lockedByProjeto
+      : lockedByVinculo
         ? numOrNull(form.receita_ramo)
         : scope
           ? scope.ramo
           : numOrNull(form.receita_ramo)
     const secaoPayload = isMensalidadeSave
       ? null
-      : lockedByProjeto
+      : lockedByVinculo
         ? numOrNull(form.receita_secao)
         : scope?.secao != null
           ? scope.secao
@@ -334,6 +436,7 @@ export function ReceitaFormPage() {
           receita_secao: secaoPayload,
           atividade_id: numOrNull(form.atividade_id),
           projeto_id: numOrNull(form.projeto_id),
+          evento_id: numOrNull(form.evento_id),
           receita_emissao: strOrNull(form.receita_emissao),
           receita_vencimento: strOrNull(form.receita_vencimento),
           receita_valor: valor,
@@ -385,6 +488,7 @@ export function ReceitaFormPage() {
           receita_secao: secaoPayload,
           atividade_id: numOrNull(form.atividade_id),
           projeto_id: numOrNull(form.projeto_id),
+          evento_id: numOrNull(form.evento_id),
           receita_emissao: strOrNull(form.receita_emissao),
           receita_vencimento: strOrNull(form.receita_vencimento),
           receita_valor: valor,
@@ -559,10 +663,10 @@ export function ReceitaFormPage() {
                   update('receita_secao', '')
                   update('atividade_id', '')
                 }}
-                disabled={disabled || isPaid || !!scope || lockedByProjeto}
+                disabled={disabled || isPaid || !!scope || lockedByVinculo}
               >
                 <option value="">
-                  {lockedByProjeto ? 'Grupo todo' : 'Selecione'}
+                  {lockedByVinculo ? 'Grupo todo' : 'Selecione'}
                 </option>
                 {ramos.map((ramo) => (
                   <option key={ramo.ramo_id} value={ramo.ramo_id}>
@@ -596,11 +700,11 @@ export function ReceitaFormPage() {
                 disabled ||
                 isPaid ||
                 (scope != null && scope.secao != null) ||
-                lockedByProjeto
+                lockedByVinculo
               }
             >
               <option value="">
-                {lockedByProjeto ? 'Todas / nenhuma' : 'Selecione'}
+                {lockedByVinculo ? 'Todas / nenhuma' : 'Selecione'}
               </option>
               {secoesFiltradas.map((secao) => (
                 <option key={secao.id} value={secao.id}>
@@ -620,7 +724,7 @@ export function ReceitaFormPage() {
               onChange={(e) => {
                 const value = e.target.value
                 update('atividade_id', value)
-                if (!value || lockedByProjeto) return
+                if (!value || lockedByVinculo) return
                 const ativ = atividades.find(
                   (a) => a.atividade_id === Number(value),
                 )
@@ -649,7 +753,7 @@ export function ReceitaFormPage() {
                 if (lockedByProjeto) return
                 const value = e.target.value
                 update('projeto_id', value)
-                if (!value) return
+                if (!value || lockedByEvento) return
                 const proj = projetos.find(
                   (p) => p.projeto_id === Number(value),
                 )
@@ -664,6 +768,33 @@ export function ReceitaFormPage() {
               {projetosFiltrados.map((p) => (
                 <option key={p.projeto_id} value={p.projeto_id}>
                   {projetoLabel(p)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="evento_id">Evento</label>
+            <select
+              id="evento_id"
+              className="select"
+              value={form.evento_id}
+              onChange={(e) => {
+                if (lockedByEvento) return
+                const value = e.target.value
+                update('evento_id', value)
+                if (!value || lockedByProjeto) return
+                const ev = eventos.find((item) => item.evento_id === Number(value))
+                if (!ev || scope) return
+                if (ev.ramo != null) update('receita_ramo', String(ev.ramo))
+                if (ev.secao != null) update('receita_secao', String(ev.secao))
+              }}
+              disabled={disabled || isPaid || lockedByEvento}
+            >
+              <option value="">Nenhum</option>
+              {eventosFiltrados.map((e) => (
+                <option key={e.evento_id} value={e.evento_id}>
+                  {eventoLabel(e)}
                 </option>
               ))}
             </select>

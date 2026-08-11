@@ -6,6 +6,7 @@ import { AddIcon } from '@/components/AddIcon'
 import { AlertMessage } from '@/components/AlertMessage'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 import { formatMoney } from '@/lib/despesas'
+import { isEncerrado } from '@/lib/encerrado'
 import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
 import { filtroAtividadesRamoOuGrupo } from '@/lib/atividadeVisibilidade'
 import type { Projeto, Ramo } from '@/types/database'
@@ -93,7 +94,9 @@ export function ProjetosPage() {
 
       let query = supabase
         .from('projetos')
-        .select('projeto_id, empresa_id, ramo, secao, descricao, valor, created_at')
+        .select(
+          'projeto_id, empresa_id, ramo, secao, descricao, valor, encerrado_em, created_at',
+        )
         .eq('empresa_id', empresaId)
         .order('created_at', { ascending: false })
 
@@ -248,7 +251,12 @@ export function ProjetosPage() {
               return (
                 <article key={row.projeto_id} className="projeto-card">
                   <div className="projeto-card-head">
-                    <h3>{row.descricao}</h3>
+                    <h3>
+                      {row.descricao}{' '}
+                      {isEncerrado(row.encerrado_em) ? (
+                        <span className="badge badge-danger">Encerrado</span>
+                      ) : null}
+                    </h3>
                     <p className="projeto-card-escopo">
                       {escopoLabel(row, ramoMap, secaoMap)}
                     </p>
@@ -284,7 +292,7 @@ export function ProjetosPage() {
                     >
                       {associadoLogin ? 'Ver resumo' : 'Abrir'}
                     </Link>
-                    {canFinanceiro ? (
+                    {canFinanceiro && !isEncerrado(row.encerrado_em) ? (
                       <>
                         <Link
                           className="btn btn-accent"

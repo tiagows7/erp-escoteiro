@@ -1150,13 +1150,19 @@ Deno.serve(async (req) => {
 
         const { data: acao, error: acaoError } = await admin
           .from('acao_entre_amigos')
-          .select('acao_id, empresa_id, nome, valor_numero, ramo')
+          .select('acao_id, empresa_id, nome, valor_numero, ramo, encerrado_em')
           .eq('acao_id', faixa.acao_id)
           .eq('empresa_id', faixa.empresa_id)
           .maybeSingle()
 
         if (acaoError || !acao) {
           return json({ error: 'Ação não encontrada.' }, 404)
+        }
+        if (acao.encerrado_em) {
+          return json(
+            { error: 'Esta ação entre amigos está encerrada.' },
+            409,
+          )
         }
 
         const ini = Number(faixa.numero_inicial)
@@ -1280,13 +1286,16 @@ Deno.serve(async (req) => {
         const { data: evento, error: eventoError } = await admin
           .from('venda_eventos')
           .select(
-            'evento_id, empresa_id, nome, valor_convite, numero_inicial, numero_final, link_token, ramo, secao',
+            'evento_id, empresa_id, nome, valor_convite, numero_inicial, numero_final, link_token, ramo, secao, encerrado_em',
           )
           .eq('link_token', token)
           .maybeSingle()
 
         if (eventoError || !evento) {
           return json({ error: 'Link inválido ou expirado.' }, 404)
+        }
+        if (evento.encerrado_em) {
+          return json({ error: 'Este evento está encerrado.' }, 409)
         }
 
         const total =

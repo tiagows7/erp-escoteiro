@@ -11,6 +11,7 @@ export type EventoPublicInfo = {
   empresa_nome: string
   disponiveis: number
   total: number
+  encerrado: boolean
 }
 
 export function linkPublicoVendaEvento(token: string): string {
@@ -43,6 +44,7 @@ export async function fetchEventoPublicInfo(
       empresa_nome: String(row.empresa_nome ?? ''),
       disponiveis: Number(row.disponiveis ?? 0),
       total: Number(row.total ?? 0),
+      encerrado: !!row.encerrado,
     },
     error: null,
   }

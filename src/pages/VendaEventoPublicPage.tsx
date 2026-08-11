@@ -61,6 +61,10 @@ export function VendaEventoPublicPage() {
   function onSubmit(event: FormEvent) {
     event.preventDefault()
     if (!token || !info) return
+    if (info.encerrado) {
+      setError('Este evento está encerrado.')
+      return
+    }
     if (info.disponiveis <= 0) {
       setError('Não há mais convites disponíveis.')
       return
@@ -131,7 +135,12 @@ export function VendaEventoPublicPage() {
     <div className="public-rifa-page">
       <header className="public-rifa-header">
         <p className="muted">{info.empresa_nome}</p>
-        <h1>{info.evento_nome}</h1>
+        <h1>
+          {info.evento_nome}{' '}
+          {info.encerrado ? (
+            <span className="badge badge-danger">Encerrado</span>
+          ) : null}
+        </h1>
         <p>
           {formatMoney(valorUnitario)} por convite
           {dataLabel ? ` · ${dataLabel}` : ''}
@@ -141,6 +150,11 @@ export function VendaEventoPublicPage() {
       {error ? (
         <AlertMessage tone="error" title="Atenção">
           {error}
+        </AlertMessage>
+      ) : null}
+      {info.encerrado ? (
+        <AlertMessage tone="info" title="Evento encerrado">
+          Este link não aceita mais compras de convites.
         </AlertMessage>
       ) : null}
       {success ? (
@@ -165,9 +179,12 @@ export function VendaEventoPublicPage() {
           <div className="acao-venda-numeros">
             <p className="muted" style={{ marginTop: 0 }}>
               {info.disponiveis} de {info.total} convite(s) disponível(is).
-              Informe a quantidade, os nomes e pague via PIX para confirmar.
+              {!info.encerrado
+                ? ' Informe a quantidade, os nomes e pague via PIX para confirmar.'
+                : ''}
             </p>
 
+            {!info.encerrado ? (
             <form
               className="form-grid form-grid-2"
               onSubmit={(e) => onSubmit(e)}
@@ -254,6 +271,7 @@ export function VendaEventoPublicPage() {
                 </button>
               </div>
             </form>
+            ) : null}
           </div>
         </div>
       </section>

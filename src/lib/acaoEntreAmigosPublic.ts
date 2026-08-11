@@ -11,6 +11,7 @@ export type AcaoPublicInfo = {
   numeros_vendidos: number[]
   imagem_url: string | null
   data_sorteio: string | null
+  encerrado: boolean
 }
 
 export function linkPublicoAcaoEntreAmigos(token: string): string {
@@ -46,6 +47,7 @@ export async function fetchAcaoPublicInfo(
       data_sorteio: row.data_sorteio
         ? String(row.data_sorteio).slice(0, 10)
         : null,
+      encerrado: !!row.encerrado,
     },
     error: null,
   }

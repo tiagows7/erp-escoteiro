@@ -69,6 +69,10 @@ export function AcaoEntreAmigosPublicPage() {
   function onSubmit(event: FormEvent) {
     event.preventDefault()
     if (!token || !info || selectedNumeros.length === 0) return
+    if (info.encerrado) {
+      setError('Esta ação entre amigos está encerrada.')
+      return
+    }
     if (!compradorNome.trim()) {
       setError('Informe o seu nome.')
       return
@@ -131,7 +135,12 @@ export function AcaoEntreAmigosPublicPage() {
     <div className="public-rifa-page">
       <header className="public-rifa-header">
         <p className="muted">{info.empresa_nome}</p>
-        <h1>{info.acao_nome}</h1>
+        <h1>
+          {info.acao_nome}{' '}
+          {info.encerrado ? (
+            <span className="badge badge-danger">Encerrado</span>
+          ) : null}
+        </h1>
         <p>
           Vendedor: <strong>{info.vendedor_nome}</strong> ·{' '}
           {formatMoney(valorUnitario)} por número
@@ -149,6 +158,11 @@ export function AcaoEntreAmigosPublicPage() {
       {error ? (
         <AlertMessage tone="error" title="Atenção">
           {error}
+        </AlertMessage>
+      ) : null}
+      {info.encerrado ? (
+        <AlertMessage tone="info" title="Ação encerrada">
+          Este link não aceita mais compras.
         </AlertMessage>
       ) : null}
       {success ? (
@@ -173,10 +187,11 @@ export function AcaoEntreAmigosPublicPage() {
           <div className="acao-venda-numeros">
             <p className="muted" style={{ marginTop: 0 }}>
               {vendidosCount} de {numeros.length} número(s) já vendido(s).
-              Selecione os números, informe seus dados e pague via PIX para
-              confirmar.
+              {!info.encerrado
+                ? ' Selecione os números, informe seus dados e pague via PIX para confirmar.'
+                : ''}
             </p>
-            {selectedNumeros.length > 0 ? (
+            {!info.encerrado && selectedNumeros.length > 0 ? (
               <p className="field-hint">
                 Selecionados: {selectedNumeros.join(', ')}
               </p>
@@ -192,7 +207,7 @@ export function AcaoEntreAmigosPublicPage() {
                     className={`acao-numero-btn ${sold ? 'is-sold' : ''} ${
                       selected ? 'is-selected' : ''
                     }`}
-                    disabled={sold || pixOpen}
+                    disabled={sold || pixOpen || info.encerrado}
                     onClick={() => toggleNumero(numero)}
                   >
                     {numero}
@@ -204,7 +219,7 @@ export function AcaoEntreAmigosPublicPage() {
         </div>
       </section>
 
-      {selectedNumeros.length > 0 ? (
+      {!info.encerrado && selectedNumeros.length > 0 ? (
         <section className="panel">
           <h2 style={{ marginTop: 0, fontSize: '1.15rem' }}>
             {selectedNumeros.length === 1

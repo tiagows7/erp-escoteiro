@@ -7,6 +7,7 @@ import { AlertMessage } from '@/components/AlertMessage'
 import { numerosDaFaixa } from '@/lib/acaoEntreAmigos'
 import { linkPublicoAcaoEntreAmigos } from '@/lib/acaoEntreAmigosPublic'
 import { formatMoney } from '@/lib/despesas'
+import { isEncerrado } from '@/lib/encerrado'
 import {
   financeiroScopeFromProfile,
   isAssociadoLogin,
@@ -125,7 +126,7 @@ export function AcaoEntreAmigosVendaPage() {
         supabase
           .from('acao_entre_amigos')
           .select(
-            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, imagem_url, created_at',
+            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, imagem_url, encerrado_em, created_at',
           )
           .eq('acao_id', acaoId)
           .eq('empresa_id', empresaId)
@@ -332,6 +333,10 @@ export function AcaoEntreAmigosVendaPage() {
   async function onVender(event: FormEvent) {
     event.preventDefault()
     if (!empresaId || !acao || selectedNumeros.length === 0) return
+    if (isEncerrado(acao.encerrado_em)) {
+      setError('Esta ação está encerrada — não é possível vender.')
+      return
+    }
     if (!compradorNome.trim()) {
       setError('Informe o nome do comprador.')
       return
@@ -429,12 +434,22 @@ export function AcaoEntreAmigosVendaPage() {
   const vendidosNaFaixa = numeros.filter((n) => vendidos.has(n)).length
   const valorUnitario = Number(acao.valor_numero ?? 0)
   const totalSelecionado = selectedNumeros.length * valorUnitario
+  const encerrado = isEncerrado(acao.encerrado_em)
 
   return (
     <>
       <header className="page-header">
         <div>
-          <h2>{associadoLogin ? 'Vender números' : 'Vendas da ação'}</h2>
+          <h2>
+            {encerrado
+              ? 'Vendas da ação'
+              : associadoLogin
+                ? 'Vender números'
+                : 'Vendas da ação'}{' '}
+            {encerrado ? (
+              <span className="badge badge-danger">Encerrado</span>
+            ) : null}
+          </h2>
           <p>
             {acao.nome} · {formatMoney(Number(acao.valor_numero ?? 0))} cada
             {acao.data_sorteio
@@ -451,7 +466,7 @@ export function AcaoEntreAmigosVendaPage() {
           </p>
         </div>
         <div className="page-header-actions actions-pair">
-          {associadoLogin && faixa?.link_token ? (
+          {associadoLogin && faixa?.link_token && !encerrado ? (
             <button
               type="button"
               className="btn btn-primary"
@@ -465,7 +480,7 @@ export function AcaoEntreAmigosVendaPage() {
               className="btn btn-soft"
               to={`/vendas/acao-entre-amigos/${acao.acao_id}`}
             >
-              Editar ação
+              {encerrado ? 'Ver ação' : 'Editar ação'}
             </Link>
           ) : null}
           <Link className="btn btn-soft" to="/vendas/acao-entre-amigos">
@@ -477,6 +492,12 @@ export function AcaoEntreAmigosVendaPage() {
       {error ? (
         <AlertMessage tone="error" title="Atenção">
           {error}
+        </AlertMessage>
+      ) : null}
+      {encerrado ? (
+        <AlertMessage tone="info" title="Ação encerrada">
+          Não é possível vender novos números — só consultar o que já foi
+          vendido.
         </AlertMessage>
       ) : null}
 
@@ -605,14 +626,16 @@ export function AcaoEntreAmigosVendaPage() {
                         className={`acao-numero-btn ${sold ? 'is-sold' : ''} ${
                           selected ? 'is-selected' : ''
                         }`}
-                        disabled={sold || saving}
+                        disabled={sold || saving || encerrado}
                         onClick={() => toggleNumero(numero)}
                         title={
                           sold
                             ? `${venda.comprador_nome} · ${venda.comprador_telefone}`
-                            : selected
-                              ? `Remover nº ${numero} da seleção`
-                              : `Selecionar nº ${numero}`
+                            : encerrado
+                              ? 'Ação encerrada'
+                              : selected
+                                ? `Remover nº ${numero} da seleção`
+                                : `Selecionar nº ${numero}`
                         }
                       >
                         {numero}
@@ -624,7 +647,7 @@ export function AcaoEntreAmigosVendaPage() {
             </div>
           </section>
 
-          {selectedNumeros.length > 0 ? (
+          {!encerrado && selectedNumeros.length > 0 ? (
             <section className="panel">
               <h3 style={{ marginTop: 0 }}>
                 {selectedNumeros.length === 1

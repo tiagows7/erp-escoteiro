@@ -7,6 +7,7 @@ import { AlertMessage } from '@/components/AlertMessage'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 import { filtroAtividadesRamoOuGrupo } from '@/lib/atividadeVisibilidade'
 import { formatMoney } from '@/lib/despesas'
+import { isEncerrado } from '@/lib/encerrado'
 import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
 import type { AcaoEntreAmigos, Ramo } from '@/types/database'
 
@@ -116,7 +117,7 @@ export function AcaoEntreAmigosPage() {
         const { data, error: listError } = await supabase
           .from('acao_entre_amigos')
           .select(
-            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, created_at',
+            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, encerrado_em, created_at',
           )
           .eq('empresa_id', empresaId)
           .in('acao_id', acaoIds)
@@ -146,7 +147,7 @@ export function AcaoEntreAmigosPage() {
       let query = supabase
         .from('acao_entre_amigos')
         .select(
-          'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, created_at',
+          'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, encerrado_em, created_at',
         )
         .eq('empresa_id', empresaId)
         .order('created_at', { ascending: false })
@@ -302,6 +303,7 @@ export function AcaoEntreAmigosPage() {
               <tbody>
                 {filtered.map((row) => {
                   const qtde = row.numero_final - row.numero_inicial + 1
+                  const encerrado = isEncerrado(row.encerrado_em)
                   const openTo = associadoLogin
                     ? `/vendas/acao-entre-amigos/${row.acao_id}/vender`
                     : `/vendas/acao-entre-amigos/${row.acao_id}`
@@ -318,19 +320,30 @@ export function AcaoEntreAmigosPage() {
                       <td>
                         <div className="atividades-row-actions">
                           <Link className="btn btn-soft" to={openTo}>
-                            {associadoLogin ? 'Vender' : 'Abrir'}
+                            {associadoLogin
+                              ? encerrado
+                                ? 'Ver'
+                                : 'Vender'
+                              : encerrado
+                                ? 'Ver'
+                                : 'Abrir'}
                           </Link>
                           {!associadoLogin ? (
                             <Link
                               className="btn btn-primary"
                               to={`/vendas/acao-entre-amigos/${row.acao_id}/vender`}
                             >
-                              Jovens / vendas
+                              {encerrado ? 'Vendas' : 'Jovens / vendas'}
                             </Link>
                           ) : null}
                         </div>
                       </td>
-                      <td>{row.nome}</td>
+                      <td>
+                        {row.nome}{' '}
+                        {encerrado ? (
+                          <span className="badge badge-danger">Encerrado</span>
+                        ) : null}
+                      </td>
                       {!associadoLogin ? (
                         <>
                           <td>

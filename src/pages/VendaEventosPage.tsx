@@ -7,6 +7,7 @@ import { AlertMessage } from '@/components/AlertMessage'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 import { formatMoney } from '@/lib/despesas'
 import { useToast } from '@/contexts/ToastContext'
+import { isEncerrado } from '@/lib/encerrado'
 import { totalConvitesEvento } from '@/lib/vendaEventos'
 import { linkPublicoVendaEvento } from '@/lib/vendaEventosPublic'
 import { isAssociadoLogin } from '@/lib/roles'
@@ -51,7 +52,7 @@ export function VendaEventosPage() {
         supabase
           .from('venda_eventos')
           .select(
-            'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, link_token, created_at',
+            'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, link_token, encerrado_em, created_at',
           )
           .eq('empresa_id', empresaId)
           .order('nome'),
@@ -180,10 +181,15 @@ export function VendaEventosPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => (
+                {filtered.map((row) => {
+                  const encerrado = isEncerrado(row.encerrado_em)
+                  return (
                   <tr key={row.evento_id}>
                     <td>
-                      <strong>{row.nome}</strong>
+                      <strong>{row.nome}</strong>{' '}
+                      {encerrado ? (
+                        <span className="badge badge-danger">Encerrado</span>
+                      ) : null}
                       <div className="muted">
                         nº {row.numero_inicial}–{row.numero_final}
                       </div>
@@ -202,29 +208,36 @@ export function VendaEventosPage() {
                     <td>{formatMoney(Number(row.valor_convite ?? 0))}</td>
                     <td className="actions-pair">
                       <Link
-                        className="btn btn-primary"
+                        className={`btn ${encerrado ? 'btn-soft' : 'btn-primary'}`}
                         to={`/vendas/eventos/${row.evento_id}/vender`}
                       >
-                        {associadoLogin ? 'Comprar' : 'Vender'}
+                        {encerrado
+                          ? 'Lista'
+                          : associadoLogin
+                            ? 'Comprar'
+                            : 'Vender'}
                       </Link>
-                      <button
-                        type="button"
-                        className="btn btn-soft"
-                        onClick={() => void copiarLink(row.link_token)}
-                      >
-                        Link
-                      </button>
+                      {!encerrado ? (
+                        <button
+                          type="button"
+                          className="btn btn-soft"
+                          onClick={() => void copiarLink(row.link_token)}
+                        >
+                          Link
+                        </button>
+                      ) : null}
                       {canWrite ? (
                         <Link
                           className="btn btn-soft"
                           to={`/vendas/eventos/${row.evento_id}`}
                         >
-                          Editar
+                          {encerrado ? 'Ver' : 'Editar'}
                         </Link>
                       ) : null}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

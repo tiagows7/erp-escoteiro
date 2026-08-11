@@ -30,6 +30,11 @@ import {
   projetoLabel,
   type ProjetoLookup,
 } from '@/lib/projetosLookup'
+import {
+  eventoLabel,
+  loadEventosLookup,
+  type EventoLookup,
+} from '@/lib/eventosLookup'
 import type { Ramo } from '@/types/database'
 
 type Lookup = { id: number; nome: string; ramo?: number | null; secao?: number | null }
@@ -41,6 +46,7 @@ const emptyForm = {
   despesa_secaonome: '',
   atividade_id: '',
   projeto_id: '',
+  evento_id: '',
   despesa_numeronota: '',
   despesa_emissao: '',
   despesa_vencimento: '',
@@ -72,7 +78,10 @@ export function DespesaFormPage() {
   const scope = useMemo(() => resolveFinanceiroScope(profile), [profile])
   const toast = useToast()
   const projetoIdParam = searchParams.get('projeto_id')
+  const eventoIdParam = searchParams.get('evento_id')
   const lockedByProjeto = isNew && !!projetoIdParam
+  const lockedByEvento = isNew && !!eventoIdParam
+  const lockedByVinculo = lockedByProjeto || lockedByEvento
 
   const [form, setForm] = useState({
     ...emptyForm,
@@ -88,6 +97,7 @@ export function DespesaFormPage() {
   const [fornecedores, setFornecedores] = useState<Lookup[]>([])
   const [atividades, setAtividades] = useState<AtividadeLookup[]>([])
   const [projetos, setProjetos] = useState<ProjetoLookup[]>([])
+  const [eventos, setEventos] = useState<EventoLookup[]>([])
   const [documentoUrls, setDocumentoUrls] = useState<string[]>([])
   const [notaFiles, setNotaFiles] = useState<File[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -95,14 +105,14 @@ export function DespesaFormPage() {
   const [loading, setLoading] = useState(!isNew)
 
   useEffect(() => {
-    if (!scope || !isNew || lockedByProjeto) return
+    if (!scope || !isNew || lockedByVinculo) return
     setForm((prev) => ({
       ...prev,
       despesa_ramo: String(scope.ramo),
       despesa_secao:
         scope.secao != null ? String(scope.secao) : prev.despesa_secao,
     }))
-  }, [scope, isNew, lockedByProjeto])
+  }, [scope, isNew, lockedByVinculo])
 
   useEffect(() => {
     if (!empresaId) return
@@ -196,6 +206,21 @@ export function DespesaFormPage() {
     return list
   }, [projetos, form.despesa_ramo, form.despesa_secao])
 
+  const eventosFiltrados = useMemo(() => {
+    let list = eventos
+    if (form.despesa_ramo) {
+      list = list.filter(
+        (e) => e.ramo == null || e.ramo === Number(form.despesa_ramo),
+      )
+    }
+    if (form.despesa_secao) {
+      list = list.filter(
+        (e) => e.secao == null || e.secao === Number(form.despesa_secao),
+      )
+    }
+    return list
+  }, [eventos, form.despesa_ramo, form.despesa_secao])
+
   useEffect(() => {
     if (!empresaId) return
     void loadAtividadesLookup(empresaId, { scope }).then((res) => {
@@ -204,26 +229,106 @@ export function DespesaFormPage() {
     void loadProjetosLookup(empresaId, { scope }).then((res) => {
       if (!res.error) setProjetos(res.data)
     })
+    void loadEventosLookup(empresaId, { scope }).then((res) => {
+      if (!res.error) setEventos(res.data)
+    })
   }, [empresaId, scope])
 
   useEffect(() => {
-    if (!isNew || !projetoIdParam || projetos.length === 0) return
+    if (!isNew || !projetoIdParam || !empresaId) return
     const pid = Number(projetoIdParam)
     if (!Number.isFinite(pid) || pid <= 0) return
-    const projeto = projetos.find((p) => p.projeto_id === pid)
-    if (!projeto) return
-    setForm((prev) => ({
-      ...prev,
-      projeto_id: String(projeto.projeto_id),
-      despesa_ramo: projeto.ramo != null ? String(projeto.ramo) : '',
-      despesa_secao: projeto.secao != null ? String(projeto.secao) : '',
-      despesa_secaonome: '',
-      despesa_valor: '0,00',
-      despesa_finalidade:
-        prev.despesa_finalidade.trim() ||
-        `Projeto: ${projeto.descricao}`,
-    }))
-  }, [isNew, projetoIdParam, projetos])
+
+    const fromList = projetos.find((p) => p.projeto_id === pid)
+    if (fromList) {
+      setForm((prev) => ({
+        ...prev,
+        projeto_id: String(fromList.projeto_id),
+        despesa_ramo: fromList.ramo != null ? String(fromList.ramo) : '',
+        despesa_secao: fromList.secao != null ? String(fromList.secao) : '',
+        despesa_secaonome: '',
+        despesa_valor: '0,00',
+        despesa_finalidade:
+          prev.despesa_finalidade.trim() ||
+          `Projeto: ${fromList.descricao}`,
+      }))
+      return
+    }
+
+    void supabase
+      .from('projetos')
+      .select('projeto_id, descricao, ramo, secao, encerrado_em')
+      .eq('empresa_id', empresaId)
+      .eq('projeto_id', pid)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return
+        if (data.encerrado_em) {
+          setError(
+            'Este projeto está encerrado — não é possível lançar despesas.',
+          )
+          return
+        }
+        setForm((prev) => ({
+          ...prev,
+          projeto_id: String(data.projeto_id),
+          despesa_ramo: data.ramo != null ? String(data.ramo) : '',
+          despesa_secao: data.secao != null ? String(data.secao) : '',
+          despesa_secaonome: '',
+          despesa_valor: '0,00',
+          despesa_finalidade:
+            prev.despesa_finalidade.trim() ||
+            `Projeto: ${data.descricao}`,
+        }))
+      })
+  }, [isNew, projetoIdParam, projetos, empresaId])
+
+  useEffect(() => {
+    if (!isNew || !eventoIdParam || !empresaId) return
+    const eid = Number(eventoIdParam)
+    if (!Number.isFinite(eid) || eid <= 0) return
+
+    const fromList = eventos.find((e) => e.evento_id === eid)
+    if (fromList) {
+      setForm((prev) => ({
+        ...prev,
+        evento_id: String(fromList.evento_id),
+        despesa_ramo: fromList.ramo != null ? String(fromList.ramo) : '',
+        despesa_secao: fromList.secao != null ? String(fromList.secao) : '',
+        despesa_secaonome: '',
+        despesa_valor: '0,00',
+        despesa_finalidade:
+          prev.despesa_finalidade.trim() || `Evento: ${fromList.nome}`,
+      }))
+      return
+    }
+
+    void supabase
+      .from('venda_eventos')
+      .select('evento_id, nome, ramo, secao, encerrado_em')
+      .eq('empresa_id', empresaId)
+      .eq('evento_id', eid)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return
+        if (data.encerrado_em) {
+          setError(
+            'Este evento está encerrado — não é possível lançar despesas.',
+          )
+          return
+        }
+        setForm((prev) => ({
+          ...prev,
+          evento_id: String(data.evento_id),
+          despesa_ramo: data.ramo != null ? String(data.ramo) : '',
+          despesa_secao: data.secao != null ? String(data.secao) : '',
+          despesa_secaonome: '',
+          despesa_valor: '0,00',
+          despesa_finalidade:
+            prev.despesa_finalidade.trim() || `Evento: ${data.nome}`,
+        }))
+      })
+  }, [isNew, eventoIdParam, eventos, empresaId])
 
   useEffect(() => {
     if (isNew || !empresaId) return
@@ -233,7 +338,7 @@ export function DespesaFormPage() {
       const { data, error: loadError } = await supabase
         .from('despesas')
         .select(
-          'despesa_id, despesa_fornecedor, despesa_ramo, despesa_secao, despesa_secaonome, atividade_id, projeto_id, despesa_numeronota, despesa_emissao, despesa_vencimento, despesa_valor, despesa_saldo, despesa_situacao, despesa_finalidade, despesa_documento',
+          'despesa_id, despesa_fornecedor, despesa_ramo, despesa_secao, despesa_secaonome, atividade_id, projeto_id, evento_id, despesa_numeronota, despesa_emissao, despesa_vencimento, despesa_valor, despesa_saldo, despesa_situacao, despesa_finalidade, despesa_documento',
         )
         .eq('despesa_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -268,6 +373,7 @@ export function DespesaFormPage() {
         despesa_secaonome: data.despesa_secaonome?.toString() ?? '',
         atividade_id: data.atividade_id?.toString() ?? '',
         projeto_id: data.projeto_id?.toString() ?? '',
+        evento_id: data.evento_id?.toString() ?? '',
         despesa_numeronota: data.despesa_numeronota ?? '',
         despesa_emissao: data.despesa_emissao?.slice(0, 10) ?? '',
         despesa_vencimento: data.despesa_vencimento?.slice(0, 10) ?? '',
@@ -318,17 +424,17 @@ export function DespesaFormPage() {
       return
     }
 
-    const ramoPayload = lockedByProjeto
+    const ramoPayload = lockedByVinculo
       ? numOrNull(form.despesa_ramo)
       : scope
         ? scope.ramo
         : numOrNull(form.despesa_ramo)
-    const secaoPayload = lockedByProjeto
+    const secaoPayload = lockedByVinculo
       ? numOrNull(form.despesa_secao)
       : scope?.secao != null
         ? scope.secao
         : numOrNull(form.despesa_secao)
-    const secaonomePayload = lockedByProjeto
+    const secaonomePayload = lockedByVinculo
       ? null
       : numOrNull(form.despesa_secaonome)
 
@@ -346,6 +452,7 @@ export function DespesaFormPage() {
           despesa_secaonome: secaonomePayload,
           atividade_id: numOrNull(form.atividade_id),
           projeto_id: numOrNull(form.projeto_id),
+          evento_id: numOrNull(form.evento_id),
           despesa_numeronota: strOrNull(form.despesa_numeronota),
           despesa_emissao: strOrNull(form.despesa_emissao),
           despesa_vencimento: strOrNull(form.despesa_vencimento),
@@ -392,6 +499,7 @@ export function DespesaFormPage() {
           despesa_secaonome: secaonomePayload,
           atividade_id: numOrNull(form.atividade_id),
           projeto_id: numOrNull(form.projeto_id),
+          evento_id: numOrNull(form.evento_id),
           despesa_numeronota: strOrNull(form.despesa_numeronota),
           despesa_emissao: strOrNull(form.despesa_emissao),
           despesa_vencimento: strOrNull(form.despesa_vencimento),
@@ -544,10 +652,10 @@ export function DespesaFormPage() {
                 update('despesa_secaonome', '')
                 update('atividade_id', '')
               }}
-              disabled={disabled || isPaid || !!scope || lockedByProjeto}
+              disabled={disabled || isPaid || !!scope || lockedByVinculo}
             >
               <option value="">
-                {lockedByProjeto ? 'Grupo todo' : 'Selecione'}
+                {lockedByVinculo ? 'Grupo todo' : 'Selecione'}
               </option>
               {ramos.map((ramo) => (
                 <option key={ramo.ramo_id} value={ramo.ramo_id}>
@@ -572,11 +680,11 @@ export function DespesaFormPage() {
                 disabled ||
                 isPaid ||
                 (scope != null && scope.secao != null) ||
-                lockedByProjeto
+                lockedByVinculo
               }
             >
               <option value="">
-                {lockedByProjeto ? 'Todas / nenhuma' : 'Selecione'}
+                {lockedByVinculo ? 'Todas / nenhuma' : 'Selecione'}
               </option>
               {secoesFiltradas.map((secao) => (
                 <option key={secao.id} value={secao.id}>
@@ -593,7 +701,7 @@ export function DespesaFormPage() {
               className="select"
               value={form.despesa_secaonome}
               onChange={(e) => update('despesa_secaonome', e.target.value)}
-              disabled={disabled || isPaid || lockedByProjeto}
+              disabled={disabled || isPaid || lockedByVinculo}
             >
               <option value="">Selecione</option>
               {patrulhasFiltradas.map((item) => (
@@ -613,7 +721,7 @@ export function DespesaFormPage() {
               onChange={(e) => {
                 const value = e.target.value
                 update('atividade_id', value)
-                if (!value || lockedByProjeto) return
+                if (!value || lockedByVinculo) return
                 const ativ = atividades.find(
                   (a) => a.atividade_id === Number(value),
                 )
@@ -642,7 +750,7 @@ export function DespesaFormPage() {
                 if (lockedByProjeto) return
                 const value = e.target.value
                 update('projeto_id', value)
-                if (!value) return
+                if (!value || lockedByEvento) return
                 const proj = projetos.find(
                   (p) => p.projeto_id === Number(value),
                 )
@@ -657,6 +765,33 @@ export function DespesaFormPage() {
               {projetosFiltrados.map((p) => (
                 <option key={p.projeto_id} value={p.projeto_id}>
                   {projetoLabel(p)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="evento_id">Evento</label>
+            <select
+              id="evento_id"
+              className="select"
+              value={form.evento_id}
+              onChange={(e) => {
+                if (lockedByEvento) return
+                const value = e.target.value
+                update('evento_id', value)
+                if (!value || lockedByProjeto) return
+                const ev = eventos.find((item) => item.evento_id === Number(value))
+                if (!ev || scope) return
+                if (ev.ramo != null) update('despesa_ramo', String(ev.ramo))
+                if (ev.secao != null) update('despesa_secao', String(ev.secao))
+              }}
+              disabled={disabled || isPaid || lockedByEvento}
+            >
+              <option value="">Nenhum</option>
+              {eventosFiltrados.map((e) => (
+                <option key={e.evento_id} value={e.evento_id}>
+                  {eventoLabel(e)}
                 </option>
               ))}
             </select>

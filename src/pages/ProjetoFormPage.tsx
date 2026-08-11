@@ -6,6 +6,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { formatMoney, parseMoneyInput, situacaoDespesaLabel } from '@/lib/despesas'
 import { documentLabel, parseDocumentUrls } from '@/lib/documentUrls'
+import { isEncerrado } from '@/lib/encerrado'
 import { situacaoTituloLabel } from '@/lib/receitas'
 import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
 import type { Projeto, Ramo } from '@/types/database'
@@ -166,7 +167,9 @@ export function ProjetoFormPage() {
 
       const { data, error: loadError } = await supabase
         .from('projetos')
-        .select('projeto_id, empresa_id, ramo, secao, descricao, valor, created_at')
+        .select(
+          'projeto_id, empresa_id, ramo, secao, descricao, valor, encerrado_em, created_at',
+        )
         .eq('projeto_id', Number(id))
         .eq('empresa_id', empresaId)
         .maybeSingle()
@@ -278,10 +281,44 @@ export function ProjetoFormPage() {
     })
   }
 
+  async function onEncerrar() {
+    if (!canWrite || isNew || !empresaId || !projeto) return
+    if (isEncerrado(projeto.encerrado_em)) return
+    const ok = await toast.confirm({
+      title: 'Encerrar projeto?',
+      message:
+        'Depois de encerrado, o projeto fica somente para visualização — sem editar nem lançar despesas/receitas.',
+      confirmLabel: 'Encerrar',
+      danger: true,
+    })
+    if (!ok) return
+
+    const { error: upError, data } = await supabase
+      .from('projetos')
+      .update({ encerrado_em: new Date().toISOString() })
+      .eq('projeto_id', Number(id))
+      .eq('empresa_id', empresaId)
+      .select(
+        'projeto_id, empresa_id, ramo, secao, descricao, valor, encerrado_em, created_at',
+      )
+      .single()
+
+    if (upError || !data) {
+      setError(upError?.message ?? 'Não foi possível encerrar o projeto.')
+      return
+    }
+    setProjeto(data as Projeto)
+    toast.success('Projeto encerrado', 'Agora só é possível visualizar.')
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     if (!canWrite) {
       setError('Sem permissão para alterar projetos.')
+      return
+    }
+    if (!isNew && isEncerrado(projeto?.encerrado_em)) {
+      setError('Projeto encerrado — somente visualização.')
       return
     }
     if (!empresaId) {
@@ -339,6 +376,10 @@ export function ProjetoFormPage() {
 
   async function onDelete() {
     if (!canWrite || isNew || !empresaId) return
+    if (isEncerrado(projeto?.encerrado_em)) {
+      setError('Projeto encerrado — não é possível excluir.')
+      return
+    }
     const ok = await toast.confirm({
       title: 'Excluir projeto?',
       message: 'Esta ação não pode ser desfeita.',
@@ -410,7 +451,12 @@ export function ProjetoFormPage() {
       <>
         <header className="page-header">
           <div>
-            <h2>Resumo do projeto</h2>
+            <h2>
+              Resumo do projeto{' '}
+              {isEncerrado(projeto.encerrado_em) ? (
+                <span className="badge badge-danger">Encerrado</span>
+              ) : null}
+            </h2>
             <p>
               {projeto.descricao} · {escopoLabel(projeto, ramoMap, secaoMap)} —{' '}
               <strong>{empresa?.nome}</strong>
@@ -455,7 +501,8 @@ export function ProjetoFormPage() {
     )
   }
 
-  const disabled = saving || !canWrite
+  const encerrado = isEncerrado(projeto?.encerrado_em)
+  const disabled = saving || !canWrite || encerrado
 
   function renderContasTables(linkLancamentos: boolean) {
     return (
@@ -581,11 +628,18 @@ export function ProjetoFormPage() {
     <>
       <header className="page-header">
         <div>
-          <h2>{isNew ? 'Novo projeto' : 'Editar projeto'}</h2>
-          <p>Descrição, ramo/grupo, seção e valor</p>
+          <h2>
+            {isNew ? 'Novo projeto' : encerrado ? 'Projeto' : 'Editar projeto'}{' '}
+            {encerrado ? <span className="badge badge-danger">Encerrado</span> : null}
+          </h2>
+          <p>
+            {encerrado
+              ? 'Somente visualização — não é possível alterar nem lançar contas.'
+              : 'Descrição, ramo/grupo, seção e valor'}
+          </p>
         </div>
-        <div className="page-header-actions actions-pair">
-          {!isNew && canFinanceiro ? (
+        <div className="page-header-actions">
+          {!isNew && canFinanceiro && !encerrado ? (
             <>
               <Link
                 className="btn btn-accent"
@@ -601,6 +655,15 @@ export function ProjetoFormPage() {
               </Link>
             </>
           ) : null}
+          {!isNew && canWrite && !encerrado ? (
+            <button
+              type="button"
+              className="btn btn-soft"
+              onClick={() => void onEncerrar()}
+            >
+              Encerrar
+            </button>
+          ) : null}
           <Link className="btn btn-soft" to="/projetos">
             Voltar
           </Link>
@@ -611,6 +674,12 @@ export function ProjetoFormPage() {
         {error ? (
           <AlertMessage tone="error" title="Atenção">
             {error}
+          </AlertMessage>
+        ) : null}
+        {encerrado ? (
+          <AlertMessage tone="info" title="Projeto encerrado">
+            Cadastro e lançamentos bloqueados. Você ainda pode consultar o
+            resumo financeiro abaixo.
           </AlertMessage>
         ) : null}
 
@@ -685,7 +754,7 @@ export function ProjetoFormPage() {
         </div>
 
         <div className="form-actions">
-          {canWrite ? (
+          {canWrite && !encerrado ? (
             <>
               <button className="btn btn-primary" type="submit" disabled={saving}>
                 {saving ? 'Salvando…' : 'Salvar'}
@@ -702,7 +771,11 @@ export function ProjetoFormPage() {
               ) : null}
             </>
           ) : (
-            <p className="muted">Modo leitura — sem permissão para salvar.</p>
+            <p className="muted">
+              {encerrado
+                ? 'Projeto encerrado — somente visualização.'
+                : 'Modo leitura — sem permissão para salvar.'}
+            </p>
           )}
           <Link className="btn btn-soft" to="/projetos">
             Cancelar

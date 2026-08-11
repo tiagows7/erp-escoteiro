@@ -195,6 +195,7 @@ export type Projeto = {
   secao: number | null
   descricao: string
   valor: number
+  encerrado_em: string | null
   created_at: string | null
 }
 
@@ -210,6 +211,7 @@ export type AcaoEntreAmigos = {
   valor_numero: number
   data_sorteio: string | null
   imagem_url: string | null
+  encerrado_em: string | null
   created_at: string | null
 }
 
@@ -258,6 +260,7 @@ export type VendaEvento = {
   data_evento: string | null
   imagem_url: string | null
   link_token: string
+  encerrado_em: string | null
   created_at: string | null
 }
 
