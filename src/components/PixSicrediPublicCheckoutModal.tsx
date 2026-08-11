@@ -257,7 +257,9 @@ export function PixSicrediPublicCheckoutModal({
               <p className="muted">Aguardando código PIX…</p>
             )}
             <p className="field-hint">
-              Números: {input.numeros.join(', ')} · Aguardando confirmação…
+              {input.kind === 'evento'
+                ? `Convites: ${input.nomes.length} · Aguardando confirmação…`
+                : `Números: ${input.numeros.join(', ')} · Aguardando confirmação…`}
             </p>
           </div>
         ) : null}
