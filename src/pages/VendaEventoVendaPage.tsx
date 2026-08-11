@@ -1,0 +1,425 @@
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
+import { useToast } from '@/contexts/ToastContext'
+import { AlertMessage } from '@/components/AlertMessage'
+import { formatMoney } from '@/lib/despesas'
+import {
+  comprarConvitesEvento,
+  totalConvitesEvento,
+} from '@/lib/vendaEventos'
+import { isAssociadoLogin } from '@/lib/roles'
+import type {
+  VendaEvento,
+  VendaEventoConvite,
+  VendaEventoFormaPagamento,
+} from '@/types/database'
+
+function formatDateBr(value: string | null | undefined) {
+  if (!value) return '—'
+  const [y, m, d] = value.slice(0, 10).split('-')
+  if (!y || !m || !d) return value
+  return `${d}/${m}/${y}`
+}
+
+export function VendaEventoVendaPage() {
+  const { id } = useParams()
+  const eventoId = Number(id)
+  const { empresa, profile, hasPermission } = useAuth()
+  const empresaId = empresa?.id
+  const associadoLogin = isAssociadoLogin(profile)
+  const canStaffEdit = !associadoLogin && hasPermission('vendas.write')
+  const toast = useToast()
+
+  const [evento, setEvento] = useState<VendaEvento | null>(null)
+  const [convites, setConvites] = useState<VendaEventoConvite[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [quantidade, setQuantidade] = useState(1)
+  const [nomes, setNomes] = useState<string[]>([''])
+  const [telefone, setTelefone] = useState('')
+  const [formaPagamento, setFormaPagamento] =
+    useState<VendaEventoFormaPagamento | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [ultimaNumeracao, setUltimaNumeracao] = useState<number[] | null>(null)
+
+  const total = useMemo(() => {
+    if (!evento) return 0
+    return totalConvitesEvento(evento.numero_inicial, evento.numero_final)
+  }, [evento])
+
+  const vendidos = convites.length
+  const disponiveis = Math.max(0, total - vendidos)
+  const valorUnitario = Number(evento?.valor_convite ?? 0)
+  const totalSelecionado = Math.max(0, quantidade) * valorUnitario
+
+  async function reload() {
+    if (!empresaId || !Number.isFinite(eventoId) || eventoId <= 0) return
+    setLoading(true)
+    setError(null)
+
+    const [eventoRes, convitesRes] = await Promise.all([
+      supabase
+        .from('venda_eventos')
+        .select(
+          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, created_at',
+        )
+        .eq('evento_id', eventoId)
+        .eq('empresa_id', empresaId)
+        .maybeSingle(),
+      supabase
+        .from('venda_evento_convite')
+        .select(
+          'convite_id, empresa_id, evento_id, compra_id, numero, nome, created_at',
+        )
+        .eq('evento_id', eventoId)
+        .eq('empresa_id', empresaId)
+        .order('numero'),
+    ])
+
+    if (eventoRes.error || !eventoRes.data) {
+      setError(eventoRes.error?.message ?? 'Evento não encontrado.')
+      setEvento(null)
+      setConvites([])
+      setLoading(false)
+      return
+    }
+
+    if (convitesRes.error) {
+      setError(convitesRes.error.message)
+      setLoading(false)
+      return
+    }
+
+    setEvento(eventoRes.data as VendaEvento)
+    setConvites((convitesRes.data ?? []) as VendaEventoConvite[])
+    setError(null)
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    void reload()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaId, eventoId])
+
+  useEffect(() => {
+    setNomes((prev) => {
+      const next = Array.from({ length: Math.max(1, quantidade) }, (_, i) =>
+        prev[i] ?? '',
+      )
+      return next
+    })
+  }, [quantidade])
+
+  function limparCompra() {
+    setQuantidade(1)
+    setNomes([''])
+    setTelefone('')
+    setFormaPagamento(null)
+    setUltimaNumeracao(null)
+    setError(null)
+  }
+
+  async function onComprar(event: FormEvent) {
+    event.preventDefault()
+    if (!evento) return
+
+    if (quantidade < 1) {
+      setError('Informe a quantidade de convites.')
+      return
+    }
+    if (quantidade > disponiveis) {
+      setError(`Só há ${disponiveis} convite(s) disponível(is).`)
+      return
+    }
+
+    const nomesLimpos = nomes.map((n) => n.trim())
+    if (nomesLimpos.some((n) => !n)) {
+      setError('Preencha o nome de cada convite.')
+      return
+    }
+    if (!formaPagamento) {
+      setError('Selecione a forma de pagamento: Dinheiro ou PIX direto.')
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+
+    const result = await comprarConvitesEvento({
+      eventoId: evento.evento_id,
+      nomes: nomesLimpos,
+      compradorTelefone: telefone,
+      formaPagamento,
+    })
+
+    setSaving(false)
+
+    if (!result.ok) {
+      setError(result.mensagem)
+      await reload()
+      return
+    }
+
+    setUltimaNumeracao(result.numeros)
+    toast.success('Compra registrada!', result.mensagem)
+    setQuantidade(1)
+    setNomes([''])
+    setTelefone('')
+    setFormaPagamento(null)
+    await reload()
+  }
+
+  if (!empresaId) {
+    return (
+      <section className="panel">
+        <p className="muted">
+          Seu usuário precisa estar vinculado a um grupo escoteiro.
+        </p>
+      </section>
+    )
+  }
+
+  if (loading) {
+    return <div className="loading">Carregando evento…</div>
+  }
+
+  if (!evento) {
+    return (
+      <section className="panel">
+        <AlertMessage tone="error" title="Atenção">
+          {error ?? 'Evento não encontrado'}
+        </AlertMessage>
+        <Link className="btn btn-soft" to="/vendas/eventos">
+          Voltar
+        </Link>
+      </section>
+    )
+  }
+
+  return (
+    <>
+      <header className="page-header">
+        <div>
+          <h2>Vender convites</h2>
+          <p>
+            {evento.nome} · {formatMoney(valorUnitario)} cada
+            {evento.data_evento
+              ? ` · ${formatDateBr(evento.data_evento)}`
+              : ''}
+          </p>
+        </div>
+        <div className="page-header-actions actions-pair">
+          {canStaffEdit ? (
+            <Link
+              className="btn btn-soft"
+              to={`/vendas/eventos/${evento.evento_id}`}
+            >
+              Editar evento
+            </Link>
+          ) : null}
+          <Link className="btn btn-soft" to="/vendas/eventos">
+            Voltar
+          </Link>
+        </div>
+      </header>
+
+      {error ? (
+        <AlertMessage tone="error" title="Atenção">
+          {error}
+        </AlertMessage>
+      ) : null}
+
+      {ultimaNumeracao && ultimaNumeracao.length > 0 ? (
+        <AlertMessage tone="success" title="Numeração atribuída">
+          Convite(s): <strong>{ultimaNumeracao.join(', ')}</strong>
+        </AlertMessage>
+      ) : null}
+
+      <section className="panel">
+        <div
+          className={`acao-venda-layout ${evento.imagem_url ? 'has-imagem' : ''}`}
+        >
+          {evento.imagem_url ? (
+            <div className="acao-imagem-side">
+              <img
+                className="acao-imagem-banner"
+                src={evento.imagem_url}
+                alt={`Imagem do evento ${evento.nome}`}
+              />
+            </div>
+          ) : null}
+          <div className="acao-venda-numeros">
+            <p className="muted" style={{ marginTop: 0 }}>
+              {vendidos} de {total} convite(s) vendido(s) · {disponiveis}{' '}
+              disponível(is) · faixa {evento.numero_inicial}–
+              {evento.numero_final}
+            </p>
+            <p className="field-hint">
+              Informe a quantidade. Em seguida preencha o nome de cada convite;
+              a numeração é atribuída automaticamente na ordem disponível.
+            </p>
+
+            <form
+              className="form-grid form-grid-2"
+              onSubmit={(e) => void onComprar(e)}
+            >
+              <div className="field">
+                <label htmlFor="quantidade">Quantidade</label>
+                <input
+                  id="quantidade"
+                  className="input"
+                  type="number"
+                  min={1}
+                  max={Math.max(1, disponiveis)}
+                  value={quantidade}
+                  onChange={(e) => {
+                    const n = Number(e.target.value)
+                    setQuantidade(
+                      Number.isFinite(n)
+                        ? Math.min(Math.max(1, Math.floor(n)), Math.max(1, disponiveis || 1))
+                        : 1,
+                    )
+                    setUltimaNumeracao(null)
+                  }}
+                  disabled={saving || disponiveis === 0}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label>Total</label>
+                <div className="input" style={{ display: 'flex', alignItems: 'center' }}>
+                  {formatMoney(totalSelecionado)}
+                </div>
+              </div>
+
+              {quantidade > 0 && disponiveis > 0
+                ? nomes.map((nome, index) => (
+                    <div
+                      key={`nome-${index}`}
+                      className={`field ${quantidade === 1 ? 'field-span-2' : ''}`}
+                    >
+                      <label htmlFor={`nome_${index}`}>
+                        Nome do convite {index + 1}
+                      </label>
+                      <input
+                        id={`nome_${index}`}
+                        className="input"
+                        value={nome}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          setNomes((prev) =>
+                            prev.map((n, i) => (i === index ? value : n)),
+                          )
+                        }}
+                        disabled={saving}
+                        required
+                        placeholder="Nome completo"
+                      />
+                    </div>
+                  ))
+                : null}
+
+              <div className="field">
+                <label htmlFor="telefone">Telefone (opcional)</label>
+                <input
+                  id="telefone"
+                  className="input"
+                  value={telefone}
+                  onChange={(e) => setTelefone(e.target.value)}
+                  disabled={saving}
+                  inputMode="tel"
+                  placeholder="(00) 00000-0000"
+                />
+              </div>
+
+              <div className="field">
+                <label>Forma de pagamento</label>
+                <div className="actions-pair" style={{ flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className={`btn ${
+                      formaPagamento === 'dinheiro' ? 'btn-primary' : 'btn-soft'
+                    }`}
+                    disabled={saving}
+                    onClick={() => setFormaPagamento('dinheiro')}
+                  >
+                    Dinheiro
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${
+                      formaPagamento === 'pix_direto'
+                        ? 'btn-primary'
+                        : 'btn-soft'
+                    }`}
+                    disabled={saving}
+                    onClick={() => setFormaPagamento('pix_direto')}
+                  >
+                    PIX direto
+                  </button>
+                </div>
+              </div>
+
+              <div className="form-actions field-span-2">
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  disabled={
+                    saving || disponiveis === 0 || !formaPagamento
+                  }
+                >
+                  {saving
+                    ? 'Salvando…'
+                    : quantidade === 1
+                      ? 'Confirmar 1 convite'
+                      : `Confirmar ${quantidade} convites`}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-soft"
+                  disabled={saving}
+                  onClick={limparCompra}
+                >
+                  Limpar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h3 style={{ marginTop: 0 }}>Lista para conferência</h3>
+        <p className="muted">
+          Convites já vendidos, ordenados pelo número — use no dia do evento.
+        </p>
+        {convites.length === 0 ? (
+          <div className="empty">Nenhum convite vendido ainda.</div>
+        ) : (
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Nº</th>
+                  <th>Nome</th>
+                </tr>
+              </thead>
+              <tbody>
+                {convites.map((c) => (
+                  <tr key={c.convite_id}>
+                    <td>
+                      <strong>{c.numero}</strong>
+                    </td>
+                    <td>{c.nome}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
+  )
+}

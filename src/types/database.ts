@@ -208,6 +208,7 @@ export type AcaoEntreAmigos = {
   numero_inicial: number
   numero_final: number
   valor_numero: number
+  data_sorteio: string | null
   imagem_url: string | null
   created_at: string | null
 }
@@ -241,6 +242,43 @@ export type AcaoEntreAmigosVenda = {
   vendido_por: string | null
   pix_cobranca_id: number | null
   vendido_em: string
+  created_at: string | null
+}
+
+export type VendaEvento = {
+  evento_id: number
+  empresa_id: number
+  nome: string
+  numero_inicial: number
+  numero_final: number
+  valor_convite: number
+  data_evento: string | null
+  imagem_url: string | null
+  created_at: string | null
+}
+
+export type VendaEventoFormaPagamento = 'dinheiro' | 'pix_direto'
+
+export type VendaEventoCompra = {
+  compra_id: number
+  empresa_id: number
+  evento_id: number
+  quantidade: number
+  comprador_telefone: string | null
+  valor: number
+  forma_pagamento: VendaEventoFormaPagamento | null
+  vendido_por: string | null
+  vendido_em: string
+  created_at: string | null
+}
+
+export type VendaEventoConvite = {
+  convite_id: number
+  empresa_id: number
+  evento_id: number
+  compra_id: number
+  numero: number
+  nome: string
   created_at: string | null
 }
 

@@ -28,6 +28,9 @@ import { AcaoEntreAmigosPage } from '@/pages/AcaoEntreAmigosPage'
 import { AcaoEntreAmigosFormPage } from '@/pages/AcaoEntreAmigosFormPage'
 import { AcaoEntreAmigosVendaPage } from '@/pages/AcaoEntreAmigosVendaPage'
 import { AcaoEntreAmigosPublicPage } from '@/pages/AcaoEntreAmigosPublicPage'
+import { VendaEventosPage } from '@/pages/VendaEventosPage'
+import { VendaEventoFormPage } from '@/pages/VendaEventoFormPage'
+import { VendaEventoVendaPage } from '@/pages/VendaEventoVendaPage'
 import { UsuariosPage } from '@/pages/UsuariosPage'
 import { UsuarioFormPage } from '@/pages/UsuarioFormPage'
 import { FornecedoresPage } from '@/pages/FornecedoresPage'
@@ -385,6 +388,30 @@ export default function App() {
               element={
                 <RequirePermission permission="vendas.view">
                   <AcaoEntreAmigosFormPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="vendas/eventos"
+              element={
+                <RequirePermission permission="vendas.view">
+                  <VendaEventosPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="vendas/eventos/:id/vender"
+              element={
+                <RequirePermission permission="vendas.view">
+                  <VendaEventoVendaPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="vendas/eventos/:id"
+              element={
+                <RequirePermission permission="vendas.view">
+                  <VendaEventoFormPage />
                 </RequirePermission>
               }
             />

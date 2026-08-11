@@ -135,6 +135,14 @@ export function AcaoEntreAmigosPublicPage() {
         <p>
           Vendedor: <strong>{info.vendedor_nome}</strong> ·{' '}
           {formatMoney(valorUnitario)} por número
+          {info.data_sorteio
+            ? ` · sorteio ${(() => {
+                const [y, m, d] = String(info.data_sorteio)
+                  .slice(0, 10)
+                  .split('-')
+                return y && m && d ? `${d}/${m}/${y}` : info.data_sorteio
+              })()}`
+            : ''}
         </p>
       </header>
 

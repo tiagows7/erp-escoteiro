@@ -24,6 +24,7 @@ export const ASSOCIADO_PORTAL_MENU_KEYS = [
   '/projetos',
   // Ação entre amigos: menu só se o associado tiver faixa (AppLayout).
   '/vendas/acao-entre-amigos',
+  '/vendas/eventos',
 ] as const
 
 export type AssociadoPortalMenuKey =

@@ -10,6 +10,7 @@ export type AcaoPublicInfo = {
   empresa_nome: string
   numeros_vendidos: number[]
   imagem_url: string | null
+  data_sorteio: string | null
 }
 
 export function linkPublicoAcaoEntreAmigos(token: string): string {
@@ -42,6 +43,9 @@ export async function fetchAcaoPublicInfo(
         ? row.numeros_vendidos.map((n: unknown) => Number(n))
         : [],
       imagem_url: row.imagem_url ? String(row.imagem_url) : null,
+      data_sorteio: row.data_sorteio
+        ? String(row.data_sorteio).slice(0, 10)
+        : null,
     },
     error: null,
   }

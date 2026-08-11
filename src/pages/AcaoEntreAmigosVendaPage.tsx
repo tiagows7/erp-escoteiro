@@ -125,7 +125,7 @@ export function AcaoEntreAmigosVendaPage() {
         supabase
           .from('acao_entre_amigos')
           .select(
-            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, imagem_url, created_at',
+            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, imagem_url, created_at',
           )
           .eq('acao_id', acaoId)
           .eq('empresa_id', empresaId)
@@ -437,6 +437,14 @@ export function AcaoEntreAmigosVendaPage() {
           <h2>{associadoLogin ? 'Vender números' : 'Vendas da ação'}</h2>
           <p>
             {acao.nome} · {formatMoney(Number(acao.valor_numero ?? 0))} cada
+            {acao.data_sorteio
+              ? ` · sorteio ${(() => {
+                  const [y, m, d] = String(acao.data_sorteio)
+                    .slice(0, 10)
+                    .split('-')
+                  return y && m && d ? `${d}/${m}/${y}` : acao.data_sorteio
+                })()}`
+              : null}
             {faixa
               ? ` · sua faixa ${faixa.numero_inicial}–${faixa.numero_final}`
               : null}

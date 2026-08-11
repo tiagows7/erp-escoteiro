@@ -47,6 +47,7 @@ const emptyForm = {
   numero_inicial: '1',
   numero_final: '100',
   valor_numero: '0,00',
+  data_sorteio: '',
 }
 
 function unidadeLabel(ramoId: number | null): string {
@@ -219,7 +220,7 @@ export function AcaoEntreAmigosFormPage() {
       const { data, error: loadError } = await supabase
         .from('acao_entre_amigos')
         .select(
-          'acao_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, imagem_url',
+          'acao_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, imagem_url',
         )
         .eq('acao_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -248,6 +249,9 @@ export function AcaoEntreAmigosFormPage() {
         valor_numero: formatMoney(Number(data.valor_numero ?? 0))
           .replace('R$', '')
           .trim(),
+        data_sorteio: data.data_sorteio
+          ? String(data.data_sorteio).slice(0, 10)
+          : '',
       })
       setImagemUrl(data.imagem_url ?? null)
       setImagemPreview(data.imagem_url ?? null)
@@ -339,6 +343,7 @@ export function AcaoEntreAmigosFormPage() {
       numero_inicial: numeroInicial,
       numero_final: numeroFinal,
       valor_numero: parseMoneyInput(form.valor_numero),
+      data_sorteio: form.data_sorteio || null,
     }
 
     const result = isNew
@@ -652,6 +657,18 @@ export function AcaoEntreAmigosFormPage() {
               inputMode="decimal"
               value={form.valor_numero}
               onChange={(e) => update('valor_numero', e.target.value)}
+              disabled={disabled}
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="data_sorteio">Data do sorteio</label>
+            <input
+              id="data_sorteio"
+              type="date"
+              className="input"
+              value={form.data_sorteio}
+              onChange={(e) => update('data_sorteio', e.target.value)}
               disabled={disabled}
             />
           </div>

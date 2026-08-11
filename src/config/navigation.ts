@@ -214,6 +214,12 @@ export const NAV_ITEMS: NavItem[] = [
         label: 'Ação entre amigos',
         permission: 'vendas.view',
       },
+      {
+        type: 'link',
+        to: '/vendas/eventos',
+        label: 'Eventos',
+        permission: 'vendas.view',
+      },
     ],
   },
   {
@@ -286,6 +292,12 @@ export function navItemsForProfile(
         type: 'link',
         to: '/vendas/acao-entre-amigos',
         label: 'Ação entre amigos',
+        permission: 'vendas.view',
+      },
+      {
+        type: 'link',
+        to: '/vendas/eventos',
+        label: 'Eventos',
         permission: 'vendas.view',
       },
     ]
