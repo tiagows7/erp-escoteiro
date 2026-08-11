@@ -27,7 +27,10 @@ type AssociadoOpt = {
   secao: number | null
   patrulha_matilha: number | null
 }
-type FaixaRow = AcaoEntreAmigosFaixa & { associado_nome: string }
+type FaixaRow = AcaoEntreAmigosFaixa & {
+  associado_nome: string
+  vendidos: number
+}
 
 const emptyForm = {
   ramo: '',
@@ -153,29 +156,47 @@ export function AcaoEntreAmigosFormPage() {
   }, [empresaId])
 
   async function loadFaixas(acaoId: number) {
-    const { data, error: loadError } = await supabase
-      .from('acao_entre_amigos_faixa')
-      .select(
-        'faixa_id, empresa_id, acao_id, associado_id, numero_inicial, numero_final, created_at, associados(nome)',
-      )
-      .eq('acao_id', acaoId)
-      .eq('empresa_id', empresaId!)
-      .order('numero_inicial')
+    const [faixasRes, vendasRes] = await Promise.all([
+      supabase
+        .from('acao_entre_amigos_faixa')
+        .select(
+          'faixa_id, empresa_id, acao_id, associado_id, numero_inicial, numero_final, created_at, associados(nome)',
+        )
+        .eq('acao_id', acaoId)
+        .eq('empresa_id', empresaId!)
+        .order('numero_inicial'),
+      supabase
+        .from('acao_entre_amigos_venda')
+        .select('numero')
+        .eq('acao_id', acaoId)
+        .eq('empresa_id', empresaId!),
+    ])
 
-    if (loadError) {
-      setFaixaError(loadError.message)
+    if (faixasRes.error) {
+      setFaixaError(faixasRes.error.message)
       setFaixas([])
       return
     }
 
+    const vendidosSet = new Set(
+      (vendasRes.data ?? []).map((v) => Number(v.numero)),
+    )
+
     setFaixas(
-      ((data ?? []) as unknown as Array<
+      ((faixasRes.data ?? []) as unknown as Array<
         AcaoEntreAmigosFaixa & { associados: { nome: string | null } | null }
-      >).map((row) => ({
-        ...row,
-        associado_nome:
-          row.associados?.nome ?? `Associado #${row.associado_id}`,
-      })),
+      >).map((row) => {
+        let vendidos = 0
+        for (let n = row.numero_inicial; n <= row.numero_final; n += 1) {
+          if (vendidosSet.has(n)) vendidos += 1
+        }
+        return {
+          ...row,
+          associado_nome:
+            row.associados?.nome ?? `Associado #${row.associado_id}`,
+          vendidos,
+        }
+      }),
     )
   }
 
@@ -741,6 +762,7 @@ export function AcaoEntreAmigosFormPage() {
                   <tr>
                     <th>Jovem</th>
                     <th>Números</th>
+                    <th>Vendidos</th>
                     <th>Qtde</th>
                     <th></th>
                   </tr>
@@ -751,6 +773,9 @@ export function AcaoEntreAmigosFormPage() {
                       <td>{f.associado_nome}</td>
                       <td>
                         {f.numero_inicial} – {f.numero_final}
+                      </td>
+                      <td>
+                        <strong>{f.vendidos}</strong>
                       </td>
                       <td>{f.numero_final - f.numero_inicial + 1}</td>
                       <td>

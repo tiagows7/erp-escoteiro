@@ -307,9 +307,19 @@ export function AcaoEntreAmigosPage() {
                   return (
                     <tr key={row.acao_id}>
                       <td>
-                        <Link className="btn btn-soft" to={openTo}>
-                          {associadoLogin ? 'Vender' : 'Abrir'}
-                        </Link>
+                        <div className="atividades-row-actions">
+                          <Link className="btn btn-soft" to={openTo}>
+                            {associadoLogin ? 'Vender' : 'Abrir'}
+                          </Link>
+                          {!associadoLogin ? (
+                            <Link
+                              className="btn btn-primary"
+                              to={`/vendas/acao-entre-amigos/${row.acao_id}/vender`}
+                            >
+                              Jovens / vendas
+                            </Link>
+                          ) : null}
+                        </div>
                       </td>
                       <td>{row.nome}</td>
                       {!associadoLogin ? (

@@ -6,7 +6,11 @@ import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { numerosDaFaixa } from '@/lib/acaoEntreAmigos'
 import { formatMoney } from '@/lib/despesas'
-import { isAssociadoLogin } from '@/lib/roles'
+import {
+  financeiroScopeFromProfile,
+  isAssociadoLogin,
+  staffRamoScope,
+} from '@/lib/roles'
 import type {
   AcaoEntreAmigos,
   AcaoEntreAmigosFaixa,
@@ -17,6 +21,17 @@ type VendaRow = AcaoEntreAmigosVenda & {
   associado_nome?: string | null
 }
 
+type StaffFaixaRow = AcaoEntreAmigosFaixa & {
+  associado_nome: string
+  associado_registro: number | null
+  associado_ramo: number | null
+  associado_secao: number | null
+  secao_nome: string | null
+  total: number
+  vendidos: number
+  disponiveis: number
+}
+
 export function AcaoEntreAmigosVendaPage() {
   const { id } = useParams()
   const acaoId = Number(id)
@@ -24,15 +39,21 @@ export function AcaoEntreAmigosVendaPage() {
   const empresaId = empresa?.id
   const associadoLogin = isAssociadoLogin(profile)
   const canStaffEdit = !associadoLogin && hasPermission('vendas.write')
+  const ramoScoped = useMemo(() => staffRamoScope(profile), [profile])
+  const secaoScoped = useMemo(() => {
+    const scope = financeiroScopeFromProfile(profile)
+    return scope?.secao ?? null
+  }, [profile])
   const toast = useToast()
 
   const [acao, setAcao] = useState<AcaoEntreAmigos | null>(null)
   const [faixa, setFaixa] = useState<AcaoEntreAmigosFaixa | null>(null)
+  const [staffFaixas, setStaffFaixas] = useState<StaffFaixaRow[]>([])
   const [vendas, setVendas] = useState<VendaRow[]>([])
   const [associadoId, setAssociadoId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedNumero, setSelectedNumero] = useState<number | null>(null)
+  const [selectedNumeros, setSelectedNumeros] = useState<number[]>([])
   const [compradorNome, setCompradorNome] = useState('')
   const [compradorTelefone, setCompradorTelefone] = useState('')
   const [saving, setSaving] = useState(false)
@@ -81,39 +102,58 @@ export function AcaoEntreAmigosVendaPage() {
       }
     }
 
-    const [acaoRes, faixaRes, vendasRes] = await Promise.all([
-      supabase
-        .from('acao_entre_amigos')
-        .select(
-          'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, created_at',
-        )
-        .eq('acao_id', acaoId)
-        .eq('empresa_id', empresaId)
-        .maybeSingle(),
-      associadoLogin && assocId != null
-        ? supabase
-            .from('acao_entre_amigos_faixa')
-            .select(
-              'faixa_id, empresa_id, acao_id, associado_id, numero_inicial, numero_final, created_at',
-            )
-            .eq('acao_id', acaoId)
-            .eq('empresa_id', empresaId)
-            .eq('associado_id', assocId)
-            .maybeSingle()
-        : Promise.resolve({ data: null, error: null }),
-      supabase
-        .from('acao_entre_amigos_venda')
-        .select(
-          'venda_id, empresa_id, acao_id, numero, comprador_nome, comprador_telefone, valor, associado_vendedor_id, vendido_por, vendido_em, created_at, associados!associado_vendedor_id(nome)',
-        )
-        .eq('acao_id', acaoId)
-        .eq('empresa_id', empresaId)
-        .order('numero'),
-    ])
+    const [acaoRes, faixaRes, faixasStaffRes, secoesRes, vendasRes] =
+      await Promise.all([
+        supabase
+          .from('acao_entre_amigos')
+          .select(
+            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, created_at',
+          )
+          .eq('acao_id', acaoId)
+          .eq('empresa_id', empresaId)
+          .maybeSingle(),
+        associadoLogin && assocId != null
+          ? supabase
+              .from('acao_entre_amigos_faixa')
+              .select(
+                'faixa_id, empresa_id, acao_id, associado_id, numero_inicial, numero_final, created_at',
+              )
+              .eq('acao_id', acaoId)
+              .eq('empresa_id', empresaId)
+              .eq('associado_id', assocId)
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+        !associadoLogin
+          ? supabase
+              .from('acao_entre_amigos_faixa')
+              .select(
+                `faixa_id, empresa_id, acao_id, associado_id, numero_inicial, numero_final, created_at,
+                 associados(nome, registro, ramo, secao)`,
+              )
+              .eq('acao_id', acaoId)
+              .eq('empresa_id', empresaId)
+              .order('numero_inicial')
+          : Promise.resolve({ data: null, error: null }),
+        !associadoLogin
+          ? supabase
+              .from('secao')
+              .select('secao_id, nome')
+              .eq('empresa_id', empresaId)
+          : Promise.resolve({ data: null, error: null }),
+        supabase
+          .from('acao_entre_amigos_venda')
+          .select(
+            'venda_id, empresa_id, acao_id, numero, comprador_nome, comprador_telefone, valor, associado_vendedor_id, vendido_por, vendido_em, created_at, associados!associado_vendedor_id(nome)',
+          )
+          .eq('acao_id', acaoId)
+          .eq('empresa_id', empresaId)
+          .order('numero'),
+      ])
 
     if (acaoRes.error || !acaoRes.data) {
       setError(acaoRes.error?.message ?? 'Ação não encontrada.')
       setAcao(null)
+      setStaffFaixas([])
       setLoading(false)
       return
     }
@@ -127,10 +167,12 @@ export function AcaoEntreAmigosVendaPage() {
         setAcao(acaoRes.data as AcaoEntreAmigos)
         setFaixa(null)
         setVendas([])
+        setStaffFaixas([])
         setLoading(false)
         return
       }
       setFaixa(faixaRes.data as AcaoEntreAmigosFaixa)
+      setStaffFaixas([])
     }
 
     if (vendasRes.error) {
@@ -139,17 +181,85 @@ export function AcaoEntreAmigosVendaPage() {
       return
     }
 
-    setAcao(acaoRes.data as AcaoEntreAmigos)
-    setVendas(
-      ((vendasRes.data ?? []) as unknown as Array<
-        AcaoEntreAmigosVenda & {
-          associados: { nome: string | null } | null
+    const vendasRows = ((vendasRes.data ?? []) as unknown as Array<
+      AcaoEntreAmigosVenda & {
+        associados: { nome: string | null } | null
+      }
+    >).map((row) => ({
+      ...row,
+      associado_nome: row.associados?.nome ?? null,
+    }))
+
+    if (!associadoLogin) {
+      if (faixasStaffRes.error) {
+        setError(faixasStaffRes.error.message)
+        setLoading(false)
+        return
+      }
+
+      const secaoMap = new Map(
+        ((secoesRes.data ?? []) as Array<{ secao_id: number; nome: string }>).map(
+          (s) => [s.secao_id, s.nome],
+        ),
+      )
+
+      const vendidosSet = new Set(vendasRows.map((v) => v.numero))
+      let faixasList = (
+        (faixasStaffRes.data ?? []) as unknown as Array<
+          AcaoEntreAmigosFaixa & {
+            associados: {
+              nome: string | null
+              registro: number | null
+              ramo: number | null
+              secao: number | null
+            } | null
+          }
+        >
+      ).map((row) => {
+        const total = row.numero_final - row.numero_inicial + 1
+        let vendidosCount = 0
+        for (let n = row.numero_inicial; n <= row.numero_final; n += 1) {
+          if (vendidosSet.has(n)) vendidosCount += 1
         }
-      >).map((row) => ({
-        ...row,
-        associado_nome: row.associados?.nome ?? null,
-      })),
-    )
+        const assoc = row.associados
+        return {
+          ...row,
+          associado_nome:
+            assoc?.nome ?? `Associado #${row.associado_id}`,
+          associado_registro: assoc?.registro ?? null,
+          associado_ramo: assoc?.ramo ?? null,
+          associado_secao: assoc?.secao ?? null,
+          secao_nome:
+            assoc?.secao != null
+              ? (secaoMap.get(assoc.secao) ?? `Seção ${assoc.secao}`)
+              : null,
+          total,
+          vendidos: vendidosCount,
+          disponiveis: total - vendidosCount,
+        } satisfies StaffFaixaRow
+      })
+
+      if (ramoScoped != null) {
+        faixasList = faixasList.filter(
+          (f) =>
+            f.associado_ramo == null || f.associado_ramo === ramoScoped,
+        )
+      }
+      if (secaoScoped != null) {
+        faixasList = faixasList.filter(
+          (f) =>
+            f.associado_secao == null || f.associado_secao === secaoScoped,
+        )
+      }
+
+      faixasList.sort((a, b) =>
+        a.associado_nome.localeCompare(b.associado_nome, 'pt-BR'),
+      )
+      setStaffFaixas(faixasList)
+    }
+
+    setAcao(acaoRes.data as AcaoEntreAmigos)
+    setVendas(vendasRows)
     setError(null)
     setLoading(false)
   }
@@ -157,19 +267,38 @@ export function AcaoEntreAmigosVendaPage() {
   useEffect(() => {
     void reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empresaId, acaoId, associadoLogin, profile?.registro])
+  }, [
+    empresaId,
+    acaoId,
+    associadoLogin,
+    profile?.registro,
+    ramoScoped,
+    secaoScoped,
+  ])
 
-  function openNumero(numero: number) {
+  function toggleNumero(numero: number) {
     if (vendidos.has(numero)) return
     if (associadoLogin && !faixa) return
-    setSelectedNumero(numero)
+    setSelectedNumeros((prev) => {
+      if (prev.includes(numero)) {
+        return prev.filter((n) => n !== numero)
+      }
+      // Mantém nome/telefone já digitados ao adicionar mais números.
+      return [...prev, numero].sort((a, b) => a - b)
+    })
+    setError(null)
+  }
+
+  function limparSelecao() {
+    setSelectedNumeros([])
     setCompradorNome('')
     setCompradorTelefone('')
+    setError(null)
   }
 
   async function onVender(event: FormEvent) {
     event.preventDefault()
-    if (!empresaId || !acao || selectedNumero == null) return
+    if (!empresaId || !acao || selectedNumeros.length === 0) return
     if (!compradorNome.trim()) {
       setError('Informe o nome do comprador.')
       return
@@ -183,21 +312,32 @@ export function AcaoEntreAmigosVendaPage() {
       return
     }
 
+    const disponiveis = selectedNumeros.filter((n) => !vendidos.has(n))
+    if (disponiveis.length === 0) {
+      setError('Nenhum dos números selecionados está disponível.')
+      return
+    }
+
     setSaving(true)
     setError(null)
 
+    const nome = compradorNome.trim()
+    const telefone = compradorTelefone.trim()
+    const valorUnitario = Number(acao.valor_numero ?? 0)
+    const rows = disponiveis.map((numero) => ({
+      empresa_id: empresaId,
+      acao_id: acao.acao_id,
+      numero,
+      comprador_nome: nome,
+      comprador_telefone: telefone,
+      valor: valorUnitario,
+      associado_vendedor_id: associadoLogin ? associadoId : null,
+      vendido_por: user?.id ?? null,
+    }))
+
     const { error: insertError } = await supabase
       .from('acao_entre_amigos_venda')
-      .insert({
-        empresa_id: empresaId,
-        acao_id: acao.acao_id,
-        numero: selectedNumero,
-        comprador_nome: compradorNome.trim(),
-        comprador_telefone: compradorTelefone.trim(),
-        valor: Number(acao.valor_numero ?? 0),
-        associado_vendedor_id: associadoLogin ? associadoId : null,
-        vendido_por: user?.id ?? null,
-      })
+      .insert(rows)
 
     setSaving(false)
 
@@ -205,16 +345,19 @@ export function AcaoEntreAmigosVendaPage() {
       setError(
         insertError.message.includes('duplicate') ||
           insertError.message.includes('unique')
-          ? 'Este número já foi vendido.'
+          ? 'Um ou mais números já foram vendidos. Atualize e tente de novo.'
           : insertError.message,
       )
+      await reload()
       return
     }
 
-    toast.success('Venda registrada!', `Número ${selectedNumero} vendido.`)
-    setSelectedNumero(null)
-    setCompradorNome('')
-    setCompradorTelefone('')
+    const label =
+      disponiveis.length === 1
+        ? `Número ${disponiveis[0]} vendido.`
+        : `${disponiveis.length} números vendidos (${disponiveis.join(', ')}).`
+    toast.success('Venda registrada!', label)
+    limparSelecao()
     await reload()
   }
 
@@ -246,6 +389,8 @@ export function AcaoEntreAmigosVendaPage() {
   }
 
   const vendidosNaFaixa = numeros.filter((n) => vendidos.has(n)).length
+  const valorUnitario = Number(acao.valor_numero ?? 0)
+  const totalSelecionado = selectedNumeros.length * valorUnitario
 
   return (
     <>
@@ -288,28 +433,105 @@ export function AcaoEntreAmigosVendaPage() {
         </section>
       ) : (
         <>
+          {!associadoLogin ? (
+            <section className="panel">
+              <h3 style={{ marginTop: 0 }}>Jovens e vendas</h3>
+              <p className="muted">
+                Lista completa dos jovens com numeração nesta ação
+                {ramoScoped != null ? ' (filtrado pelo seu ramo/seção)' : ''}.
+              </p>
+              {staffFaixas.length === 0 ? (
+                <div className="empty">
+                  Nenhum jovem com faixa atribuída
+                  {ramoScoped != null ? ' no seu ramo/seção' : ''}.
+                </div>
+              ) : (
+                <div className="table-wrap">
+                  <table className="data">
+                    <thead>
+                      <tr>
+                        <th>Jovem</th>
+                        <th>Registro</th>
+                        <th>Seção</th>
+                        <th>Faixa</th>
+                        <th>Vendidos</th>
+                        <th>Disponíveis</th>
+                        <th>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {staffFaixas.map((f) => (
+                        <tr key={f.faixa_id}>
+                          <td>{f.associado_nome}</td>
+                          <td>{f.associado_registro ?? '—'}</td>
+                          <td>{f.secao_nome ?? '—'}</td>
+                          <td>
+                            {f.numero_inicial} – {f.numero_final}
+                          </td>
+                          <td>
+                            <strong>{f.vendidos}</strong>
+                          </td>
+                          <td>{f.disponiveis}</td>
+                          <td>{f.total}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={4}>
+                          <strong>Totais</strong>
+                        </td>
+                        <td>
+                          <strong>
+                            {staffFaixas.reduce((s, f) => s + f.vendidos, 0)}
+                          </strong>
+                        </td>
+                        <td>
+                          {staffFaixas.reduce((s, f) => s + f.disponiveis, 0)}
+                        </td>
+                        <td>
+                          {staffFaixas.reduce((s, f) => s + f.total, 0)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </section>
+          ) : null}
+
           <section className="panel">
             <p className="muted" style={{ marginTop: 0 }}>
               {vendidosNaFaixa} de {numeros.length} número(s) vendido(s). Toque
-              em um número disponível para registrar a venda.
+              em um ou mais números disponíveis; o nome e telefone preenchidos
+              valem para todos.
             </p>
+            {selectedNumeros.length > 0 ? (
+              <p className="field-hint" style={{ marginTop: 0 }}>
+                Selecionados: {selectedNumeros.join(', ')} (
+                {selectedNumeros.length})
+              </p>
+            ) : null}
             <div className="acao-numeros-grid">
               {numeros.map((numero) => {
                 const venda = vendidos.get(numero)
                 const sold = !!venda
+                const selected = selectedNumeros.includes(numero)
                 return (
                   <button
                     key={numero}
                     type="button"
                     className={`acao-numero-btn ${sold ? 'is-sold' : ''} ${
-                      selectedNumero === numero ? 'is-selected' : ''
+                      selected ? 'is-selected' : ''
                     }`}
                     disabled={sold || saving}
-                    onClick={() => openNumero(numero)}
+                    onClick={() => toggleNumero(numero)}
                     title={
                       sold
                         ? `${venda.comprador_nome} · ${venda.comprador_telefone}`
-                        : `Vender nº ${numero}`
+                        : selected
+                          ? `Remover nº ${numero} da seleção`
+                          : `Selecionar nº ${numero}`
                     }
                   >
                     {numero}
@@ -319,13 +541,21 @@ export function AcaoEntreAmigosVendaPage() {
             </div>
           </section>
 
-          {selectedNumero != null ? (
+          {selectedNumeros.length > 0 ? (
             <section className="panel">
               <h3 style={{ marginTop: 0 }}>
-                Venda do número {selectedNumero}
+                {selectedNumeros.length === 1
+                  ? `Venda do número ${selectedNumeros[0]}`
+                  : `Venda de ${selectedNumeros.length} números`}
               </h3>
               <p className="muted">
-                Valor: {formatMoney(Number(acao.valor_numero ?? 0))}
+                Números: {selectedNumeros.join(', ')} ·{' '}
+                {formatMoney(valorUnitario)} cada · total{' '}
+                {formatMoney(totalSelecionado)}
+              </p>
+              <p className="field-hint">
+                Preencha uma vez: o mesmo nome e telefone serão gravados em
+                todos os números selecionados.
               </p>
               <form
                 className="form-grid form-grid-2"
@@ -362,15 +592,19 @@ export function AcaoEntreAmigosVendaPage() {
                     type="submit"
                     disabled={saving}
                   >
-                    {saving ? 'Salvando…' : 'Confirmar venda'}
+                    {saving
+                      ? 'Salvando…'
+                      : selectedNumeros.length === 1
+                        ? 'Confirmar venda'
+                        : `Confirmar ${selectedNumeros.length} vendas`}
                   </button>
                   <button
                     type="button"
                     className="btn btn-soft"
                     disabled={saving}
-                    onClick={() => setSelectedNumero(null)}
+                    onClick={limparSelecao}
                   >
-                    Cancelar
+                    Limpar seleção
                   </button>
                 </div>
               </form>
