@@ -22,6 +22,7 @@ export const ASSOCIADO_PORTAL_MENU_KEYS = [
   '/conquistas',
   '/atividades',
   '/projetos',
+  '/vendas/acao-entre-amigos',
 ] as const
 
 export type AssociadoPortalMenuKey =

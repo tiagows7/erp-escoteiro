@@ -3870,6 +3870,43 @@ table.data tbody tr:hover {
   padding-inline: 0.65rem;
 }
 
+.acao-numeros-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(3.1rem, 1fr));
+  gap: 0.45rem;
+}
+
+.acao-numero-btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  min-height: 2.75rem;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.acao-numero-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--forest);
+}
+
+.acao-numero-btn.is-selected {
+  border-color: var(--forest);
+  background: color-mix(in srgb, var(--forest) 16%, #fff);
+}
+
+.acao-numero-btn.is-sold,
+.acao-numero-btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+  background: rgba(15, 40, 28, 0.08);
+  text-decoration: line-through;
+}
+
 .field-checks label {
   display: inline-flex;
   gap: 0.4rem;

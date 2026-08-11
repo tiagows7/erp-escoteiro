@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
-import { staffRamoScope } from '@/lib/roles'
-import type { Ramo } from '@/types/database'
+import {
+  faixaConflitaComOutras,
+  faixaDentroDaAcao,
+} from '@/lib/acaoEntreAmigos'
+import { formatMoney, parseMoneyInput } from '@/lib/despesas'
+import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
+import type { AcaoEntreAmigosFaixa, Ramo } from '@/types/database'
 
 type Secao = { secao_id: number; nome: string; ramo: number | null }
 type Patrulha = {
@@ -14,6 +19,15 @@ type Patrulha = {
   ramo: number | null
   secao: number | null
 }
+type AssociadoOpt = {
+  associado_id: number
+  nome: string
+  registro: number | null
+  ramo: number | null
+  secao: number | null
+  patrulha_matilha: number | null
+}
+type FaixaRow = AcaoEntreAmigosFaixa & { associado_nome: string }
 
 const emptyForm = {
   ramo: '',
@@ -22,6 +36,7 @@ const emptyForm = {
   nome: '',
   numero_inicial: '1',
   numero_final: '100',
+  valor_numero: '0,00',
 }
 
 function unidadeLabel(ramoId: number | null): string {
@@ -40,7 +55,8 @@ export function AcaoEntreAmigosFormPage() {
   const isNew = !id || id === 'novo'
   const navigate = useNavigate()
   const { empresa, profile, hasPermission } = useAuth()
-  const canWrite = hasPermission('vendas.write')
+  const associadoLogin = isAssociadoLogin(profile)
+  const canWrite = !associadoLogin && hasPermission('vendas.write')
   const empresaId = empresa?.id
   const ramoScoped = useMemo(() => staffRamoScope(profile), [profile])
   const toast = useToast()
@@ -49,12 +65,24 @@ export function AcaoEntreAmigosFormPage() {
   const [ramos, setRamos] = useState<Ramo[]>([])
   const [secoes, setSecoes] = useState<Secao[]>([])
   const [patrulhas, setPatrulhas] = useState<Patrulha[]>([])
+  const [associados, setAssociados] = useState<AssociadoOpt[]>([])
+  const [faixas, setFaixas] = useState<FaixaRow[]>([])
+  const [faixaForm, setFaixaForm] = useState({
+    associado_id: '',
+    numero_inicial: '',
+    numero_final: '',
+  })
   const [error, setError] = useState<string | null>(null)
+  const [faixaError, setFaixaError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [savingFaixa, setSavingFaixa] = useState(false)
   const [loading, setLoading] = useState(!isNew)
 
   const ramoId = form.ramo ? Number(form.ramo) : null
   const secaoId = form.secao ? Number(form.secao) : null
+  const patrulhaId = form.patrulha_matilha
+    ? Number(form.patrulha_matilha)
+    : null
 
   const secoesDoRamo = useMemo(() => {
     if (ramoId == null) return []
@@ -68,6 +96,23 @@ export function AcaoEntreAmigosFormPage() {
 
   const temPatrulha = patrulhasDaSecao.length > 0
   const labelUnidade = unidadeLabel(ramoId)
+
+  const associadosDisponiveis = useMemo(() => {
+    const jaTem = new Set(faixas.map((f) => f.associado_id))
+    return associados.filter((a) => {
+      if (jaTem.has(a.associado_id)) return false
+      if (ramoId != null && a.ramo != null && a.ramo !== ramoId) return false
+      if (secaoId != null && a.secao != null && a.secao !== secaoId) return false
+      if (
+        patrulhaId != null &&
+        a.patrulha_matilha != null &&
+        a.patrulha_matilha !== patrulhaId
+      ) {
+        return false
+      }
+      return true
+    })
+  }, [associados, faixas, ramoId, secaoId, patrulhaId])
 
   useEffect(() => {
     if (ramoScoped == null || !isNew) return
@@ -91,12 +136,48 @@ export function AcaoEntreAmigosFormPage() {
         .select('secaonome_id, nome, ramo, secao')
         .eq('empresa_id', empresaId)
         .order('nome'),
-    ]).then(([r, s, p]) => {
+      supabase
+        .from('associados')
+        .select(
+          'associado_id, nome, registro, ramo, secao, patrulha_matilha',
+        )
+        .eq('empresa_id', empresaId)
+        .eq('ativo', true)
+        .order('nome'),
+    ]).then(([r, s, p, a]) => {
       setRamos((r.data as Ramo[]) ?? [])
       setSecoes((s.data as Secao[]) ?? [])
       setPatrulhas((p.data as Patrulha[]) ?? [])
+      setAssociados((a.data as AssociadoOpt[]) ?? [])
     })
   }, [empresaId])
+
+  async function loadFaixas(acaoId: number) {
+    const { data, error: loadError } = await supabase
+      .from('acao_entre_amigos_faixa')
+      .select(
+        'faixa_id, empresa_id, acao_id, associado_id, numero_inicial, numero_final, created_at, associados(nome)',
+      )
+      .eq('acao_id', acaoId)
+      .eq('empresa_id', empresaId!)
+      .order('numero_inicial')
+
+    if (loadError) {
+      setFaixaError(loadError.message)
+      setFaixas([])
+      return
+    }
+
+    setFaixas(
+      ((data ?? []) as unknown as Array<
+        AcaoEntreAmigosFaixa & { associados: { nome: string | null } | null }
+      >).map((row) => ({
+        ...row,
+        associado_nome:
+          row.associados?.nome ?? `Associado #${row.associado_id}`,
+      })),
+    )
+  }
 
   useEffect(() => {
     if (isNew || !empresaId) return
@@ -106,7 +187,7 @@ export function AcaoEntreAmigosFormPage() {
       const { data, error: loadError } = await supabase
         .from('acao_entre_amigos')
         .select(
-          'acao_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final',
+          'acao_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero',
         )
         .eq('acao_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -132,13 +213,18 @@ export function AcaoEntreAmigosFormPage() {
         nome: data.nome ?? '',
         numero_inicial: String(data.numero_inicial ?? 1),
         numero_final: String(data.numero_final ?? 1),
+        valor_numero: formatMoney(Number(data.valor_numero ?? 0))
+          .replace('R$', '')
+          .trim(),
       })
+      await loadFaixas(Number(id))
       setLoading(false)
     })()
 
     return () => {
       mounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isNew, empresaId, ramoScoped])
 
   function update(field: keyof typeof emptyForm, value: string) {
@@ -209,6 +295,7 @@ export function AcaoEntreAmigosFormPage() {
       nome: form.nome.trim(),
       numero_inicial: numeroInicial,
       numero_final: numeroFinal,
+      valor_numero: parseMoneyInput(form.valor_numero),
     }
 
     const result = isNew
@@ -232,16 +319,101 @@ export function AcaoEntreAmigosFormPage() {
       return
     }
 
-    navigate('/vendas/acao-entre-amigos', {
-      state: { flashSuccess: 'Salvo com sucesso!' },
+    if (isNew && result.data?.acao_id) {
+      navigate(`/vendas/acao-entre-amigos/${result.data.acao_id}`, {
+        state: {
+          flashSuccess:
+            'Ação salva! Agora atribua as faixas de números aos jovens.',
+        },
+      })
+      return
+    }
+
+    toast.success('Pronto!', 'Salvo com sucesso!')
+  }
+
+  async function onAddFaixa(event: FormEvent) {
+    event.preventDefault()
+    if (!canWrite || isNew || !empresaId) return
+
+    const associadoId = Number(faixaForm.associado_id)
+    const ini = Number(String(faixaForm.numero_inicial).replace(/\D/g, ''))
+    const fim = Number(String(faixaForm.numero_final).replace(/\D/g, ''))
+    const acaoIni = Number(String(form.numero_inicial).replace(/\D/g, ''))
+    const acaoFim = Number(String(form.numero_final).replace(/\D/g, ''))
+
+    if (!Number.isFinite(associadoId) || associadoId <= 0) {
+      setFaixaError('Selecione o jovem.')
+      return
+    }
+    if (!Number.isFinite(ini) || !Number.isFinite(fim) || fim < ini) {
+      setFaixaError('Informe a numeração inicial e final válidas.')
+      return
+    }
+    if (!faixaDentroDaAcao(ini, fim, acaoIni, acaoFim)) {
+      setFaixaError(
+        `A faixa deve estar entre ${acaoIni} e ${acaoFim} (números da ação).`,
+      )
+      return
+    }
+    if (faixaConflitaComOutras(ini, fim, faixas)) {
+      setFaixaError('Esta faixa se sobrepõe a outra já atribuída.')
+      return
+    }
+
+    setSavingFaixa(true)
+    setFaixaError(null)
+
+    const { error: insertError } = await supabase
+      .from('acao_entre_amigos_faixa')
+      .insert({
+        empresa_id: empresaId,
+        acao_id: Number(id),
+        associado_id: associadoId,
+        numero_inicial: ini,
+        numero_final: fim,
+      })
+
+    setSavingFaixa(false)
+
+    if (insertError) {
+      setFaixaError(insertError.message)
+      return
+    }
+
+    setFaixaForm({ associado_id: '', numero_inicial: '', numero_final: '' })
+    await loadFaixas(Number(id))
+    toast.success('Pronto!', 'Faixa atribuída ao jovem.')
+  }
+
+  async function onDeleteFaixa(faixaId: number) {
+    if (!canWrite || !empresaId) return
+    const ok = await toast.confirm({
+      title: 'Remover faixa do jovem?',
+      message: 'Os números voltam a ficar sem responsável.',
+      confirmLabel: 'Remover',
+      danger: true,
     })
+    if (!ok) return
+
+    const { error: delError } = await supabase
+      .from('acao_entre_amigos_faixa')
+      .delete()
+      .eq('faixa_id', faixaId)
+      .eq('empresa_id', empresaId)
+
+    if (delError) {
+      setFaixaError(delError.message)
+      return
+    }
+    await loadFaixas(Number(id))
   }
 
   async function onDelete() {
     if (!canWrite || isNew || !empresaId) return
     const ok = await toast.confirm({
       title: 'Excluir ação entre amigos?',
-      message: 'Esta ação não pode ser desfeita.',
+      message: 'Faixas e vendas vinculadas também serão removidas.',
       confirmLabel: 'Excluir',
       danger: true,
     })
@@ -261,6 +433,15 @@ export function AcaoEntreAmigosFormPage() {
     navigate('/vendas/acao-entre-amigos', {
       state: { flashSuccess: 'Ação excluída com sucesso!' },
     })
+  }
+
+  if (associadoLogin && !isNew) {
+    return (
+      <Navigate to={`/vendas/acao-entre-amigos/${id}/vender`} replace />
+    )
+  }
+  if (associadoLogin && isNew) {
+    return <Navigate to="/vendas/acao-entre-amigos" replace />
   }
 
   if (!empresaId) {
@@ -290,9 +471,17 @@ export function AcaoEntreAmigosFormPage() {
       <header className="page-header">
         <div>
           <h2>{isNew ? 'Nova ação entre amigos' : 'Editar ação entre amigos'}</h2>
-          <p>Nome, faixa de números e escopo (ramo / seção / patrulha)</p>
+          <p>Nome, valor do número, faixa geral e atribuição aos jovens</p>
         </div>
         <div className="page-header-actions actions-pair">
+          {!isNew ? (
+            <Link
+              className="btn btn-primary"
+              to={`/vendas/acao-entre-amigos/${id}/vender`}
+            >
+              Ver vendas
+            </Link>
+          ) : null}
           <Link className="btn btn-soft" to="/vendas/acao-entre-amigos">
             Voltar
           </Link>
@@ -387,6 +576,18 @@ export function AcaoEntreAmigosFormPage() {
           ) : null}
 
           <div className="field">
+            <label htmlFor="valor_numero">Valor de cada número</label>
+            <input
+              id="valor_numero"
+              className="input"
+              inputMode="decimal"
+              value={form.valor_numero}
+              onChange={(e) => update('valor_numero', e.target.value)}
+              disabled={disabled}
+            />
+          </div>
+
+          <div className="field">
             <label htmlFor="numero_inicial">Número inicial</label>
             <input
               id="numero_inicial"
@@ -441,6 +642,136 @@ export function AcaoEntreAmigosFormPage() {
           </Link>
         </div>
       </form>
+
+      {!isNew ? (
+        <section className="panel" style={{ marginTop: '1rem' }}>
+          <h3 style={{ marginTop: 0 }}>Números por jovem</h3>
+          <p className="muted">
+            Selecione o associado e o intervalo de numeração que fica com ele.
+          </p>
+
+          {faixaError ? (
+            <AlertMessage tone="error" title="Atenção">
+              {faixaError}
+            </AlertMessage>
+          ) : null}
+
+          {canWrite ? (
+            <form
+              className="form-grid form-grid-2"
+              onSubmit={(e) => void onAddFaixa(e)}
+              style={{ marginBottom: '1rem' }}
+            >
+              <div className="field field-span-2">
+                <label htmlFor="faixa_associado">Jovem</label>
+                <select
+                  id="faixa_associado"
+                  className="select"
+                  value={faixaForm.associado_id}
+                  onChange={(e) =>
+                    setFaixaForm((prev) => ({
+                      ...prev,
+                      associado_id: e.target.value,
+                    }))
+                  }
+                  disabled={savingFaixa}
+                  required
+                >
+                  <option value="">Selecione…</option>
+                  {associadosDisponiveis.map((a) => (
+                    <option key={a.associado_id} value={a.associado_id}>
+                      {a.nome}
+                      {a.registro != null ? ` · ${a.registro}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="faixa_ini">Nº inicial</label>
+                <input
+                  id="faixa_ini"
+                  className="input"
+                  inputMode="numeric"
+                  value={faixaForm.numero_inicial}
+                  onChange={(e) =>
+                    setFaixaForm((prev) => ({
+                      ...prev,
+                      numero_inicial: e.target.value,
+                    }))
+                  }
+                  disabled={savingFaixa}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="faixa_fim">Nº final</label>
+                <input
+                  id="faixa_fim"
+                  className="input"
+                  inputMode="numeric"
+                  value={faixaForm.numero_final}
+                  onChange={(e) =>
+                    setFaixaForm((prev) => ({
+                      ...prev,
+                      numero_final: e.target.value,
+                    }))
+                  }
+                  disabled={savingFaixa}
+                  required
+                />
+              </div>
+              <div className="form-actions field-span-2">
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  disabled={savingFaixa}
+                >
+                  {savingFaixa ? 'Salvando…' : 'Atribuir faixa'}
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {faixas.length === 0 ? (
+            <div className="empty">Nenhuma faixa atribuída ainda.</div>
+          ) : (
+            <div className="table-wrap">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Jovem</th>
+                    <th>Números</th>
+                    <th>Qtde</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {faixas.map((f) => (
+                    <tr key={f.faixa_id}>
+                      <td>{f.associado_nome}</td>
+                      <td>
+                        {f.numero_inicial} – {f.numero_final}
+                      </td>
+                      <td>{f.numero_final - f.numero_inicial + 1}</td>
+                      <td>
+                        {canWrite ? (
+                          <button
+                            type="button"
+                            className="btn btn-soft"
+                            onClick={() => void onDeleteFaixa(f.faixa_id)}
+                          >
+                            Remover
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      ) : null}
     </>
   )
 }

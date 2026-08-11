@@ -207,6 +207,31 @@ export type AcaoEntreAmigos = {
   nome: string
   numero_inicial: number
   numero_final: number
+  valor_numero: number
+  created_at: string | null
+}
+
+export type AcaoEntreAmigosFaixa = {
+  faixa_id: number
+  empresa_id: number
+  acao_id: number
+  associado_id: number
+  numero_inicial: number
+  numero_final: number
+  created_at: string | null
+}
+
+export type AcaoEntreAmigosVenda = {
+  venda_id: number
+  empresa_id: number
+  acao_id: number
+  numero: number
+  comprador_nome: string
+  comprador_telefone: string
+  valor: number
+  associado_vendedor_id: number | null
+  vendido_por: string | null
+  vendido_em: string
   created_at: string | null
 }
 

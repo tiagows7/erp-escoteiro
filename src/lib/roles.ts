@@ -231,6 +231,8 @@ const ASSOCIADO_PERMISSIONS: Permission[] = [
   'portal.view',
   'atividades.view',
   'projetos.view',
+  'vendas.view',
+  'vendas.write',
 ]
 
 const RAMO_FINANCEIRO_PERMISSIONS: Permission[] = [

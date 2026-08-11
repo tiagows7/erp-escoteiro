@@ -6,15 +6,22 @@ import { AddIcon } from '@/components/AddIcon'
 import { AlertMessage } from '@/components/AlertMessage'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 import { filtroAtividadesRamoOuGrupo } from '@/lib/atividadeVisibilidade'
-import { staffRamoScope } from '@/lib/roles'
+import { formatMoney } from '@/lib/despesas'
+import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
 import type { AcaoEntreAmigos, Ramo } from '@/types/database'
 
 type Secao = { secao_id: number; nome: string; ramo: number | null }
 type Patrulha = { secaonome_id: number; nome: string }
 
+type AcaoRow = AcaoEntreAmigos & {
+  faixa_ini?: number | null
+  faixa_fim?: number | null
+}
+
 export function AcaoEntreAmigosPage() {
   const { empresa, profile, hasPermission } = useAuth()
-  const canWrite = hasPermission('vendas.write')
+  const associadoLogin = isAssociadoLogin(profile)
+  const canWrite = !associadoLogin && hasPermission('vendas.write')
   const empresaId = empresa?.id
   const ramoScoped = useMemo(() => staffRamoScope(profile), [profile])
   const flashTick = useFlashSuccess()
@@ -22,7 +29,7 @@ export function AcaoEntreAmigosPage() {
   const [ramos, setRamos] = useState<Ramo[]>([])
   const [secoes, setSecoes] = useState<Secao[]>([])
   const [patrulhas, setPatrulhas] = useState<Patrulha[]>([])
-  const [rows, setRows] = useState<AcaoEntreAmigos[]>([])
+  const [rows, setRows] = useState<AcaoRow[]>([])
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -51,10 +58,95 @@ export function AcaoEntreAmigosPage() {
     void (async () => {
       setLoading(true)
 
+      let associadoId: number | null = null
+      if (associadoLogin && profile?.registro) {
+        const registroNum = Number(String(profile.registro).replace(/\D/g, ''))
+        if (Number.isFinite(registroNum) && registroNum > 0) {
+          const { data: assoc } = await supabase
+            .from('associados')
+            .select('associado_id')
+            .eq('empresa_id', empresaId)
+            .eq('registro', registroNum)
+            .maybeSingle()
+          associadoId = (assoc?.associado_id as number | null) ?? null
+        }
+      }
+
+      if (associadoLogin) {
+        if (associadoId == null) {
+          if (!mounted) return
+          setError(null)
+          setRows([])
+          setLoading(false)
+          return
+        }
+
+        const { data: faixas, error: faixaError } = await supabase
+          .from('acao_entre_amigos_faixa')
+          .select('acao_id, numero_inicial, numero_final')
+          .eq('empresa_id', empresaId)
+          .eq('associado_id', associadoId)
+
+        if (!mounted) return
+        if (faixaError) {
+          setError(faixaError.message)
+          setRows([])
+          setLoading(false)
+          return
+        }
+
+        const acaoIds = (faixas ?? []).map((f) => f.acao_id as number)
+        if (acaoIds.length === 0) {
+          setError(null)
+          setRows([])
+          setLoading(false)
+          return
+        }
+
+        const faixaByAcao = new Map(
+          (faixas ?? []).map((f) => [
+            f.acao_id as number,
+            {
+              ini: f.numero_inicial as number,
+              fim: f.numero_final as number,
+            },
+          ]),
+        )
+
+        const { data, error: listError } = await supabase
+          .from('acao_entre_amigos')
+          .select(
+            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, created_at',
+          )
+          .eq('empresa_id', empresaId)
+          .in('acao_id', acaoIds)
+          .order('created_at', { ascending: false })
+
+        if (!mounted) return
+        if (listError) {
+          setError(listError.message)
+          setRows([])
+        } else {
+          setError(null)
+          setRows(
+            ((data ?? []) as AcaoEntreAmigos[]).map((row) => {
+              const f = faixaByAcao.get(row.acao_id)
+              return {
+                ...row,
+                faixa_ini: f?.ini ?? null,
+                faixa_fim: f?.fim ?? null,
+              }
+            }),
+          )
+        }
+        setLoading(false)
+        return
+      }
+
       let query = supabase
         .from('acao_entre_amigos')
         .select(
-          'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, created_at',
+          'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, created_at',
         )
         .eq('empresa_id', empresaId)
         .order('created_at', { ascending: false })
@@ -99,7 +191,7 @@ export function AcaoEntreAmigosPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, ramoScoped, flashTick])
+  }, [empresaId, ramoScoped, flashTick, associadoLogin, profile?.registro])
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
@@ -136,8 +228,10 @@ export function AcaoEntreAmigosPage() {
         <div>
           <h2>Ação entre amigos</h2>
           <p>
-            Rifas do grupo <strong>{empresa?.nome}</strong>
-            {ramoScoped != null ? ' — seu ramo e ações do grupo' : ''}
+            {associadoLogin
+              ? 'Suas rifas — selecione para vender os números'
+              : `Rifas do grupo `}
+            {!associadoLogin ? <strong>{empresa?.nome}</strong> : null}
           </p>
         </div>
         {canWrite ? (
@@ -178,7 +272,11 @@ export function AcaoEntreAmigosPage() {
         {loading ? (
           <div className="loading">Carregando ações…</div>
         ) : filtered.length === 0 ? (
-          <div className="empty">Nenhuma ação entre amigos cadastrada.</div>
+          <div className="empty">
+            {associadoLogin
+              ? 'Nenhuma ação com numeração atribuída a você.'
+              : 'Nenhuma ação entre amigos cadastrada.'}
+          </div>
         ) : (
           <div className="table-wrap">
             <table className="data">
@@ -186,42 +284,62 @@ export function AcaoEntreAmigosPage() {
                 <tr>
                   <th></th>
                   <th>Nome</th>
-                  <th>Ramo</th>
-                  <th>Seção</th>
-                  <th>Patrulha / Matilha</th>
-                  <th>Números</th>
-                  <th>Qtde</th>
+                  {!associadoLogin ? (
+                    <>
+                      <th>Ramo</th>
+                      <th>Seção</th>
+                      <th>Patrulha / Matilha</th>
+                      <th>Números</th>
+                    </>
+                  ) : (
+                    <th>Sua faixa</th>
+                  )}
+                  <th>Valor</th>
+                  {!associadoLogin ? <th>Qtde</th> : null}
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((row) => {
                   const qtde = row.numero_final - row.numero_inicial + 1
+                  const openTo = associadoLogin
+                    ? `/vendas/acao-entre-amigos/${row.acao_id}/vender`
+                    : `/vendas/acao-entre-amigos/${row.acao_id}`
                   return (
                     <tr key={row.acao_id}>
                       <td>
-                        <Link
-                          className="btn btn-soft"
-                          to={`/vendas/acao-entre-amigos/${row.acao_id}`}
-                        >
-                          Abrir
+                        <Link className="btn btn-soft" to={openTo}>
+                          {associadoLogin ? 'Vender' : 'Abrir'}
                         </Link>
                       </td>
                       <td>{row.nome}</td>
-                      <td>
-                        {row.ramo == null && row.secao == null
-                          ? 'Grupo todo'
-                          : (row.ramo && ramoMap.get(row.ramo)) || '—'}
-                      </td>
-                      <td>{(row.secao && secaoMap.get(row.secao)) || '—'}</td>
-                      <td>
-                        {(row.patrulha_matilha &&
-                          patrulhaMap.get(row.patrulha_matilha)) ||
-                          '—'}
-                      </td>
-                      <td>
-                        {row.numero_inicial} – {row.numero_final}
-                      </td>
-                      <td>{qtde}</td>
+                      {!associadoLogin ? (
+                        <>
+                          <td>
+                            {row.ramo == null && row.secao == null
+                              ? 'Grupo todo'
+                              : (row.ramo && ramoMap.get(row.ramo)) || '—'}
+                          </td>
+                          <td>
+                            {(row.secao && secaoMap.get(row.secao)) || '—'}
+                          </td>
+                          <td>
+                            {(row.patrulha_matilha &&
+                              patrulhaMap.get(row.patrulha_matilha)) ||
+                              '—'}
+                          </td>
+                          <td>
+                            {row.numero_inicial} – {row.numero_final}
+                          </td>
+                        </>
+                      ) : (
+                        <td>
+                          {row.faixa_ini != null && row.faixa_fim != null
+                            ? `${row.faixa_ini} – ${row.faixa_fim}`
+                            : '—'}
+                        </td>
+                      )}
+                      <td>{formatMoney(Number(row.valor_numero ?? 0))}</td>
+                      {!associadoLogin ? <td>{qtde}</td> : null}
                     </tr>
                   )
                 })}

@@ -282,6 +282,12 @@ export function navItemsForProfile(
         label: 'Projetos',
         permission: 'projetos.view',
       },
+      {
+        type: 'link',
+        to: '/vendas/acao-entre-amigos',
+        label: 'Ação entre amigos',
+        permission: 'vendas.view',
+      },
     ]
     const keys = profile?.menu_keys
     if (Array.isArray(keys) && keys.length > 0) {
@@ -289,11 +295,13 @@ export function navItemsForProfile(
         (item) => item.type === 'link' && keys.includes(item.to),
       )
       // Projetos: sempre visível para associado (somente leitura).
-      if (!filtered.some((item) => item.type === 'link' && item.to === '/projetos')) {
-        const projetos = associadoMenus.find(
-          (item) => item.type === 'link' && item.to === '/projetos',
-        )
-        if (projetos) filtered.push(projetos)
+      for (const path of ['/projetos', '/vendas/acao-entre-amigos'] as const) {
+        if (!filtered.some((item) => item.type === 'link' && item.to === path)) {
+          const item = associadoMenus.find(
+            (m) => m.type === 'link' && m.to === path,
+          )
+          if (item) filtered.push(item)
+        }
       }
       return filtered
     }

@@ -49,11 +49,12 @@ export function RequirePermission({
       location.pathname,
       profile?.menu_keys,
     )
-    // Associado: Projetos sempre liberado (somente leitura).
-    const associadoProjetos =
+    // Associado: Projetos (leitura) e Ação entre amigos (venda) sempre liberados.
+    const associadoExtra =
       isAssociadoLogin(profile) &&
-      pathMatchesMenuKey(location.pathname, '/projetos')
-    if (!menuOk && !associadoProjetos) {
+      (pathMatchesMenuKey(location.pathname, '/projetos') ||
+        pathMatchesMenuKey(location.pathname, '/vendas/acao-entre-amigos'))
+    if (!menuOk && !associadoExtra) {
       return (
         <Navigate
           to={firstAllowedMenuPath(profile?.menu_keys)}
