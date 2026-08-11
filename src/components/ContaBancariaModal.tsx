@@ -246,5 +246,6 @@ function normalizeRow(data: Record<string, unknown>): ContaBancariaRow {
     api_pix_cert: (data.api_pix_cert as string | null) ?? '',
     api_pix_key: (data.api_pix_key as string | null) ?? '',
     api_pix_base_url: (data.api_pix_base_url as string | null) ?? '',
+    infinitepay_handle: (data.infinitepay_handle as string | null) ?? '',
   }
 }

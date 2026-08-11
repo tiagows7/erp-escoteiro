@@ -1,0 +1,2 @@
+# Checkout público e webhook da InfinitePay não enviam JWT do Supabase.
+verify_jwt = false

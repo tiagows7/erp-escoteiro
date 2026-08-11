@@ -996,6 +996,7 @@ export function GrupoFormPage() {
                       <th>Banco</th>
                       <th>Agência</th>
                       <th>Conta</th>
+                      <th>InfinitePay</th>
                       <th>Ramo / seção</th>
                       <th></th>
                     </tr>
@@ -1007,6 +1008,11 @@ export function GrupoFormPage() {
                         <td>{conta.banco_nome || '—'}</td>
                         <td>{conta.agencia || '—'}</td>
                         <td>{conta.conta || '—'}</td>
+                        <td>
+                          {conta.infinitepay_handle
+                            ? `$${conta.infinitepay_handle}`
+                            : '—'}
+                        </td>
                         <td>{labelContaEscopo(conta, ramoMap, secaoMap)}</td>
                         <td>
                           <div className="atividades-row-actions">

@@ -122,6 +122,8 @@ export type EmpresaContaBancaria = {
   api_pix_cert: string | null
   api_pix_key: string | null
   api_pix_base_url: string | null
+  /** InfiniteTag (sem $). Null = usa PIX Sicredi da conta. */
+  infinitepay_handle: string | null
 }
 
 export type Ramo = {
@@ -264,7 +266,11 @@ export type VendaEvento = {
   created_at: string | null
 }
 
-export type VendaEventoFormaPagamento = 'dinheiro' | 'pix_direto' | 'pix'
+export type VendaEventoFormaPagamento =
+  | 'dinheiro'
+  | 'pix_direto'
+  | 'pix'
+  | 'infinitepay'
 
 export type VendaEventoCompra = {
   compra_id: number

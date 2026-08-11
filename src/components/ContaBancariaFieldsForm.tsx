@@ -71,11 +71,36 @@ export function ContaBancariaFieldsForm({
         className="form-section-title"
         style={{ gridColumn: '1 / -1', margin: '0.5rem 0 0' }}
       >
+        InfinitePay (Checkout Integrado)
+      </p>
+      <div className="field" style={{ gridColumn: '1 / -1' }}>
+        <label htmlFor={`${idPrefix}-infinitepay`}>
+          Tag InfinitePay (InfiniteTag)
+        </label>
+        <input
+          id={`${idPrefix}-infinitepay`}
+          className="input"
+          value={value.infinitepay_handle}
+          onChange={(e) => setField('infinitepay_handle', e.target.value)}
+          placeholder="sua_tag (sem o $)"
+          autoComplete="off"
+          disabled={disabled}
+        />
+        <span className="field-hint">
+          Se preenchida, eventos podem usar o checkout InfinitePay (Pix/cartão).
+          Se vazia, vale o PIX Sicredi cadastrado abaixo.
+        </span>
+      </div>
+
+      <p
+        className="form-section-title"
+        style={{ gridColumn: '1 / -1', margin: '0.5rem 0 0' }}
+      >
         PIX / API do banco
       </p>
       <p className="field-hint" style={{ gridColumn: '1 / -1', margin: 0 }}>
         Conta do grupo (sem ramo) = mensalidades. Conta com ramo = atividades
-        daquele ramo.
+        daquele ramo. Usado quando não houver tag InfinitePay.
       </p>
 
       <label

@@ -6,6 +6,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { PixSicrediPublicCheckoutModal } from '@/components/PixSicrediPublicCheckoutModal'
 import { formatMoney } from '@/lib/despesas'
+import { createInfinitePayEventoCheckout } from '@/lib/infinitePayCheckout'
 import type { PixPublicEventoInput } from '@/lib/pixSicrediPublic'
 import {
   comprarConvitesEvento,
@@ -204,11 +205,11 @@ export function VendaEventoVendaPage() {
 
     if (formaPagamento === 'pix') {
       if (!telefone.trim()) {
-        setError('Informe o telefone para pagar com PIX.')
+        setError('Informe o telefone para pagar online.')
         return
       }
       if (!evento.link_token) {
-        setError('Link PIX deste evento ainda não está disponível.')
+        setError('Link de pagamento deste evento ainda não está disponível.')
         return
       }
       if (!Number.isFinite(valorUnitario) || valorUnitario <= 0) {
@@ -217,17 +218,40 @@ export function VendaEventoVendaPage() {
       }
 
       const valor = Math.round(valorUnitario * quantidade * 100) / 100
+      const descricao = `${evento.nome} · ${quantidade} convite(s)`
+      const fone = telefone.trim()
       setError(null)
       setUltimaNumeracao(null)
-      setPixInput({
-        kind: 'evento',
+
+      // Prefere InfinitePay (tag na conta bancária); senão PIX Sicredi.
+      setSaving(true)
+      const created = await createInfinitePayEventoCheckout({
         linkToken: evento.link_token,
         nomes: nomesLimpos,
-        compradorTelefone: telefone.trim(),
+        compradorTelefone: fone,
         valor,
-        descricao: `${evento.nome} · ${quantidade} convite(s)`,
+        descricao,
+        redirectUrl: `${window.location.origin}/vendas/eventos/${evento.evento_id}/vender?pago=1`,
       })
-      setPixOpen(true)
+      setSaving(false)
+
+      if (created.ok) {
+        window.location.href = created.url
+        return
+      }
+      if (created.usePix) {
+        setPixInput({
+          kind: 'evento',
+          linkToken: evento.link_token,
+          nomes: nomesLimpos,
+          compradorTelefone: fone,
+          valor,
+          descricao,
+        })
+        setPixOpen(true)
+        return
+      }
+      setError(created.error)
       return
     }
 
@@ -482,9 +506,9 @@ export function VendaEventoVendaPage() {
                     }`}
                     disabled={saving || pixOpen}
                     onClick={() => setFormaPagamento('pix')}
-                    title="Gera QR Code PIX via Sicredi (banco)"
+                    title="InfinitePay (se houver tag) ou PIX Sicredi"
                   >
-                    PIX
+                    PIX / InfinitePay
                   </button>
                   <button
                     type="button"
@@ -501,8 +525,9 @@ export function VendaEventoVendaPage() {
                 </div>
                 {formaPagamento === 'pix' ? (
                   <p className="field-hint" style={{ marginBottom: 0 }}>
-                    PIX com confirmação no banco (Sicredi). Informe o telefone
-                    antes de continuar.
+                    Se a conta do ramo/grupo tiver tag InfinitePay, abre o
+                    checkout (Pix/cartão). Senão, usa o PIX Sicredi. Informe o
+                    telefone antes de continuar.
                   </p>
                 ) : null}
               </div>
@@ -521,7 +546,7 @@ export function VendaEventoVendaPage() {
                   {saving
                     ? 'Salvando…'
                     : formaPagamento === 'pix'
-                      ? 'Pagar com PIX'
+                      ? 'Pagar online'
                       : associadoLogin
                         ? quantidade === 1
                           ? 'Comprar 1 convite'

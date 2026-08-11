@@ -1,8 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { AlertMessage } from '@/components/AlertMessage'
 import { PixSicrediPublicCheckoutModal } from '@/components/PixSicrediPublicCheckoutModal'
 import { formatMoney } from '@/lib/despesas'
+import {
+  checkInfinitePayPedidoStatus,
+  createInfinitePayEventoCheckout,
+  fetchEventoPagamentoConfig,
+  type EventoPagamentoConfig,
+} from '@/lib/infinitePayCheckout'
 import type { PixPublicEventoInput } from '@/lib/pixSicrediPublic'
 import {
   fetchEventoPublicInfo,
@@ -18,8 +24,11 @@ function formatDateBr(value: string | null | undefined) {
 
 export function VendaEventoPublicPage() {
   const { token } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [info, setInfo] = useState<EventoPublicInfo | null>(null)
+  const [payConfig, setPayConfig] = useState<EventoPagamentoConfig | null>(null)
   const [loading, setLoading] = useState(true)
+  const [paying, setPaying] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [quantidade, setQuantidade] = useState(1)
@@ -35,14 +44,19 @@ export function VendaEventoPublicPage() {
       return
     }
     setLoading(true)
-    const res = await fetchEventoPublicInfo(token)
+    const [res, cfg] = await Promise.all([
+      fetchEventoPublicInfo(token),
+      fetchEventoPagamentoConfig(token),
+    ])
     if (res.error || !res.data) {
       setError(res.error ?? 'Link inválido.')
       setInfo(null)
+      setPayConfig(null)
       setLoading(false)
       return
     }
     setInfo(res.data)
+    setPayConfig(cfg.ok ? cfg.config : null)
     setError(null)
     setLoading(false)
   }
@@ -58,7 +72,73 @@ export function VendaEventoPublicPage() {
     )
   }, [quantidade])
 
-  function onSubmit(event: FormEvent) {
+  // Retorno do checkout InfinitePay
+  useEffect(() => {
+    const pago = searchParams.get('pago')
+    const orderNsu = searchParams.get('order_nsu')
+    if (pago !== '1' || !orderNsu) return
+
+    let cancelled = false
+    void (async () => {
+      const slug = searchParams.get('slug') ?? undefined
+      const transactionNsu =
+        searchParams.get('transaction_nsu') ?? undefined
+      const status = await checkInfinitePayPedidoStatus(orderNsu, {
+        slug,
+        transactionNsu,
+      })
+      if (cancelled) return
+      if (status.ok && status.paid) {
+        setSuccess(
+          'Pagamento confirmado! Seus convites já constam na lista do evento.',
+        )
+        setQuantidade(1)
+        setNomes([''])
+        setTelefone('')
+        void load()
+      } else if (!status.ok) {
+        setError(status.error)
+      } else {
+        setSuccess(
+          'Recebemos o retorno do pagamento. Se os convites não aparecerem em instantes, aguarde a confirmação.',
+        )
+        void load()
+      }
+      const next = new URLSearchParams(searchParams)
+      next.delete('pago')
+      next.delete('order_nsu')
+      next.delete('slug')
+      next.delete('transaction_nsu')
+      next.delete('receipt_url')
+      next.delete('capture_method')
+      setSearchParams(next, { replace: true })
+    })()
+
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  function openPixSicredi(
+    nomesLimpos: string[],
+    fone: string,
+    valor: number,
+    descricao: string,
+  ) {
+    if (!token) return
+    setPixInput({
+      kind: 'evento',
+      linkToken: token,
+      nomes: nomesLimpos,
+      compradorTelefone: fone,
+      valor,
+      descricao,
+    })
+    setPixOpen(true)
+  }
+
+  async function onSubmit(event: FormEvent) {
     event.preventDefault()
     if (!token || !info) return
     if (info.encerrado) {
@@ -90,18 +170,47 @@ export function VendaEventoPublicPage() {
     }
 
     const valor = Math.round(valorUnitario * quantidade * 100) / 100
+    const descricao = `${info.evento_nome} · ${quantidade} convite(s)`
+    const fone = telefone.trim()
 
     setError(null)
     setSuccess(null)
-    setPixInput({
-      kind: 'evento',
-      linkToken: token,
-      nomes: nomesLimpos,
-      compradorTelefone: telefone.trim(),
-      valor,
-      descricao: `${info.evento_nome} · ${quantidade} convite(s)`,
-    })
-    setPixOpen(true)
+
+    const prefer = payConfig?.prefer ?? 'nenhum'
+    const hasInfinite = payConfig?.infinitepay === true
+    const hasPix = payConfig?.pix_sicredi === true
+
+    if (!hasInfinite && !hasPix) {
+      setError(
+        'Nenhuma forma de pagamento online configurada para este evento. Cadastre a tag InfinitePay ou o PIX Sicredi na conta bancária do grupo/ramo.',
+      )
+      return
+    }
+
+    if (hasInfinite && (prefer === 'infinitepay' || !hasPix)) {
+      setPaying(true)
+      const created = await createInfinitePayEventoCheckout({
+        linkToken: token,
+        nomes: nomesLimpos,
+        compradorTelefone: fone,
+        valor,
+        descricao,
+      })
+      setPaying(false)
+
+      if (created.ok) {
+        window.location.href = created.url
+        return
+      }
+      if (created.usePix && hasPix) {
+        openPixSicredi(nomesLimpos, fone, valor, descricao)
+        return
+      }
+      setError(created.error)
+      return
+    }
+
+    openPixSicredi(nomesLimpos, fone, valor, descricao)
   }
 
   if (loading) {
@@ -130,6 +239,12 @@ export function VendaEventoPublicPage() {
   const valorUnitario = Number(info.valor_convite ?? 0)
   const total = quantidade * valorUnitario
   const dataLabel = formatDateBr(info.data_evento)
+  const payLabel =
+    payConfig?.prefer === 'infinitepay'
+      ? 'Pagar com InfinitePay'
+      : payConfig?.pix_sicredi
+        ? 'Pagar com PIX'
+        : 'Pagar'
 
   return (
     <div className="public-rifa-page">
@@ -180,97 +295,101 @@ export function VendaEventoPublicPage() {
             <p className="muted" style={{ marginTop: 0 }}>
               {info.disponiveis} de {info.total} convite(s) disponível(is).
               {!info.encerrado
-                ? ' Informe a quantidade, os nomes e pague via PIX para confirmar.'
+                ? payConfig?.prefer === 'infinitepay'
+                  ? ' Informe a quantidade, os nomes e pague no checkout InfinitePay (Pix ou cartão).'
+                  : ' Informe a quantidade, os nomes e pague via PIX para confirmar.'
                 : ''}
             </p>
 
             {!info.encerrado ? (
-            <form
-              className="form-grid form-grid-2"
-              onSubmit={(e) => onSubmit(e)}
-            >
-              <div className="field">
-                <label htmlFor="quantidade">Quantidade</label>
-                <input
-                  id="quantidade"
-                  className="input"
-                  type="number"
-                  min={1}
-                  max={Math.max(1, info.disponiveis)}
-                  value={quantidade}
-                  onChange={(e) => {
-                    const n = Number(e.target.value)
-                    setQuantidade(
-                      Number.isFinite(n)
-                        ? Math.min(
-                            Math.max(1, Math.floor(n)),
-                            Math.max(1, info.disponiveis || 1),
-                          )
-                        : 1,
-                    )
-                  }}
-                  disabled={pixOpen || info.disponiveis === 0}
-                  required
-                />
-              </div>
-              <div className="field">
-                <label>Total</label>
-                <div
-                  className="input"
-                  style={{ display: 'flex', alignItems: 'center' }}
-                >
-                  {formatMoney(total)}
-                </div>
-              </div>
-
-              {nomes.map((nome, index) => (
-                <div
-                  key={`nome-${index}`}
-                  className={`field ${quantidade === 1 ? 'field-span-2' : ''}`}
-                >
-                  <label htmlFor={`nome_${index}`}>
-                    Nome do convite {index + 1}
-                  </label>
+              <form
+                className="form-grid form-grid-2"
+                onSubmit={(e) => void onSubmit(e)}
+              >
+                <div className="field">
+                  <label htmlFor="quantidade">Quantidade</label>
                   <input
-                    id={`nome_${index}`}
+                    id="quantidade"
                     className="input"
-                    value={nome}
+                    type="number"
+                    min={1}
+                    max={Math.max(1, info.disponiveis)}
+                    value={quantidade}
                     onChange={(e) => {
-                      const value = e.target.value
-                      setNomes((prev) =>
-                        prev.map((n, i) => (i === index ? value : n)),
+                      const n = Number(e.target.value)
+                      setQuantidade(
+                        Number.isFinite(n)
+                          ? Math.min(
+                              Math.max(1, Math.floor(n)),
+                              Math.max(1, info.disponiveis || 1),
+                            )
+                          : 1,
                       )
                     }}
-                    disabled={pixOpen}
+                    disabled={pixOpen || paying || info.disponiveis === 0}
                     required
                   />
                 </div>
-              ))}
+                <div className="field">
+                  <label>Total</label>
+                  <div
+                    className="input"
+                    style={{ display: 'flex', alignItems: 'center' }}
+                  >
+                    {formatMoney(total)}
+                  </div>
+                </div>
 
-              <div className="field field-span-2">
-                <label htmlFor="telefone">Seu telefone</label>
-                <input
-                  id="telefone"
-                  className="input"
-                  value={telefone}
-                  onChange={(e) => setTelefone(e.target.value)}
-                  disabled={pixOpen}
-                  required
-                  inputMode="tel"
-                  placeholder="(00) 00000-0000"
-                />
-              </div>
+                {nomes.map((nome, index) => (
+                  <div
+                    key={`nome-${index}`}
+                    className={`field ${quantidade === 1 ? 'field-span-2' : ''}`}
+                  >
+                    <label htmlFor={`nome_${index}`}>
+                      Nome do convite {index + 1}
+                    </label>
+                    <input
+                      id={`nome_${index}`}
+                      className="input"
+                      value={nome}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setNomes((prev) =>
+                          prev.map((n, i) => (i === index ? value : n)),
+                        )
+                      }}
+                      disabled={pixOpen || paying}
+                      required
+                    />
+                  </div>
+                ))}
 
-              <div className="form-actions field-span-2">
-                <button
-                  className="btn btn-primary"
-                  type="submit"
-                  disabled={pixOpen || info.disponiveis === 0}
-                >
-                  Pagar com PIX
-                </button>
-              </div>
-            </form>
+                <div className="field field-span-2">
+                  <label htmlFor="telefone">Seu telefone</label>
+                  <input
+                    id="telefone"
+                    className="input"
+                    value={telefone}
+                    onChange={(e) => setTelefone(e.target.value)}
+                    disabled={pixOpen || paying}
+                    required
+                    inputMode="tel"
+                    placeholder="(00) 00000-0000"
+                  />
+                </div>
+
+                <div className="form-actions field-span-2">
+                  <button
+                    className="btn btn-primary"
+                    type="submit"
+                    disabled={
+                      pixOpen || paying || info.disponiveis === 0
+                    }
+                  >
+                    {paying ? 'Redirecionando…' : payLabel}
+                  </button>
+                </div>
+              </form>
             ) : null}
           </div>
         </div>

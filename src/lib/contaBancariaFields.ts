@@ -10,6 +10,13 @@ export type ContaBancariaFields = {
   api_pix_cert: string
   api_pix_key: string
   api_pix_base_url: string
+  /** InfiniteTag da InfinitePay (sem $). Vazio = usa PIX Sicredi. */
+  infinitepay_handle: string
+}
+
+/** Normaliza a InfiniteTag: remove $ e espaços. */
+export function normalizeInfinitePayHandle(value: string): string {
+  return value.trim().replace(/^\$+/, '').trim()
 }
 
 export type ContaBancariaRow = ContaBancariaFields & {
@@ -31,6 +38,7 @@ export const emptyContaBancariaFields = (): ContaBancariaFields => ({
   api_pix_cert: '',
   api_pix_key: '',
   api_pix_base_url: '',
+  infinitepay_handle: '',
 })
 
 export function contaBancariaFromRow(
@@ -48,10 +56,14 @@ export function contaBancariaFromRow(
     api_pix_cert: row?.api_pix_cert ?? '',
     api_pix_key: row?.api_pix_key ?? '',
     api_pix_base_url: row?.api_pix_base_url ?? '',
+    infinitepay_handle: normalizeInfinitePayHandle(
+      row?.infinitepay_handle ?? '',
+    ),
   }
 }
 
 export function contaBancariaToDb(fields: ContaBancariaFields) {
+  const handle = normalizeInfinitePayHandle(fields.infinitepay_handle)
   return {
     descricao: fields.descricao.trim() || null,
     banco_nome: fields.banco_nome.trim() || null,
@@ -64,6 +76,7 @@ export function contaBancariaToDb(fields: ContaBancariaFields) {
     api_pix_cert: fields.api_pix_cert.trim() || null,
     api_pix_key: fields.api_pix_key.trim() || null,
     api_pix_base_url: fields.api_pix_base_url.trim() || null,
+    infinitepay_handle: handle || null,
   }
 }
 
@@ -77,10 +90,11 @@ export function contaBancariaHasData(fields: ContaBancariaFields): boolean {
       fields.api_pix_chave.trim() ||
       fields.api_pix_cert.trim() ||
       fields.api_pix_key.trim() ||
+      fields.infinitepay_handle.trim() ||
       fields.descricao.trim(),
   )
 }
 
 /** Colunas padrão ao ler/gravar conta bancária. */
 export const CONTA_BANCARIA_SELECT =
-  'id, empresa_id, ramo_id, secao_id, descricao, banco_nome, agencia, conta, api_client_id, api_client_secret, api_pix_chave, api_pix_ativo, api_pix_cert, api_pix_key, api_pix_base_url'
+  'id, empresa_id, ramo_id, secao_id, descricao, banco_nome, agencia, conta, api_client_id, api_client_secret, api_pix_chave, api_pix_ativo, api_pix_cert, api_pix_key, api_pix_base_url, infinitepay_handle'
