@@ -104,6 +104,8 @@ const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
     'atividades.write',
     'eventos.view',
     'eventos.write',
+    'vendas.view',
+    'vendas.write',
     'projetos.view',
     'projetos.write',
   ],
@@ -117,6 +119,8 @@ const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
     'atividades.view',
     'atividades.write',
     'eventos.view',
+    'vendas.view',
+    'vendas.write',
   ],
   leitura: [
     'dashboard.view',

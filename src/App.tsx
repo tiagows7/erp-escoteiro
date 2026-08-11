@@ -21,10 +21,11 @@ import {
   ProdutosPage,
   EntradaEstoquePage,
   EventosPage,
-  VendasPage,
 } from '@/pages/placeholders'
 import { ProjetosPage } from '@/pages/ProjetosPage'
 import { ProjetoFormPage } from '@/pages/ProjetoFormPage'
+import { AcaoEntreAmigosPage } from '@/pages/AcaoEntreAmigosPage'
+import { AcaoEntreAmigosFormPage } from '@/pages/AcaoEntreAmigosFormPage'
 import { UsuariosPage } from '@/pages/UsuariosPage'
 import { UsuarioFormPage } from '@/pages/UsuarioFormPage'
 import { FornecedoresPage } from '@/pages/FornecedoresPage'
@@ -353,7 +354,23 @@ export default function App() {
               path="vendas"
               element={
                 <RequirePermission permission="vendas.view">
-                  <VendasPage />
+                  <Navigate to="/vendas/acao-entre-amigos" replace />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="vendas/acao-entre-amigos"
+              element={
+                <RequirePermission permission="vendas.view">
+                  <AcaoEntreAmigosPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="vendas/acao-entre-amigos/:id"
+              element={
+                <RequirePermission permission="vendas.view">
+                  <AcaoEntreAmigosFormPage />
                 </RequirePermission>
               }
             />

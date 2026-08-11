@@ -202,13 +202,20 @@ export const NAV_ITEMS: NavItem[] = [
   //   label: 'Eventos',
   //   permission: 'eventos.view',
   // },
-  // Vendas oculto por enquanto
-  // {
-  //   type: 'link',
-  //   to: '/vendas',
-  //   label: 'Vendas',
-  //   permission: 'vendas.view',
-  // },
+  {
+    type: 'group',
+    id: 'vendas',
+    label: 'Vendas',
+    anyOf: ['vendas.view'],
+    children: [
+      {
+        type: 'link',
+        to: '/vendas/acao-entre-amigos',
+        label: 'Ação entre amigos',
+        permission: 'vendas.view',
+      },
+    ],
+  },
   {
     type: 'link',
     to: '/projetos',

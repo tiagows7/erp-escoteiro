@@ -198,6 +198,18 @@ export type Projeto = {
   created_at: string | null
 }
 
+export type AcaoEntreAmigos = {
+  acao_id: number
+  empresa_id: number
+  ramo: number | null
+  secao: number | null
+  patrulha_matilha: number | null
+  nome: string
+  numero_inicial: number
+  numero_final: number
+  created_at: string | null
+}
+
 export type AtividadeConfirmacao = {
   confirmacao_id: number
   empresa_id: number
