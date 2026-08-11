@@ -10,6 +10,7 @@ import {
   filterNavItemsByMenuKeys,
   profileUsesMenuKeys,
 } from '@/lib/menuAccess'
+import { useAssociadoAcaoEntreAmigos } from '@/hooks/useAssociadoAcaoEntreAmigos'
 import { isAssociadoLogin } from '@/lib/roles'
 
 function groupHasVisibleChild(
@@ -43,6 +44,8 @@ export function AppLayout() {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
   const [menuOpen, setMenuOpen] = useState(false)
 
+  const { loading: acaoMenuLoading, temAcao } = useAssociadoAcaoEntreAmigos()
+
   const allItems = useMemo(() => {
     const base = navItemsForProfile(profile)
     // Associado: navItemsForProfile já aplica menu_keys (+ Projetos).
@@ -51,8 +54,15 @@ export function AppLayout() {
   }, [profile])
 
   const items = useMemo(() => {
-    return allItems.filter((item) => {
+    const filtered = allItems.filter((item) => {
       if (item.type === 'link') {
+        if (
+          item.to === '/vendas/acao-entre-amigos' &&
+          isAssociadoLogin(profile) &&
+          (acaoMenuLoading || !temAcao)
+        ) {
+          return false
+        }
         return !item.permission || hasPermission(item.permission)
       }
       if (item.anyOf && !item.anyOf.some((p) => hasPermission(p))) {
@@ -60,7 +70,28 @@ export function AppLayout() {
       }
       return groupHasVisibleChild(item, hasPermission)
     })
-  }, [allItems, hasPermission])
+
+    // Associado com faixa: garante o item no menu mesmo sem menu_keys.
+    if (
+      isAssociadoLogin(profile) &&
+      !acaoMenuLoading &&
+      temAcao &&
+      hasPermission('vendas.view') &&
+      !filtered.some(
+        (item) =>
+          item.type === 'link' && item.to === '/vendas/acao-entre-amigos',
+      )
+    ) {
+      filtered.push({
+        type: 'link',
+        to: '/vendas/acao-entre-amigos',
+        label: 'Ação entre amigos',
+        permission: 'vendas.view',
+      })
+    }
+
+    return filtered
+  }, [allItems, hasPermission, profile, acaoMenuLoading, temAcao])
 
   useEffect(() => {
     setOpenGroups((prev) => {

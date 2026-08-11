@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { numerosDaFaixa } from '@/lib/acaoEntreAmigos'
+import { linkPublicoAcaoEntreAmigos } from '@/lib/acaoEntreAmigosPublic'
 import { formatMoney } from '@/lib/despesas'
 import {
   financeiroScopeFromProfile,
@@ -14,8 +15,23 @@ import {
 import type {
   AcaoEntreAmigos,
   AcaoEntreAmigosFaixa,
+  AcaoEntreAmigosFormaPagamento,
   AcaoEntreAmigosVenda,
 } from '@/types/database'
+
+type FormaPagamentoApp = Extract<
+  AcaoEntreAmigosFormaPagamento,
+  'dinheiro' | 'pix_direto'
+>
+
+function labelFormaPagamento(
+  forma: AcaoEntreAmigosFormaPagamento | null | undefined,
+) {
+  if (forma === 'dinheiro') return 'Dinheiro'
+  if (forma === 'pix_direto') return 'PIX direto'
+  if (forma === 'pix') return 'PIX online'
+  return '—'
+}
 
 type VendaRow = AcaoEntreAmigosVenda & {
   associado_nome?: string | null
@@ -56,6 +72,8 @@ export function AcaoEntreAmigosVendaPage() {
   const [selectedNumeros, setSelectedNumeros] = useState<number[]>([])
   const [compradorNome, setCompradorNome] = useState('')
   const [compradorTelefone, setCompradorTelefone] = useState('')
+  const [formaPagamento, setFormaPagamento] =
+    useState<FormaPagamentoApp | null>(null)
   const [saving, setSaving] = useState(false)
 
   const vendidos = useMemo(
@@ -116,7 +134,7 @@ export function AcaoEntreAmigosVendaPage() {
           ? supabase
               .from('acao_entre_amigos_faixa')
               .select(
-                'faixa_id, empresa_id, acao_id, associado_id, numero_inicial, numero_final, created_at',
+                'faixa_id, empresa_id, acao_id, associado_id, numero_inicial, numero_final, link_token, created_at',
               )
               .eq('acao_id', acaoId)
               .eq('empresa_id', empresaId)
@@ -127,7 +145,7 @@ export function AcaoEntreAmigosVendaPage() {
           ? supabase
               .from('acao_entre_amigos_faixa')
               .select(
-                `faixa_id, empresa_id, acao_id, associado_id, numero_inicial, numero_final, created_at,
+                `faixa_id, empresa_id, acao_id, associado_id, numero_inicial, numero_final, link_token, created_at,
                  associados(nome, registro, ramo, secao)`,
               )
               .eq('acao_id', acaoId)
@@ -143,7 +161,7 @@ export function AcaoEntreAmigosVendaPage() {
         supabase
           .from('acao_entre_amigos_venda')
           .select(
-            'venda_id, empresa_id, acao_id, numero, comprador_nome, comprador_telefone, valor, associado_vendedor_id, vendido_por, vendido_em, created_at, associados!associado_vendedor_id(nome)',
+            'venda_id, empresa_id, acao_id, numero, comprador_nome, comprador_telefone, valor, forma_pagamento, associado_vendedor_id, vendido_por, vendido_em, created_at, associados!associado_vendedor_id(nome)',
           )
           .eq('acao_id', acaoId)
           .eq('empresa_id', empresaId)
@@ -293,7 +311,22 @@ export function AcaoEntreAmigosVendaPage() {
     setSelectedNumeros([])
     setCompradorNome('')
     setCompradorTelefone('')
+    setFormaPagamento(null)
     setError(null)
+  }
+
+  async function copiarLink(token: string | null | undefined) {
+    if (!token) {
+      toast.error('Atenção', 'Link ainda não disponível para esta faixa.')
+      return
+    }
+    const url = linkPublicoAcaoEntreAmigos(token)
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success('Link copiado!', 'Envie para quem for comprar fora do app.')
+    } catch {
+      window.prompt('Copie o link:', url)
+    }
   }
 
   async function onVender(event: FormEvent) {
@@ -305,6 +338,10 @@ export function AcaoEntreAmigosVendaPage() {
     }
     if (!compradorTelefone.trim()) {
       setError('Informe o telefone do comprador.')
+      return
+    }
+    if (!formaPagamento) {
+      setError('Selecione a forma de pagamento: Dinheiro ou PIX direto.')
       return
     }
     if (associadoLogin && associadoId == null) {
@@ -331,6 +368,7 @@ export function AcaoEntreAmigosVendaPage() {
       comprador_nome: nome,
       comprador_telefone: telefone,
       valor: valorUnitario,
+      forma_pagamento: formaPagamento,
       associado_vendedor_id: associadoLogin ? associadoId : null,
       vendido_por: user?.id ?? null,
     }))
@@ -405,6 +443,15 @@ export function AcaoEntreAmigosVendaPage() {
           </p>
         </div>
         <div className="page-header-actions actions-pair">
+          {associadoLogin && faixa?.link_token ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void copiarLink(faixa.link_token)}
+            >
+              Copiar link de venda
+            </button>
+          ) : null}
           {canStaffEdit ? (
             <Link
               className="btn btn-soft"
@@ -457,6 +504,7 @@ export function AcaoEntreAmigosVendaPage() {
                         <th>Vendidos</th>
                         <th>Disponíveis</th>
                         <th>Total</th>
+                        <th>Link</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -473,6 +521,15 @@ export function AcaoEntreAmigosVendaPage() {
                           </td>
                           <td>{f.disponiveis}</td>
                           <td>{f.total}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="btn btn-soft"
+                              onClick={() => void copiarLink(f.link_token)}
+                            >
+                              Copiar
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -492,6 +549,7 @@ export function AcaoEntreAmigosVendaPage() {
                         <td>
                           {staffFaixas.reduce((s, f) => s + f.total, 0)}
                         </td>
+                        <td />
                       </tr>
                     </tfoot>
                   </table>
@@ -554,8 +612,9 @@ export function AcaoEntreAmigosVendaPage() {
                 {formatMoney(totalSelecionado)}
               </p>
               <p className="field-hint">
-                Preencha uma vez: o mesmo nome e telefone serão gravados em
-                todos os números selecionados.
+                Preencha uma vez: o mesmo nome, telefone e forma de pagamento
+                serão gravados em todos os números selecionados. PIX direto
+                registra o recebimento sem abrir a cobrança Sicredi.
               </p>
               <form
                 className="form-grid form-grid-2"
@@ -586,11 +645,40 @@ export function AcaoEntreAmigosVendaPage() {
                     placeholder="(00) 00000-0000"
                   />
                 </div>
+                <div className="field field-span-2">
+                  <label>Forma de pagamento</label>
+                  <div className="actions-pair" style={{ flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className={`btn ${
+                        formaPagamento === 'dinheiro'
+                          ? 'btn-primary'
+                          : 'btn-soft'
+                      }`}
+                      disabled={saving}
+                      onClick={() => setFormaPagamento('dinheiro')}
+                    >
+                      Dinheiro
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${
+                        formaPagamento === 'pix_direto'
+                          ? 'btn-primary'
+                          : 'btn-soft'
+                      }`}
+                      disabled={saving}
+                      onClick={() => setFormaPagamento('pix_direto')}
+                    >
+                      PIX direto
+                    </button>
+                  </div>
+                </div>
                 <div className="form-actions field-span-2">
                   <button
                     className="btn btn-primary"
                     type="submit"
-                    disabled={saving}
+                    disabled={saving || !formaPagamento}
                   >
                     {saving
                       ? 'Salvando…'
@@ -624,6 +712,7 @@ export function AcaoEntreAmigosVendaPage() {
                       <th>Comprador</th>
                       <th>Telefone</th>
                       <th>Valor</th>
+                      <th>Pagamento</th>
                       {!associadoLogin ? <th>Vendedor</th> : null}
                     </tr>
                   </thead>
@@ -642,6 +731,7 @@ export function AcaoEntreAmigosVendaPage() {
                         <td>{v.comprador_nome}</td>
                         <td>{v.comprador_telefone}</td>
                         <td>{formatMoney(v.valor)}</td>
+                        <td>{labelFormaPagamento(v.forma_pagamento)}</td>
                         {!associadoLogin ? (
                           <td>{v.associado_nome || '—'}</td>
                         ) : null}

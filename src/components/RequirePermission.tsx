@@ -6,6 +6,7 @@ import {
   pathMatchesMenuKey,
   profileUsesMenuKeys,
 } from '@/lib/menuAccess'
+import { useAssociadoAcaoEntreAmigos } from '@/hooks/useAssociadoAcaoEntreAmigos'
 import { isAssociadoLogin, isGrupoAdmin, type Permission } from '@/lib/roles'
 
 type Props = {
@@ -25,8 +26,17 @@ export function RequirePermission({
 }: Props) {
   const { loading, hasPermission, hasAnyPermission, role, profile } = useAuth()
   const location = useLocation()
+  const {
+    associadoLogin,
+    loading: acaoLoading,
+    temAcao,
+  } = useAssociadoAcaoEntreAmigos()
+  const isAcaoPath = pathMatchesMenuKey(
+    location.pathname,
+    '/vendas/acao-entre-amigos',
+  )
 
-  if (loading) {
+  if (loading || (associadoLogin && isAcaoPath && acaoLoading)) {
     return <div className="loading">Carregando permissões…</div>
   }
 
@@ -44,16 +54,21 @@ export function RequirePermission({
     return <Navigate to="/" replace />
   }
 
+  // Associado sem faixa: não acessa ação entre amigos.
+  if (associadoLogin && isAcaoPath && !temAcao) {
+    return <Navigate to="/" replace />
+  }
+
   if (profileUsesMenuKeys(profile)) {
     const menuOk = pathAllowedByMenuKeys(
       location.pathname,
       profile?.menu_keys,
     )
-    // Associado: Projetos (leitura) e Ação entre amigos (venda) sempre liberados.
+    // Associado: Projetos sempre liberado; ação só se tiver faixa.
     const associadoExtra =
       isAssociadoLogin(profile) &&
       (pathMatchesMenuKey(location.pathname, '/projetos') ||
-        pathMatchesMenuKey(location.pathname, '/vendas/acao-entre-amigos'))
+        (isAcaoPath && temAcao))
     if (!menuOk && !associadoExtra) {
       return (
         <Navigate

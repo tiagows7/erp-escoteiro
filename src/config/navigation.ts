@@ -295,13 +295,12 @@ export function navItemsForProfile(
         (item) => item.type === 'link' && keys.includes(item.to),
       )
       // Projetos: sempre visível para associado (somente leitura).
-      for (const path of ['/projetos', '/vendas/acao-entre-amigos'] as const) {
-        if (!filtered.some((item) => item.type === 'link' && item.to === path)) {
-          const item = associadoMenus.find(
-            (m) => m.type === 'link' && m.to === path,
-          )
-          if (item) filtered.push(item)
-        }
+      // Ação entre amigos: só aparece se tiver faixa (filtrado no AppLayout).
+      if (!filtered.some((item) => item.type === 'link' && item.to === '/projetos')) {
+        const projetos = associadoMenus.find(
+          (item) => item.type === 'link' && item.to === '/projetos',
+        )
+        if (projetos) filtered.push(projetos)
       }
       return filtered
     }

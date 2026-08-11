@@ -27,6 +27,7 @@ import { ProjetoFormPage } from '@/pages/ProjetoFormPage'
 import { AcaoEntreAmigosPage } from '@/pages/AcaoEntreAmigosPage'
 import { AcaoEntreAmigosFormPage } from '@/pages/AcaoEntreAmigosFormPage'
 import { AcaoEntreAmigosVendaPage } from '@/pages/AcaoEntreAmigosVendaPage'
+import { AcaoEntreAmigosPublicPage } from '@/pages/AcaoEntreAmigosPublicPage'
 import { UsuariosPage } from '@/pages/UsuariosPage'
 import { UsuarioFormPage } from '@/pages/UsuarioFormPage'
 import { FornecedoresPage } from '@/pages/FornecedoresPage'
@@ -69,6 +70,10 @@ export default function App() {
           <Route
             path="/transparencia/:slug"
             element={<PortalTransparenciaPage />}
+          />
+          <Route
+            path="/rifa/:token"
+            element={<AcaoEntreAmigosPublicPage />}
           />
           <Route
             element={

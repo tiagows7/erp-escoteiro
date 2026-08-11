@@ -218,8 +218,14 @@ export type AcaoEntreAmigosFaixa = {
   associado_id: number
   numero_inicial: number
   numero_final: number
+  link_token: string
   created_at: string | null
 }
+
+export type AcaoEntreAmigosFormaPagamento =
+  | 'dinheiro'
+  | 'pix_direto'
+  | 'pix'
 
 export type AcaoEntreAmigosVenda = {
   venda_id: number
@@ -229,8 +235,10 @@ export type AcaoEntreAmigosVenda = {
   comprador_nome: string
   comprador_telefone: string
   valor: number
+  forma_pagamento: AcaoEntreAmigosFormaPagamento | null
   associado_vendedor_id: number | null
   vendido_por: string | null
+  pix_cobranca_id: number | null
   vendido_em: string
   created_at: string | null
 }

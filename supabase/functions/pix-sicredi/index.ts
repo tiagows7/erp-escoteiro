@@ -9,7 +9,7 @@ const corsHeaders = {
 type CreateBody = {
   action: 'create'
   empresa_id: number
-  tipo: 'mensalidade' | 'atividade' | 'mensalidade_lote'
+  tipo: 'mensalidade' | 'atividade' | 'mensalidade_lote' | 'acao_entre_amigos'
   valor: number
   descricao?: string
   associado_id?: number | null
@@ -25,11 +25,36 @@ type StatusBody = {
 type ConfigBody = {
   action: 'config'
   empresa_id?: number
-  tipo?: 'mensalidade' | 'atividade' | 'mensalidade_lote'
+  tipo?: 'mensalidade' | 'atividade' | 'mensalidade_lote' | 'acao_entre_amigos'
   atividade_id?: number | null
+  ramo_id?: number | null
 }
 
-type Body = CreateBody | StatusBody | ConfigBody
+type CreatePublicBody = {
+  action: 'create_public'
+  link_token: string
+  numeros: number[]
+  comprador_nome: string
+  comprador_telefone: string
+  descricao?: string
+}
+
+type StatusPublicBody = {
+  action: 'status_public'
+  cobranca_id: number
+  link_token: string
+}
+
+type Body =
+  | CreateBody
+  | StatusBody
+  | ConfigBody
+  | CreatePublicBody
+  | StatusPublicBody
+
+function tipoUsaPixRamo(tipo: string): boolean {
+  return tipo === 'atividade' || tipo === 'acao_entre_amigos'
+}
 
 type SicrediConfig = {
   clientId: string
@@ -273,12 +298,12 @@ async function resolveSicrediConfig(
   const fromConta = await resolveConfigFromContas(
     admin,
     opts.empresaId,
-    opts.tipo === 'atividade' ? ramoId : null,
+    tipoUsaPixRamo(opts.tipo) ? ramoId : null,
   )
   if (fromConta.cfg) return fromConta
 
   // Fallback legado: empresa / ramo_pix_sicredi / env.
-  if (opts.tipo === 'atividade' && ramoId != null) {
+  if (tipoUsaPixRamo(opts.tipo) && ramoId != null) {
     const { data: ramoCfg } = await admin
       .from('empresa_ramo_pix_sicredi')
       .select(
@@ -313,7 +338,7 @@ async function resolveSicrediConfig(
     cfg: null,
     hint:
       fromConta.hint ||
-      (opts.tipo === 'atividade'
+      (tipoUsaPixRamo(opts.tipo)
         ? 'Cadastre uma conta bancária com PIX ativo para o ramo (ou do grupo) em Cadastrar banco.'
         : 'Cadastre uma conta bancária do grupo (sem ramo) com PIX ativo em Cadastrar banco.'),
   }
@@ -863,6 +888,8 @@ async function concluirEBaixar(
       txid: String(cob.txid),
       descricao: (cob.descricao as string | null) ?? null,
     })
+  } else if (tipo === 'acao_entre_amigos') {
+    await baixarAcaoEntreAmigos(admin, cob)
   }
 
   const { error } = await admin
@@ -879,6 +906,57 @@ async function concluirEBaixar(
 
   if (error) throw new Error(error.message)
   return { paid: true, baixado: true }
+}
+
+async function baixarAcaoEntreAmigos(
+  admin: ReturnType<typeof createClient>,
+  cob: Record<string, unknown>,
+) {
+  const empresaId = cob.empresa_id as number
+  const acaoId = cob.acao_id as number
+  const associadoId = cob.associado_id as number | null
+  const numeros = Array.isArray(cob.numeros)
+    ? (cob.numeros as unknown[]).map(Number).filter((n) => Number.isFinite(n))
+    : []
+  const compradorNome = String(cob.comprador_nome ?? '').trim()
+  const compradorTelefone = String(cob.comprador_telefone ?? '').trim()
+  const valorTotal = Number(cob.valor)
+  const cobrancaId = cob.id as number
+
+  if (!acaoId || numeros.length === 0 || !compradorNome || !compradorTelefone) {
+    throw new Error('Cobrança de ação entre amigos incompleta.')
+  }
+
+  const valorUnitario = Math.round((valorTotal / numeros.length) * 100) / 100
+
+  const rows = numeros.map((numero) => ({
+    empresa_id: empresaId,
+    acao_id: acaoId,
+    numero,
+    comprador_nome: compradorNome.slice(0, 200),
+    comprador_telefone: compradorTelefone.slice(0, 40),
+    valor: valorUnitario,
+    forma_pagamento: 'pix',
+    associado_vendedor_id: associadoId,
+    vendido_por: null,
+    pix_cobranca_id: cobrancaId,
+  }))
+
+  const { error } = await admin.from('acao_entre_amigos_venda').insert(rows)
+  if (error) {
+    if (
+      error.message.includes('duplicate') ||
+      error.message.includes('unique')
+    ) {
+      // Idempotência: se já gravou as vendas desta cobrança, segue.
+      const { count } = await admin
+        .from('acao_entre_amigos_venda')
+        .select('venda_id', { count: 'exact', head: true })
+        .eq('pix_cobranca_id', cobrancaId)
+      if ((count ?? 0) > 0) return
+    }
+    throw new Error(error.message)
+  }
 }
 
 Deno.serve(async (req) => {
@@ -915,6 +993,259 @@ Deno.serve(async (req) => {
       }
 
       return json({ ok: true })
+    }
+
+    // Endpoints públicos (link da rifa) — sem JWT do app
+    if (req.method === 'POST') {
+      const peek = (await req
+        .clone()
+        .json()
+        .catch(() => null)) as Body | null
+
+      if (peek?.action === 'create_public') {
+        const body = peek as CreatePublicBody
+        const token = String(body.link_token ?? '').trim()
+        const nome = String(body.comprador_nome ?? '').trim()
+        const fone = String(body.comprador_telefone ?? '').trim()
+        const numerosRaw = Array.isArray(body.numeros) ? body.numeros : []
+        const numeros = [
+          ...new Set(
+            numerosRaw.map(Number).filter((n) => Number.isFinite(n) && n >= 0),
+          ),
+        ].sort((a, b) => a - b)
+
+        if (!token) return json({ error: 'Link inválido.' }, 400)
+        if (!nome) return json({ error: 'Informe o nome do comprador.' }, 400)
+        if (!fone) return json({ error: 'Informe o telefone do comprador.' }, 400)
+        if (numeros.length === 0) {
+          return json({ error: 'Selecione ao menos um número.' }, 400)
+        }
+
+        const { data: faixa, error: faixaError } = await admin
+          .from('acao_entre_amigos_faixa')
+          .select(
+            'faixa_id, empresa_id, acao_id, associado_id, numero_inicial, numero_final, link_token',
+          )
+          .eq('link_token', token)
+          .maybeSingle()
+
+        if (faixaError || !faixa) {
+          return json({ error: 'Link inválido ou expirado.' }, 404)
+        }
+
+        const { data: acao, error: acaoError } = await admin
+          .from('acao_entre_amigos')
+          .select('acao_id, empresa_id, nome, valor_numero, ramo')
+          .eq('acao_id', faixa.acao_id)
+          .eq('empresa_id', faixa.empresa_id)
+          .maybeSingle()
+
+        if (acaoError || !acao) {
+          return json({ error: 'Ação não encontrada.' }, 404)
+        }
+
+        const ini = Number(faixa.numero_inicial)
+        const fim = Number(faixa.numero_final)
+        if (numeros.some((n) => n < ini || n > fim)) {
+          return json(
+            { error: 'Há números fora da faixa deste vendedor.' },
+            400,
+          )
+        }
+
+        const { data: jaVendidos } = await admin
+          .from('acao_entre_amigos_venda')
+          .select('numero')
+          .eq('acao_id', faixa.acao_id)
+          .in('numero', numeros)
+
+        if ((jaVendidos ?? []).length > 0) {
+          const list = (jaVendidos ?? [])
+            .map((r) => r.numero)
+            .sort((a, b) => Number(a) - Number(b))
+            .join(', ')
+          return json(
+            { error: `Número(s) já vendido(s): ${list}` },
+            409,
+          )
+        }
+
+        const valorUnit = Number(acao.valor_numero ?? 0)
+        if (!Number.isFinite(valorUnit) || valorUnit <= 0) {
+          return json(
+            { error: 'Valor do número não configurado nesta ação.' },
+            400,
+          )
+        }
+        const valor = Math.round(valorUnit * numeros.length * 100) / 100
+        const ramoId = (acao.ramo as number | null) ?? null
+
+        const resolved = await resolveSicrediConfig(admin, {
+          empresaId: faixa.empresa_id as number,
+          tipo: 'acao_entre_amigos',
+          ramoId,
+        })
+        if (!resolved.cfg) {
+          return json(
+            {
+              error:
+                resolved.hint ||
+                'PIX Sicredi não configurado para este ramo/grupo.',
+              configured: false,
+            },
+            503,
+          )
+        }
+
+        const cfg = resolved.cfg
+        const txid = generateTxid()
+        const descricao =
+          body.descricao?.trim() ||
+          `${acao.nome} · nº ${numeros.join(', ')}`
+
+        const cobRes = await createCob(cfg, { valor, descricao, txid })
+        const status = String(cobRes.status ?? 'ATIVA')
+
+        const { data: row, error: insertError } = await admin
+          .from('pix_cobrancas')
+          .insert({
+            empresa_id: faixa.empresa_id,
+            associado_id: faixa.associado_id,
+            created_by: null,
+            tipo: 'acao_entre_amigos',
+            receita_ids: [],
+            atividade_id: null,
+            ramo_id: ramoId,
+            acao_id: faixa.acao_id,
+            faixa_id: faixa.faixa_id,
+            link_token: token,
+            numeros,
+            comprador_nome: nome.slice(0, 200),
+            comprador_telefone: fone.slice(0, 40),
+            valor,
+            txid: cobRes.txid ?? txid,
+            status,
+            pix_copia_e_cola: cobRes.pixCopiaECola ?? null,
+            location: cobRes.location ?? null,
+            descricao,
+            raw_create: cobRes,
+          })
+          .select(
+            'id, txid, status, valor, pix_copia_e_cola, location, descricao, created_at',
+          )
+          .single()
+
+        if (insertError || !row) {
+          return json(
+            { error: insertError?.message ?? 'Falha ao salvar cobrança.' },
+            400,
+          )
+        }
+
+        return json({ ok: true, configured: true, cobranca: row })
+      }
+
+      if (peek?.action === 'status_public') {
+        const body = peek as StatusPublicBody
+        const cobrancaId = Number(body.cobranca_id)
+        const token = String(body.link_token ?? '').trim()
+        if (!cobrancaId || !token) {
+          return json({ error: 'Cobrança inválida.' }, 400)
+        }
+
+        const { data: cob, error: cobError } = await admin
+          .from('pix_cobrancas')
+          .select('*')
+          .eq('id', cobrancaId)
+          .eq('tipo', 'acao_entre_amigos')
+          .eq('link_token', token)
+          .maybeSingle()
+
+        if (cobError || !cob) {
+          return json(
+            { error: cobError?.message ?? 'Cobrança não encontrada.' },
+            404,
+          )
+        }
+
+        if (cob.baixado_em || cob.status === 'CONCLUIDA') {
+          return json({
+            ok: true,
+            paid: true,
+            baixado: true,
+            cobranca: {
+              id: cob.id,
+              txid: cob.txid,
+              status: cob.status,
+              valor: cob.valor,
+              pix_copia_e_cola: cob.pix_copia_e_cola,
+            },
+          })
+        }
+
+        const resolved = await resolveSicrediConfig(admin, {
+          empresaId: cob.empresa_id as number,
+          tipo: 'acao_entre_amigos',
+          ramoId: (cob.ramo_id as number | null) ?? null,
+        })
+        if (!resolved.cfg) {
+          return json(
+            {
+              error:
+                resolved.hint ||
+                'Credenciais PIX Sicredi não encontradas para consultar esta cobrança.',
+              configured: false,
+            },
+            503,
+          )
+        }
+
+        const remote = await getCob(resolved.cfg, String(cob.txid))
+        const remoteStatus = String(remote.status ?? cob.status)
+
+        await admin
+          .from('pix_cobrancas')
+          .update({
+            status: remoteStatus,
+            pix_copia_e_cola:
+              remote.pixCopiaECola ?? cob.pix_copia_e_cola ?? null,
+            raw_status: remote,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', cob.id)
+
+        if (remoteStatus === 'CONCLUIDA') {
+          const result = await concluirEBaixar(
+            admin,
+            cob as Record<string, unknown>,
+            remote,
+          )
+          return json({
+            ok: true,
+            ...result,
+            cobranca: {
+              id: cob.id,
+              txid: cob.txid,
+              status: 'CONCLUIDA',
+              valor: cob.valor,
+              pix_copia_e_cola: remote.pixCopiaECola ?? cob.pix_copia_e_cola,
+            },
+          })
+        }
+
+        return json({
+          ok: true,
+          paid: false,
+          baixado: false,
+          cobranca: {
+            id: cob.id,
+            txid: cob.txid,
+            status: remoteStatus,
+            valor: cob.valor,
+            pix_copia_e_cola: remote.pixCopiaECola ?? cob.pix_copia_e_cola,
+          },
+        })
+      }
     }
 
     const authHeader = req.headers.get('Authorization')

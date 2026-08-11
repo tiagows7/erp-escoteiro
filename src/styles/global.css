@@ -3907,6 +3907,30 @@ table.data tbody tr:hover {
   text-decoration: line-through;
 }
 
+.public-rifa-page {
+  min-height: 100vh;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 2.5rem;
+  background:
+    radial-gradient(1200px 500px at 10% -10%, rgba(47, 143, 78, 0.12), transparent 55%),
+    linear-gradient(180deg, #f7faf7 0%, #eef3ef 100%);
+}
+
+.public-rifa-header {
+  margin-bottom: 1rem;
+}
+
+.public-rifa-header h1 {
+  margin: 0.15rem 0 0.35rem;
+  font-size: clamp(1.45rem, 4vw, 1.9rem);
+  letter-spacing: -0.02em;
+}
+
+.public-rifa-page .panel {
+  margin-bottom: 1rem;
+}
+
 .field-checks label {
   display: inline-flex;
   gap: 0.4rem;
