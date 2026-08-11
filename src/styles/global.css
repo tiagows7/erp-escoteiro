@@ -3899,12 +3899,23 @@ table.data tbody tr:hover {
   background: color-mix(in srgb, var(--forest) 16%, #fff);
 }
 
-.acao-numero-btn.is-sold,
-.acao-numero-btn:disabled {
+.acao-numero-btn:disabled:not(.is-sold) {
   cursor: default;
-  opacity: 0.55;
-  background: rgba(15, 40, 28, 0.08);
+  opacity: 0.65;
+}
+
+.acao-numero-btn.is-sold {
+  cursor: default;
+  border-color: #c62828;
+  background: #ffebee;
+  color: #b71c1c;
   text-decoration: line-through;
+  opacity: 1;
+}
+
+.acao-numero-btn.is-sold:hover {
+  transform: none;
+  border-color: #c62828;
 }
 
 .public-rifa-page {
