@@ -2569,7 +2569,7 @@ table.data tbody tr:hover {
   margin: 0;
   padding: 1rem 0 0;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.85rem 1.1rem;
   border-top: 1px solid rgba(200, 220, 255, 0.16);
   animation: rise 680ms ease both;

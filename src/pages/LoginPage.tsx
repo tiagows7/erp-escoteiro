@@ -20,11 +20,19 @@ const SISTEMA_DESTAQUES = [
   },
   {
     titulo: 'Financeiro e mensalidades',
-    texto: 'Receitas, despesas, geração de mensalidades e acompanhamento.',
+    texto: 'Receitas, despesas, geração de mensalidades e PIX Sicredi.',
   },
   {
-    titulo: 'Atividades e conquistas',
-    texto: 'Confirmações, pagamentos e registro das conquistas máximas.',
+    titulo: 'Convites de eventos',
+    texto: 'Link público de inscrição com InfinitePay ou PIX Sicredi.',
+  },
+  {
+    titulo: 'Caixa do evento',
+    texto: 'Despesas e receitas vinculadas, resumo financeiro e encerramento.',
+  },
+  {
+    titulo: 'Projetos e rifas',
+    texto: 'Ação entre amigos e projetos com venda e encerramento ao final.',
   },
   {
     titulo: 'Portal da Transparência',
@@ -122,8 +130,8 @@ export function LoginPage() {
               <p className="login-kicker">Sistema de gestão escoteira</p>
               <h1 className="login-brand-title">ERP Escoteiro</h1>
               <p className="login-intro-lead">
-                Organize associados, finanças, atividades e a transparência do
-                seu grupo em um só lugar.
+                Organize associados, finanças, eventos com pagamento online e a
+                transparência do seu grupo em um só lugar.
               </p>
             </div>
           </section>
