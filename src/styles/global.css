@@ -4441,32 +4441,6 @@ table.data tbody tr:hover {
   color: #1c2a24;
 }
 
-.portal-saldo-periodo,
-.portal-demonstrativo {
-  margin-top: 1rem;
-}
-
-.portal-saldo-periodo-head {
-  margin-bottom: 0.55rem;
-}
-
-.portal-saldo-periodo-head h3 {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 650;
-  color: var(--ink);
-}
-
-.portal-saldo-periodo-head .muted {
-  margin: 0.2rem 0 0;
-  font-size: 0.82rem;
-}
-
-.portal-saldo-resumo {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  max-width: 36rem;
-}
-
 .portal-locais {
   margin-top: 1.15rem;
   padding-top: 1rem;
@@ -4499,36 +4473,55 @@ table.data tbody tr:hover {
 }
 
 .portal-stats-grid-compact {
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-  gap: 0.7rem;
+  gap: 0.55rem;
+}
+
+.portal-demo-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.portal-locais-row {
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
 }
 
 .portal-stats-grid-compact .stat-card {
-  padding: 0.75rem 0.8rem;
-  border-left-width: 4px;
+  padding: 0.65rem 0.7rem;
+  border-left-width: 3px;
 }
 
 .portal-stats-grid-compact .stat-card span {
-  font-size: 0.78rem;
-  margin-bottom: 0.28rem;
+  font-size: 0.74rem;
+  margin-bottom: 0.22rem;
 }
 
 .portal-stats-grid-compact .stat-card strong {
-  font-size: 1.35rem;
+  font-size: 1.15rem;
 }
 
 .portal-stats-grid-compact .stat-card-hint {
-  margin-top: 0.3rem;
-  font-size: 0.72rem;
+  margin-top: 0.22rem;
+  font-size: 0.68rem;
 }
 
 .portal-stats-grid-compact .stat-card::after {
-  width: 64px;
-  height: 64px;
+  width: 52px;
+  height: 52px;
 }
 
 .portal-locais .portal-stats-grid {
   margin-top: 0;
+}
+
+@media (max-width: 800px) {
+  .portal-demo-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .portal-demo-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .stat-card strong.is-neg {
