@@ -125,16 +125,35 @@ export async function createPixSicrediPublicAcao(
 export type EventoConvitePagoPublic = {
   numero: number
   nome: string
+  tipo_label?: string | null
+  valor_unitario?: number | null
 }
 
 function parseConvitesPago(raw: unknown): EventoConvitePagoPublic[] {
   if (!Array.isArray(raw)) return []
   return raw
     .map((item) => {
-      const row = item as { numero?: unknown; nome?: unknown }
+      const row = item as {
+        numero?: unknown
+        nome?: unknown
+        tipo_label?: unknown
+        valor_unitario?: unknown
+      }
       const numero = Number(row.numero)
       if (!Number.isFinite(numero)) return null
-      return { numero, nome: String(row.nome ?? '').trim() }
+      const valor =
+        row.valor_unitario != null && Number.isFinite(Number(row.valor_unitario))
+          ? Number(row.valor_unitario)
+          : null
+      return {
+        numero,
+        nome: String(row.nome ?? '').trim(),
+        tipo_label:
+          row.tipo_label != null && String(row.tipo_label).trim()
+            ? String(row.tipo_label).trim()
+            : null,
+        valor_unitario: valor,
+      }
     })
     .filter((c): c is EventoConvitePagoPublic => c != null)
 }

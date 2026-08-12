@@ -4,6 +4,10 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import {
+  AcaoNumerosImpressos,
+  type NumeroImpressoItem,
+} from '@/components/AcaoNumerosImpressos'
 import { PixSicrediPublicCheckoutModal } from '@/components/PixSicrediPublicCheckoutModal'
 import { numerosDaFaixa } from '@/lib/acaoEntreAmigos'
 import { linkPublicoAcaoEntreAmigos } from '@/lib/acaoEntreAmigosPublic'
@@ -79,6 +83,7 @@ export function AcaoEntreAmigosVendaPage() {
   const [pixOpen, setPixOpen] = useState(false)
   const [pixInput, setPixInput] = useState<PixPublicAcaoInput | null>(null)
   const [saving, setSaving] = useState(false)
+  const [numerosPagos, setNumerosPagos] = useState<NumeroImpressoItem[]>([])
 
   const vendidos = useMemo(
     () => new Map(vendas.map((v) => [v.numero, v])),
@@ -327,6 +332,7 @@ export function AcaoEntreAmigosVendaPage() {
       return [...prev, numero].sort((a, b) => a - b)
     })
     setError(null)
+    setNumerosPagos([])
   }
 
   function limparSelecao() {
@@ -410,6 +416,7 @@ export function AcaoEntreAmigosVendaPage() {
       const valor =
         Math.round(valorUnitario * disponiveis.length * 100) / 100
       setError(null)
+      setNumerosPagos([])
       setPixInput({
         linkToken,
         numeros: disponiveis,
@@ -458,6 +465,12 @@ export function AcaoEntreAmigosVendaPage() {
       disponiveis.length === 1
         ? `Número ${disponiveis[0]} vendido.`
         : `${disponiveis.length} números vendidos (${disponiveis.join(', ')}).`
+    setNumerosPagos(
+      disponiveis.map((numero) => ({
+        numero,
+        nome,
+      })),
+    )
     toast.success('Venda registrada!', label)
     limparSelecao()
     await reload()
@@ -552,6 +565,18 @@ export function AcaoEntreAmigosVendaPage() {
         <AlertMessage tone="error" title="Atenção">
           {error}
         </AlertMessage>
+      ) : null}
+
+      {numerosPagos.length > 0 && acao ? (
+        <section className="panel">
+          <AcaoNumerosImpressos
+            acaoNome={acao.nome}
+            empresaNome={empresa?.nome}
+            dataSorteio={acao.data_sorteio}
+            imagemUrl={acao.imagem_url}
+            numeros={numerosPagos}
+          />
+        </section>
       ) : null}
       {encerrado ? (
         <AlertMessage tone="info" title="Ação encerrada">
@@ -889,6 +914,18 @@ export function AcaoEntreAmigosVendaPage() {
           setPixInput(null)
         }}
         onPaid={async () => {
+          const nome = (pixInput?.compradorNome ?? compradorNome).trim()
+          const nums = pixInput?.numeros?.length
+            ? [...pixInput.numeros]
+            : [...selectedNumeros]
+          if (nums.length > 0) {
+            setNumerosPagos(
+              nums.map((numero) => ({
+                numero,
+                nome: nome || 'Comprador',
+              })),
+            )
+          }
           setPixOpen(false)
           setPixInput(null)
           limparSelecao()

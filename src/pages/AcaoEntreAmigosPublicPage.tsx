@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AlertMessage } from '@/components/AlertMessage'
+import {
+  AcaoNumerosImpressos,
+  type NumeroImpressoItem,
+} from '@/components/AcaoNumerosImpressos'
 import { PixSicrediPublicCheckoutModal } from '@/components/PixSicrediPublicCheckoutModal'
 import { numerosDaFaixa } from '@/lib/acaoEntreAmigos'
 import {
@@ -21,6 +25,7 @@ export function AcaoEntreAmigosPublicPage() {
   const [compradorTelefone, setCompradorTelefone] = useState('')
   const [pixOpen, setPixOpen] = useState(false)
   const [pixInput, setPixInput] = useState<PixPublicAcaoInput | null>(null)
+  const [numerosPagos, setNumerosPagos] = useState<NumeroImpressoItem[]>([])
 
   const vendidos = useMemo(
     () => new Set(info?.numeros_vendidos ?? []),
@@ -64,6 +69,7 @@ export function AcaoEntreAmigosPublicPage() {
     })
     setError(null)
     setSuccess(null)
+    setNumerosPagos([])
   }
 
   function onSubmit(event: FormEvent) {
@@ -93,6 +99,7 @@ export function AcaoEntreAmigosPublicPage() {
 
     setError(null)
     setSuccess(null)
+    setNumerosPagos([])
     setPixInput({
       linkToken: token,
       numeros: selectedNumeros,
@@ -169,6 +176,18 @@ export function AcaoEntreAmigosPublicPage() {
         <AlertMessage tone="success" title="Pronto!">
           {success}
         </AlertMessage>
+      ) : null}
+
+      {numerosPagos.length > 0 ? (
+        <section className="panel">
+          <AcaoNumerosImpressos
+            acaoNome={info.acao_nome}
+            empresaNome={info.empresa_nome}
+            dataSorteio={info.data_sorteio}
+            imagemUrl={info.imagem_url}
+            numeros={numerosPagos}
+          />
+        </section>
       ) : null}
 
       <section className="panel">
@@ -289,6 +308,18 @@ export function AcaoEntreAmigosPublicPage() {
           setPixInput(null)
         }}
         onPaid={() => {
+          const nome = (pixInput?.compradorNome ?? compradorNome).trim()
+          const nums = pixInput?.numeros?.length
+            ? [...pixInput.numeros]
+            : [...selectedNumeros]
+          if (nums.length > 0) {
+            setNumerosPagos(
+              nums.map((numero) => ({
+                numero,
+                nome: nome || 'Comprador',
+              })),
+            )
+          }
           setSuccess('Pagamento confirmado! Seus números foram registrados.')
           setSelectedNumeros([])
           setCompradorNome('')

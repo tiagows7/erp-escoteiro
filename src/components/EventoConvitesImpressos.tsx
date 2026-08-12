@@ -1,6 +1,10 @@
+import { formatMoney } from '@/lib/despesas'
+
 export type ConviteImpressoItem = {
   numero: number
   nome: string
+  tipo_label?: string | null
+  valor_unitario?: number | null
 }
 
 type Props = {
@@ -49,34 +53,49 @@ export function EventoConvitesImpressos({
       </div>
 
       <div className="evento-convites-print-sheet">
-        {convites.map((c) => (
-          <article
-            key={`${c.numero}-${c.nome}`}
-            className={`evento-convite-card${imagemUrl ? ' has-img' : ''}`}
-          >
-            {imagemUrl ? (
-              <img
-                className="evento-convite-card-img"
-                src={imagemUrl}
-                alt=""
-              />
-            ) : null}
-            <div className="evento-convite-card-body">
-              {empresaNome ? (
-                <p className="evento-convite-card-empresa">{empresaNome}</p>
+        {convites.map((c) => {
+          const tipoLabel = c.tipo_label?.trim() || null
+          const temValor =
+            c.valor_unitario != null && Number.isFinite(Number(c.valor_unitario))
+          return (
+            <article
+              key={`${c.numero}-${c.nome}`}
+              className={`evento-convite-card${imagemUrl ? ' has-img' : ''}`}
+            >
+              {imagemUrl ? (
+                <img
+                  className="evento-convite-card-img"
+                  src={imagemUrl}
+                  alt=""
+                />
               ) : null}
-              <h3 className="evento-convite-card-titulo">{eventoNome}</h3>
-              {dataLabel ? (
-                <p className="evento-convite-card-data">{dataLabel}</p>
-              ) : null}
-              <div className="evento-convite-card-meta">
-                <span className="evento-convite-card-label">Convite nº</span>
-                <strong className="evento-convite-card-numero">{c.numero}</strong>
+              <div className="evento-convite-card-body">
+                {empresaNome ? (
+                  <p className="evento-convite-card-empresa">{empresaNome}</p>
+                ) : null}
+                <h3 className="evento-convite-card-titulo">{eventoNome}</h3>
+                {dataLabel ? (
+                  <p className="evento-convite-card-data">{dataLabel}</p>
+                ) : null}
+                <div className="evento-convite-card-meta">
+                  <span className="evento-convite-card-label">Convite nº</span>
+                  <strong className="evento-convite-card-numero">
+                    {c.numero}
+                  </strong>
+                </div>
+                {tipoLabel || temValor ? (
+                  <p className="evento-convite-card-tipo">
+                    {tipoLabel ?? 'Convite'}
+                    {temValor
+                      ? ` · ${formatMoney(Number(c.valor_unitario))}`
+                      : ''}
+                  </p>
+                ) : null}
+                <p className="evento-convite-card-nome">{c.nome}</p>
               </div>
-              <p className="evento-convite-card-nome">{c.nome}</p>
-            </div>
-          </article>
-        ))}
+            </article>
+          )
+        })}
       </div>
     </div>
   )

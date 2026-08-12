@@ -1103,6 +1103,13 @@ button {
   line-height: 1.25;
 }
 
+.evento-convite-card-tipo {
+  margin: 0.2rem 0 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--ink, #1f2a1c);
+}
+
 @media print {
   .evento-convites-impressos-actions {
     display: none !important;
@@ -1153,6 +1160,10 @@ button {
 
   .evento-convite-card-nome {
     font-size: 1.1rem;
+  }
+
+  .evento-convite-card-tipo {
+    font-size: 0.95rem;
   }
 }
 

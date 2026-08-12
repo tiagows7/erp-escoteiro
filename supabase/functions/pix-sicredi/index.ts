@@ -1030,7 +1030,14 @@ async function fetchConvitesVendaEventoByCobranca(
   admin: ReturnType<typeof createClient>,
   cobrancaId: number,
   tipo: string,
-): Promise<{ numero: number; nome: string }[]> {
+): Promise<
+  {
+    numero: number
+    nome: string
+    tipo_label: string | null
+    valor_unitario: number | null
+  }[]
+> {
   if (tipo !== 'venda_evento') return []
   const { data: compra } = await admin
     .from('venda_evento_compra')
@@ -1040,12 +1047,17 @@ async function fetchConvitesVendaEventoByCobranca(
   if (!compra?.compra_id) return []
   const { data } = await admin
     .from('venda_evento_convite')
-    .select('numero, nome')
+    .select('numero, nome, tipo_label, valor_unitario')
     .eq('compra_id', compra.compra_id)
     .order('numero')
   return (data ?? []).map((r) => ({
     numero: Number(r.numero),
     nome: String(r.nome ?? ''),
+    tipo_label: r.tipo_label != null ? String(r.tipo_label) : null,
+    valor_unitario:
+      r.valor_unitario != null && Number.isFinite(Number(r.valor_unitario))
+        ? Number(r.valor_unitario)
+        : null,
   }))
 }
 

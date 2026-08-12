@@ -256,7 +256,7 @@ export function VendaEventoVendaPage() {
 
     const { data: rows } = await supabase
       .from('venda_evento_convite')
-      .select('numero, nome')
+      .select('numero, nome, tipo_label, valor_unitario')
       .eq('compra_id', compra.compra_id)
       .order('numero')
 
@@ -264,6 +264,11 @@ export function VendaEventoVendaPage() {
       .map((r) => ({
         numero: Number(r.numero),
         nome: String(r.nome ?? ''),
+        tipo_label: r.tipo_label != null ? String(r.tipo_label) : null,
+        valor_unitario:
+          r.valor_unitario != null && Number.isFinite(Number(r.valor_unitario))
+            ? Number(r.valor_unitario)
+            : null,
       }))
       .filter((c) => Number.isFinite(c.numero))
     return itens.length > 0 ? itens : null
@@ -402,10 +407,17 @@ export function VendaEventoVendaPage() {
 
     setUltimaNumeracao(result.numeros)
     setConvitesPagos(
-      result.numeros.map((numero, i) => ({
-        numero,
-        nome: nomesLimpos[i] ?? '',
-      })),
+      result.numeros.map((numero, i) => {
+        const tipoId = tipoIdsEnvio?.[i] ?? tipoPadraoId
+        const tipo = tipos.find((t) => t.tipo_id === tipoId) ?? tipos[0]
+        return {
+          numero,
+          nome: nomesLimpos[i] ?? '',
+          tipo_label: tipo?.label ?? null,
+          valor_unitario:
+            tipo?.valor != null ? Number(tipo.valor) : null,
+        }
+      }),
     )
     toast.success('Compra registrada!', result.mensagem)
     setQuantidade(1)

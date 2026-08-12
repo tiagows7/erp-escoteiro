@@ -157,16 +157,28 @@ async function resolveEventoRamo(
 async function fetchConvitesByCompraId(
   admin: ReturnType<typeof createClient>,
   compraId: number | null | undefined,
-): Promise<{ numero: number; nome: string }[]> {
+): Promise<
+  {
+    numero: number
+    nome: string
+    tipo_label: string | null
+    valor_unitario: number | null
+  }[]
+> {
   if (!compraId) return []
   const { data } = await admin
     .from('venda_evento_convite')
-    .select('numero, nome')
+    .select('numero, nome, tipo_label, valor_unitario')
     .eq('compra_id', compraId)
     .order('numero')
   return (data ?? []).map((r) => ({
     numero: Number(r.numero),
     nome: String(r.nome ?? ''),
+    tipo_label: r.tipo_label != null ? String(r.tipo_label) : null,
+    valor_unitario:
+      r.valor_unitario != null && Number.isFinite(Number(r.valor_unitario))
+        ? Number(r.valor_unitario)
+        : null,
   }))
 }
 
@@ -356,6 +368,8 @@ async function baixarPedidoEvento(
   const convites = livres.map((numero, i) => ({
     numero,
     nome: nomes[i] ?? '',
+    tipo_label: resolvedTipos.linhas[i]?.label ?? null,
+    valor_unitario: resolvedTipos.linhas[i]?.valor ?? 0,
   }))
   return {
     already: false as const,
