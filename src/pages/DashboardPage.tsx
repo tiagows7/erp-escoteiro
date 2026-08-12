@@ -662,11 +662,14 @@ export function DashboardPage() {
         )
         setTotalAtivos(totalRes.count ?? 0)
 
-        if (empresaId) {
-          let benefQuery = supabase
-            .from('associados')
-            .select(
-              `
+        // Card de mensalidade dos beneficiários: só usuários do grupo (sem ramo).
+        if (empresaId && ramoFiltro == null) {
+          const [{ data: assocBenef, error: benefJoinError }, { data: catsBenef }] =
+            await Promise.all([
+              supabase
+                .from('associados')
+                .select(
+                  `
               associado_id,
               categoria,
               isento,
@@ -677,19 +680,9 @@ export function DashboardPage() {
                 valor
               )
             `,
-            )
-            .eq('empresa_id', empresaId)
-            .eq('ativo', true)
-          if (ramoFiltro != null) {
-            benefQuery = benefQuery.eq('ramo', ramoFiltro)
-          }
-          if (secaoFiltro != null) {
-            benefQuery = benefQuery.eq('secao', secaoFiltro)
-          }
-
-          const [{ data: assocBenef, error: benefJoinError }, { data: catsBenef }] =
-            await Promise.all([
-              benefQuery,
+                )
+                .eq('empresa_id', empresaId)
+                .eq('ativo', true),
               supabase.from('categoria').select('categoria_id, nome'),
             ])
 
@@ -726,21 +719,13 @@ export function DashboardPage() {
           }
 
           if (benefJoinError) {
-            let plainQuery = supabase
-              .from('associados')
-              .select('associado_id, categoria, isento, tipo_mensalidade')
-              .eq('empresa_id', empresaId)
-              .eq('ativo', true)
-            if (ramoFiltro != null) {
-              plainQuery = plainQuery.eq('ramo', ramoFiltro)
-            }
-            if (secaoFiltro != null) {
-              plainQuery = plainQuery.eq('secao', secaoFiltro)
-            }
-
             const [{ data: plainAssoc }, { data: tiposMensalidade }] =
               await Promise.all([
-                plainQuery,
+                supabase
+                  .from('associados')
+                  .select('associado_id, categoria, isento, tipo_mensalidade')
+                  .eq('empresa_id', empresaId)
+                  .eq('ativo', true),
                 supabase
                   .from('tipo_mensalidade')
                   .select('tipomensalidade_id, nome, valor'),
@@ -862,7 +847,7 @@ export function DashboardPage() {
           })
 
           const anoAtual = new Date().getFullYear()
-          let receitasQuery = supabase
+          const { data: receitasMensalidade } = await supabase
             .from('receitas')
             .select('receita_valor, receita_competencia')
             .eq('empresa_id', empresaId)
@@ -870,14 +855,6 @@ export function DashboardPage() {
             .gte('receita_competencia', `${anoAtual}-01-01`)
             .lte('receita_competencia', `${anoAtual}-12-31`)
             .limit(20000)
-          if (ramoFiltro != null) {
-            receitasQuery = receitasQuery.eq('receita_ramo', ramoFiltro)
-          }
-          if (secaoFiltro != null) {
-            receitasQuery = receitasQuery.eq('receita_secao', secaoFiltro)
-          }
-
-          const { data: receitasMensalidade } = await receitasQuery
           if (!mounted) return
 
           const geradoPorMes = Array.from({ length: 12 }, () => 0)
@@ -1389,17 +1366,13 @@ export function DashboardPage() {
       </section>
       ) : null}
 
-      {!associadoView ? (
+      {!associadoView && ramoFiltro == null ? (
         <section className="panel dashboard-benef-panel">
           <div className="passagem-header">
             <div>
               <h3>Beneficiários — mensalidade</h3>
               <p className="muted">
-                {secaoFiltro != null
-                  ? 'Ativos do ramo/seção · quem paga e quem é isento'
-                  : ramoFiltro != null
-                    ? 'Ativos do ramo · quem paga e quem é isento'
-                    : 'Ativos do grupo · quem paga e quem é isento'}
+                Ativos do grupo · quem paga e quem é isento
               </p>
             </div>
             <span className="badge">

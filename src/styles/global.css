@@ -4457,6 +4457,35 @@ table.data tbody tr:hover {
   margin-top: 0.85rem;
 }
 
+.portal-stats-grid-compact {
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 0.7rem;
+}
+
+.portal-stats-grid-compact .stat-card {
+  padding: 0.75rem 0.8rem;
+  border-left-width: 4px;
+}
+
+.portal-stats-grid-compact .stat-card span {
+  font-size: 0.78rem;
+  margin-bottom: 0.28rem;
+}
+
+.portal-stats-grid-compact .stat-card strong {
+  font-size: 1.35rem;
+}
+
+.portal-stats-grid-compact .stat-card-hint {
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+}
+
+.portal-stats-grid-compact .stat-card::after {
+  width: 64px;
+  height: 64px;
+}
+
 .portal-locais .portal-stats-grid {
   margin-top: 0;
 }

@@ -17,6 +17,34 @@ export type PortalResumo = {
   receitas_recebidas: number
   saldo_lancado: number
   saldo_realizado: number
+  /** Soma lançada (receitas − despesas) antes do início do período. */
+  saldo_anterior: number
+  /** saldo_anterior + saldo_lancado do período. */
+  saldo_final: number
+}
+
+export const PORTAL_MESES = [
+  { id: 1, label: 'Janeiro' },
+  { id: 2, label: 'Fevereiro' },
+  { id: 3, label: 'Março' },
+  { id: 4, label: 'Abril' },
+  { id: 5, label: 'Maio' },
+  { id: 6, label: 'Junho' },
+  { id: 7, label: 'Julho' },
+  { id: 8, label: 'Agosto' },
+  { id: 9, label: 'Setembro' },
+  { id: 10, label: 'Outubro' },
+  { id: 11, label: 'Novembro' },
+  { id: 12, label: 'Dezembro' },
+] as const
+
+export function portalPeriodoLabel(
+  ano: number,
+  mes: number | null,
+): string {
+  if (mes == null || mes < 1 || mes > 12) return `Ano ${ano}`
+  const nome = PORTAL_MESES.find((m) => m.id === mes)?.label ?? String(mes)
+  return `${nome}/${ano}`
 }
 
 export type PortalDespesa = {

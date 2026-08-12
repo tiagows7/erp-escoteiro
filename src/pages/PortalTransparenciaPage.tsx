@@ -9,7 +9,9 @@ import {
   formatPortalDate,
   groupBySecao,
   origemReceitaLabel,
+  PORTAL_MESES,
   portalCaixasVisiveis,
+  portalPeriodoLabel,
   portalYearOptions,
   situacaoTituloLabel,
   type PortalCaixaId,
@@ -35,6 +37,7 @@ export function PortalTransparenciaPage() {
   const [secoes, setSecoes] = useState<PortalSecao[]>([])
   const [saldoLocais, setSaldoLocais] = useState<PortalSaldoLocal[]>([])
   const [ano, setAno] = useState(currentPortalYear())
+  const [mes, setMes] = useState<number | null>(() => new Date().getMonth() + 1)
   const [caixa, setCaixa] = useState<PortalCaixaId>(() => {
     const raw = Number(searchParams.get('caixa'))
     if (raw === 0 || (raw >= 1 && raw <= 4)) return raw as PortalCaixaId
@@ -46,6 +49,7 @@ export function PortalTransparenciaPage() {
   const [error, setError] = useState<string | null>(null)
 
   const years = useMemo(() => portalYearOptions(6), [])
+  const periodoLabel = portalPeriodoLabel(ano, mes)
   const caixas = useMemo(
     () => portalCaixasVisiveis(profile?.codigo_ramo),
     [profile?.codigo_ramo],
@@ -130,18 +134,21 @@ export function PortalTransparenciaPage() {
           p_ano: ano,
           p_caixa: caixa,
           p_secao: secaoId,
+          p_mes: mes,
         }),
         supabase.rpc('portal_despesas', {
           p_slug: cleanSlug,
           p_ano: ano,
           p_caixa: caixa,
           p_secao: secaoId,
+          p_mes: mes,
         }),
         supabase.rpc('portal_receitas', {
           p_slug: cleanSlug,
           p_ano: ano,
           p_caixa: caixa,
           p_secao: secaoId,
+          p_mes: mes,
         }),
         secoesPromise,
         supabase.rpc('portal_saldo_locais', {
@@ -193,7 +200,7 @@ export function PortalTransparenciaPage() {
     return () => {
       mounted = false
     }
-  }, [slug, ano, caixa, secaoId])
+  }, [slug, ano, mes, caixa, secaoId])
 
   const caixaLabel =
     caixas.find((c) => c.id === caixa)?.label ?? 'Caixa do grupo'
@@ -380,14 +387,35 @@ export function PortalTransparenciaPage() {
                 ))}
               </select>
             </label>
+            <label className="portal-year-label">
+              <span>Mês</span>
+              <select
+                className="select"
+                value={mes == null ? '' : String(mes)}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  setMes(raw === '' ? null : Number(raw))
+                }}
+                disabled={loading || !grupo}
+              >
+                <option value="">Ano todo</option>
+                {PORTAL_MESES.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <p className="field-hint portal-hint">
+              Demonstrativo do período com saldo anterior, receitas, despesas e
+              saldo final.
               {profile?.codigo_ramo != null &&
               profile.codigo_ramo >= 1 &&
               profile.codigo_ramo <= 4
-                ? 'Você vê o caixa geral e o caixa do seu ramo.'
-                : 'Caixas: grupo geral e ramos (Lobinho, Escoteiro, Sênior, Pioneiro).'}
+                ? ' Você vê o caixa geral e o caixa do seu ramo.'
+                : ' Caixas: grupo geral e ramos.'}
               {mostrarSecoes
-                ? ' Ramos com mais de uma seção também podem ser filtrados por seção.'
+                ? ' Também é possível filtrar por seção.'
                 : ''}
             </p>
           </div>
@@ -443,6 +471,8 @@ export function PortalTransparenciaPage() {
           ) : grupo && resumo ? (
             <>
               <p className="portal-caixa-atual">
+                Demonstrativo: <strong>{periodoLabel}</strong>
+                {' · '}
                 Caixa: <strong>{caixaLabel}</strong>
                 {mostrarSecoes ? (
                   <>
@@ -451,9 +481,24 @@ export function PortalTransparenciaPage() {
                   </>
                 ) : null}
               </p>
-              <div className="stats-grid portal-stats-grid">
+              <div className="stats-grid portal-stats-grid portal-stats-grid-compact">
                 <article className="stat-card">
-                  <span>Receitas lançadas</span>
+                  <span>Saldo anterior</span>
+                  <strong
+                    className={
+                      Number(resumo.saldo_anterior ?? 0) < 0
+                        ? 'is-neg'
+                        : undefined
+                    }
+                  >
+                    {formatMoney(resumo.saldo_anterior ?? 0)}
+                  </strong>
+                  <em className="stat-card-hint">
+                    Antes de {periodoLabel.toLowerCase()}
+                  </em>
+                </article>
+                <article className="stat-card">
+                  <span>Receitas</span>
                   <strong>{formatMoney(resumo.total_receitas)}</strong>
                   <em className="stat-card-hint">
                     Recebido: {formatMoney(resumo.receitas_recebidas)}
@@ -461,22 +506,28 @@ export function PortalTransparenciaPage() {
                 </article>
                 <article className="stat-card">
                   <span>Despesas</span>
-                  <strong>{formatMoney(resumo.despesas_pagas)}</strong>
+                  <strong>{formatMoney(resumo.total_despesas)}</strong>
                   <em className="stat-card-hint">
-                    Lançado: {formatMoney(resumo.total_despesas)}
+                    Pago: {formatMoney(resumo.despesas_pagas)}
                   </em>
                 </article>
                 <article className="stat-card stat-card-total">
-                  <span>Resultado</span>
+                  <span>Saldo final</span>
                   <strong
                     className={
-                      Number(resumo.saldo_realizado) < 0 ? 'is-neg' : undefined
+                      Number(resumo.saldo_final ?? resumo.saldo_lancado) < 0
+                        ? 'is-neg'
+                        : undefined
                     }
                   >
-                    {formatMoney(resumo.saldo_realizado)}
+                    {formatMoney(resumo.saldo_final ?? resumo.saldo_lancado)}
                   </strong>
                   <em className="stat-card-hint">
-                    Lançado: {formatMoney(resumo.saldo_lancado)}
+                    Realizado:{' '}
+                    {formatMoney(
+                      Number(resumo.saldo_anterior ?? 0) +
+                        Number(resumo.saldo_realizado ?? 0),
+                    )}
                   </em>
                 </article>
               </div>
@@ -484,7 +535,7 @@ export function PortalTransparenciaPage() {
               {saldoLocais.length > 0 ? (
                 <div className="portal-locais">
                   <p className="portal-locais-title">Onde está o valor</p>
-                  <div className="stats-grid portal-stats-grid">
+                  <div className="stats-grid portal-stats-grid portal-stats-grid-compact">
                     {saldoLocais.map((local) => (
                       <article key={local.id} className="stat-card">
                         <span>{local.nome}</span>
@@ -526,7 +577,9 @@ export function PortalTransparenciaPage() {
 
             {tab === 'despesas' ? (
               despesas.length === 0 ? (
-                <div className="empty">Nenhuma despesa neste caixa/ano.</div>
+                <div className="empty">
+                  Nenhuma despesa neste caixa/período.
+                </div>
               ) : despesasGrupos ? (
                 <div className="portal-secao-groups">
                   {despesasGrupos.map((grupoSecao) => (
@@ -548,7 +601,9 @@ export function PortalTransparenciaPage() {
                 renderDespesasTable(despesas, false)
               )
             ) : receitas.length === 0 ? (
-              <div className="empty">Nenhuma receita neste caixa/ano.</div>
+              <div className="empty">
+                Nenhuma receita neste caixa/período.
+              </div>
             ) : receitasGrupos ? (
               <div className="portal-secao-groups">
                 {receitasGrupos.map((grupoSecao) => (
