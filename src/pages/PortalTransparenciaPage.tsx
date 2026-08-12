@@ -45,6 +45,7 @@ export function PortalTransparenciaPage() {
   })
   const [secaoId, setSecaoId] = useState<number | null>(null)
   const [tab, setTab] = useState<Tab>('despesas')
+  const [locaisAbertos, setLocaisAbertos] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -72,7 +73,12 @@ export function PortalTransparenciaPage() {
 
   useEffect(() => {
     setSecaoId(null)
+    setLocaisAbertos(false)
   }, [caixa])
+
+  useEffect(() => {
+    setLocaisAbertos(false)
+  }, [ano, mes, secaoId])
 
   useEffect(() => {
     if (secaoId != null && !secoes.some((s) => s.secao_id === secaoId)) {
@@ -471,8 +477,6 @@ export function PortalTransparenciaPage() {
           ) : grupo && resumo ? (
             <>
               <p className="portal-caixa-atual">
-                Demonstrativo: <strong>{periodoLabel}</strong>
-                {' · '}
                 Caixa: <strong>{caixaLabel}</strong>
                 {mostrarSecoes ? (
                   <>
@@ -481,71 +485,156 @@ export function PortalTransparenciaPage() {
                   </>
                 ) : null}
               </p>
-              <div className="stats-grid portal-stats-grid portal-stats-grid-compact">
-                <article className="stat-card">
-                  <span>Saldo anterior</span>
-                  <strong
-                    className={
-                      Number(resumo.saldo_anterior ?? 0) < 0
-                        ? 'is-neg'
-                        : undefined
-                    }
-                  >
-                    {formatMoney(resumo.saldo_anterior ?? 0)}
-                  </strong>
-                  <em className="stat-card-hint">
-                    Antes de {periodoLabel.toLowerCase()}
-                  </em>
-                </article>
-                <article className="stat-card">
-                  <span>Receitas</span>
-                  <strong>{formatMoney(resumo.total_receitas)}</strong>
-                  <em className="stat-card-hint">
-                    Recebido: {formatMoney(resumo.receitas_recebidas)}
-                  </em>
-                </article>
-                <article className="stat-card">
-                  <span>Despesas</span>
-                  <strong>{formatMoney(resumo.total_despesas)}</strong>
-                  <em className="stat-card-hint">
-                    Pago: {formatMoney(resumo.despesas_pagas)}
-                  </em>
-                </article>
-                <article className="stat-card stat-card-total">
-                  <span>Saldo final</span>
-                  <strong
-                    className={
-                      Number(resumo.saldo_final ?? resumo.saldo_lancado) < 0
-                        ? 'is-neg'
-                        : undefined
-                    }
-                  >
-                    {formatMoney(resumo.saldo_final ?? resumo.saldo_lancado)}
-                  </strong>
-                  <em className="stat-card-hint">
-                    Realizado:{' '}
-                    {formatMoney(
-                      Number(resumo.saldo_anterior ?? 0) +
-                        Number(resumo.saldo_realizado ?? 0),
-                    )}
-                  </em>
-                </article>
+
+              <div className="portal-saldo-periodo">
+                <div className="portal-saldo-periodo-head">
+                  <h3>Saldo — {periodoLabel}</h3>
+                  <p className="muted">
+                    Saldo anterior e saldo final do período selecionado (ano
+                    {mes != null ? '/mês' : ''}).
+                  </p>
+                </div>
+                <div className="stats-grid portal-stats-grid portal-stats-grid-compact portal-saldo-resumo">
+                  <article className="stat-card">
+                    <span>Saldo anterior</span>
+                    <strong
+                      className={
+                        Number(resumo.saldo_anterior ?? 0) < 0
+                          ? 'is-neg'
+                          : undefined
+                      }
+                    >
+                      {formatMoney(resumo.saldo_anterior ?? 0)}
+                    </strong>
+                    <em className="stat-card-hint">
+                      Antes de {periodoLabel.toLowerCase()}
+                    </em>
+                  </article>
+                  <article className="stat-card stat-card-total">
+                    <span>Saldo final</span>
+                    <strong
+                      className={
+                        Number(resumo.saldo_final ?? resumo.saldo_lancado) < 0
+                          ? 'is-neg'
+                          : undefined
+                      }
+                    >
+                      {formatMoney(resumo.saldo_final ?? resumo.saldo_lancado)}
+                    </strong>
+                    <em className="stat-card-hint">
+                      Realizado:{' '}
+                      {formatMoney(
+                        Number(resumo.saldo_anterior ?? 0) +
+                          Number(resumo.saldo_realizado ?? 0),
+                      )}
+                    </em>
+                  </article>
+                </div>
+              </div>
+
+              <div className="portal-demonstrativo">
+                <div className="portal-saldo-periodo-head">
+                  <h3>Demonstrativo — {periodoLabel}</h3>
+                  <p className="muted">
+                    Movimentação do período: receitas e despesas lançadas.
+                  </p>
+                </div>
+                <div className="stats-grid portal-stats-grid portal-stats-grid-compact">
+                  <article className="stat-card">
+                    <span>Receitas</span>
+                    <strong>{formatMoney(resumo.total_receitas)}</strong>
+                    <em className="stat-card-hint">
+                      Recebido: {formatMoney(resumo.receitas_recebidas)}
+                    </em>
+                  </article>
+                  <article className="stat-card">
+                    <span>Despesas</span>
+                    <strong>{formatMoney(resumo.total_despesas)}</strong>
+                    <em className="stat-card-hint">
+                      Pago: {formatMoney(resumo.despesas_pagas)}
+                    </em>
+                  </article>
+                  <article className="stat-card">
+                    <span>Resultado do período</span>
+                    <strong
+                      className={
+                        Number(resumo.saldo_lancado) < 0 ? 'is-neg' : undefined
+                      }
+                    >
+                      {formatMoney(resumo.saldo_lancado)}
+                    </strong>
+                    <em className="stat-card-hint">
+                      Realizado: {formatMoney(resumo.saldo_realizado)}
+                    </em>
+                  </article>
+                </div>
               </div>
 
               {saldoLocais.length > 0 ? (
                 <div className="portal-locais">
-                  <p className="portal-locais-title">Onde está o valor</p>
-                  <div className="stats-grid portal-stats-grid portal-stats-grid-compact">
-                    {saldoLocais.map((local) => (
-                      <article key={local.id} className="stat-card">
-                        <span>{local.nome}</span>
-                        <strong>{formatMoney(local.valor)}</strong>
-                        {local.secao_nome ? (
-                          <em className="stat-card-hint">{local.secao_nome}</em>
-                        ) : null}
-                      </article>
-                    ))}
+                  <div className="portal-locais-toolbar">
+                    <div>
+                      <p className="portal-locais-title">Onde está o valor</p>
+                      <p className="muted portal-locais-hint">
+                        Distribuição cadastrada do caixa (oculta por padrão).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-soft"
+                      onClick={() => setLocaisAbertos((v) => !v)}
+                      aria-expanded={locaisAbertos}
+                    >
+                      {locaisAbertos ? 'Ocultar' : 'Visualizar'}
+                    </button>
                   </div>
+                  {locaisAbertos ? (
+                    <>
+                      <div className="stats-grid portal-stats-grid portal-stats-grid-compact portal-saldo-resumo">
+                        <article className="stat-card">
+                          <span>Saldo anterior ({periodoLabel})</span>
+                          <strong
+                            className={
+                              Number(resumo.saldo_anterior ?? 0) < 0
+                                ? 'is-neg'
+                                : undefined
+                            }
+                          >
+                            {formatMoney(resumo.saldo_anterior ?? 0)}
+                          </strong>
+                        </article>
+                        <article className="stat-card stat-card-total">
+                          <span>Saldo final ({periodoLabel})</span>
+                          <strong
+                            className={
+                              Number(
+                                resumo.saldo_final ?? resumo.saldo_lancado,
+                              ) < 0
+                                ? 'is-neg'
+                                : undefined
+                            }
+                          >
+                            {formatMoney(
+                              resumo.saldo_final ?? resumo.saldo_lancado,
+                            )}
+                          </strong>
+                        </article>
+                      </div>
+                      <div className="stats-grid portal-stats-grid portal-stats-grid-compact">
+                        {saldoLocais.map((local) => (
+                          <article key={local.id} className="stat-card">
+                            <span>{local.nome}</span>
+                            <strong>{formatMoney(local.valor)}</strong>
+                            {local.secao_nome ? (
+                              <em className="stat-card-hint">
+                                {local.secao_nome}
+                              </em>
+                            ) : null}
+                          </article>
+                        ))}
+                      </div>
+                    </>
+                  ) : null}
                 </div>
               ) : null}
             </>
