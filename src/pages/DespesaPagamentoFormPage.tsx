@@ -331,6 +331,7 @@ export function DespesaPagamentoFormPage() {
                         local: null,
                         ramo: null,
                         secao: null,
+                        patrulha_matilha: null,
                         valor: 0,
                       },
                   )

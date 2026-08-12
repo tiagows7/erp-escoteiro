@@ -334,6 +334,7 @@ export function ReceitaRecebimentoFormPage() {
                         local: null,
                         ramo: null,
                         secao: null,
+                        patrulha_matilha: null,
                         valor: 0,
                       },
                   )
