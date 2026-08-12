@@ -15,6 +15,7 @@ export type PixPublicEventoInput = {
   kind: 'evento'
   linkToken: string
   nomes: string[]
+  tipoIds?: number[]
   compradorTelefone: string
   valor: number
   descricao: string
@@ -45,6 +46,7 @@ export function pixPublicPaymentKey(input: PixPublicInput): string {
       input.linkToken,
       input.valor,
       input.nomes.join('|'),
+      (input.tipoIds ?? []).join(','),
       input.compradorTelefone.trim(),
     ].join('|')
   }
@@ -69,6 +71,7 @@ export async function createPixSicrediPublic(
         action: 'create_public_evento',
         link_token: input.linkToken,
         nomes: input.nomes,
+        tipo_ids: input.tipoIds ?? null,
         comprador_telefone: input.compradorTelefone,
         descricao: input.descricao,
       }

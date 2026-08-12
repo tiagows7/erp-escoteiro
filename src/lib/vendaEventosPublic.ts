@@ -1,5 +1,12 @@
 import { supabase } from '@/lib/supabase'
 
+export type EventoPublicTipo = {
+  tipo_id: number
+  label: string
+  valor: number
+  ordem: number
+}
+
 export type EventoPublicInfo = {
   evento_id: number
   evento_nome: string
@@ -12,11 +19,29 @@ export type EventoPublicInfo = {
   disponiveis: number
   total: number
   encerrado: boolean
+  tipos: EventoPublicTipo[]
 }
 
 export function linkPublicoVendaEvento(token: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   return `${origin}/ingresso/${token}`
+}
+
+function parseTipos(raw: unknown): EventoPublicTipo[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      const row = item as Record<string, unknown>
+      const tipoId = Number(row.tipo_id)
+      if (!Number.isFinite(tipoId)) return null
+      return {
+        tipo_id: tipoId,
+        label: String(row.label ?? ''),
+        valor: Number(row.valor ?? 0),
+        ordem: Number(row.ordem ?? 0),
+      }
+    })
+    .filter((t): t is EventoPublicTipo => t != null)
 }
 
 export async function fetchEventoPublicInfo(
@@ -30,11 +55,14 @@ export async function fetchEventoPublicInfo(
   const row = Array.isArray(data) ? data[0] : data
   if (!row) return { data: null, error: 'Link inválido ou expirado.' }
 
+  const tipos = parseTipos(row.tipos)
+  const valorFallback = Number(row.valor_convite ?? 0)
+
   return {
     data: {
       evento_id: Number(row.evento_id),
       evento_nome: String(row.evento_nome ?? ''),
-      valor_convite: Number(row.valor_convite ?? 0),
+      valor_convite: valorFallback,
       numero_inicial: Number(row.numero_inicial),
       numero_final: Number(row.numero_final),
       data_evento: row.data_evento
@@ -45,6 +73,17 @@ export async function fetchEventoPublicInfo(
       disponiveis: Number(row.disponiveis ?? 0),
       total: Number(row.total ?? 0),
       encerrado: !!row.encerrado,
+      tipos:
+        tipos.length > 0
+          ? tipos
+          : [
+              {
+                tipo_id: 0,
+                label: 'Inteira',
+                valor: valorFallback,
+                ordem: 0,
+              },
+            ],
     },
     error: null,
   }

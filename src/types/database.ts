@@ -266,6 +266,17 @@ export type VendaEvento = {
   created_at: string | null
 }
 
+export type VendaEventoTipo = {
+  tipo_id: number
+  empresa_id: number
+  evento_id: number
+  label: string
+  valor: number
+  ordem: number
+  ativo: boolean
+  created_at: string | null
+}
+
 export type VendaEventoFormaPagamento =
   | 'dinheiro'
   | 'pix_direto'
@@ -293,6 +304,9 @@ export type VendaEventoConvite = {
   compra_id: number
   numero: number
   nome: string
+  tipo_id: number | null
+  valor_unitario: number | null
+  tipo_label: string | null
   created_at: string | null
 }
 

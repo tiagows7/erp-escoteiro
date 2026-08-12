@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { AlertMessage } from '@/components/AlertMessage'
 import {
@@ -17,6 +17,7 @@ import type { PixPublicEventoInput } from '@/lib/pixSicrediPublic'
 import {
   fetchEventoPublicInfo,
   type EventoPublicInfo,
+  type EventoPublicTipo,
 } from '@/lib/vendaEventosPublic'
 
 function formatDateBr(value: string | null | undefined) {
@@ -24,6 +25,10 @@ function formatDateBr(value: string | null | undefined) {
   const [y, m, d] = value.slice(0, 10).split('-')
   if (!y || !m || !d) return value
   return `${d}/${m}/${y}`
+}
+
+function tipoOptionLabel(t: Pick<EventoPublicTipo, 'label' | 'valor'>) {
+  return `${t.label} · ${formatMoney(Number(t.valor ?? 0))}`
 }
 
 export function VendaEventoPublicPage() {
@@ -37,10 +42,20 @@ export function VendaEventoPublicPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [quantidade, setQuantidade] = useState(1)
   const [nomes, setNomes] = useState<string[]>([''])
+  const [tipoIds, setTipoIds] = useState<number[]>([0])
   const [telefone, setTelefone] = useState('')
   const [pixOpen, setPixOpen] = useState(false)
   const [pixInput, setPixInput] = useState<PixPublicEventoInput | null>(null)
   const [convitesPagos, setConvitesPagos] = useState<ConviteImpressoItem[]>([])
+
+  const tipos = info?.tipos ?? []
+  const tipoPadraoId = tipos[0]?.tipo_id ?? 0
+  const totalSelecionado = useMemo(() => {
+    return tipoIds.reduce((sum, id) => {
+      const t = tipos.find((x) => x.tipo_id === id) ?? tipos[0]
+      return sum + Number(t?.valor ?? 0)
+    }, 0)
+  }, [tipoIds, tipos])
 
   async function load() {
     if (!token) {
@@ -75,7 +90,14 @@ export function VendaEventoPublicPage() {
     setNomes((prev) =>
       Array.from({ length: Math.max(1, quantidade) }, (_, i) => prev[i] ?? ''),
     )
-  }, [quantidade])
+    setTipoIds((prev) => {
+      const fallback = tipoPadraoId
+      return Array.from(
+        { length: Math.max(1, quantidade) },
+        (_, i) => prev[i] || fallback,
+      )
+    })
+  }, [quantidade, tipoPadraoId])
 
   // Retorno do checkout InfinitePay
   useEffect(() => {
@@ -130,6 +152,7 @@ export function VendaEventoPublicPage() {
 
   function openPixSicredi(
     nomesLimpos: string[],
+    tipoIdsEnvio: number[] | undefined,
     fone: string,
     valor: number,
     descricao: string,
@@ -139,6 +162,7 @@ export function VendaEventoPublicPage() {
       kind: 'evento',
       linkToken: token,
       nomes: nomesLimpos,
+      tipoIds: tipoIdsEnvio,
       compradorTelefone: fone,
       valor,
       descricao,
@@ -171,13 +195,18 @@ export function VendaEventoPublicPage() {
       return
     }
 
-    const valorUnitario = Number(info.valor_convite ?? 0)
-    if (!Number.isFinite(valorUnitario) || valorUnitario <= 0) {
-      setError('Este evento ainda não tem valor de convite configurado.')
+    const valor = Math.round(totalSelecionado * 100) / 100
+    if (!(valor > 0)) {
+      setError(
+        'Não é possível pagar online convites isentos (R$ 0). Procure a organização do evento.',
+      )
       return
     }
 
-    const valor = Math.round(valorUnitario * quantidade * 100) / 100
+    const tipoIdsEnvio =
+      tipoPadraoId > 0
+        ? tipoIds.map((id) => id || tipoPadraoId)
+        : undefined
     const descricao = `${info.evento_nome} · ${quantidade} convite(s)`
     const fone = telefone.trim()
 
@@ -201,6 +230,7 @@ export function VendaEventoPublicPage() {
       const created = await createInfinitePayEventoCheckout({
         linkToken: token,
         nomes: nomesLimpos,
+        tipoIds: tipoIdsEnvio,
         compradorTelefone: fone,
         valor,
         descricao,
@@ -212,14 +242,14 @@ export function VendaEventoPublicPage() {
         return
       }
       if (created.usePix && hasPix) {
-        openPixSicredi(nomesLimpos, fone, valor, descricao)
+        openPixSicredi(nomesLimpos, tipoIdsEnvio, fone, valor, descricao)
         return
       }
       setError(created.error)
       return
     }
 
-    openPixSicredi(nomesLimpos, fone, valor, descricao)
+    openPixSicredi(nomesLimpos, tipoIdsEnvio, fone, valor, descricao)
   }
 
   if (loading) {
@@ -245,8 +275,7 @@ export function VendaEventoPublicPage() {
     )
   }
 
-  const valorUnitario = Number(info.valor_convite ?? 0)
-  const total = quantidade * valorUnitario
+  const total = totalSelecionado
   const dataLabel = formatDateBr(info.data_evento)
   const payLabel =
     payConfig?.prefer === 'infinitepay'
@@ -266,7 +295,8 @@ export function VendaEventoPublicPage() {
           ) : null}
         </h1>
         <p>
-          {formatMoney(valorUnitario)} por convite
+          {tipos.map((t) => tipoOptionLabel(t)).join(' · ') ||
+            `${formatMoney(info.valor_convite)} por convite`}
           {dataLabel ? ` · ${dataLabel}` : ''}
         </p>
       </header>
@@ -363,25 +393,51 @@ export function VendaEventoPublicPage() {
 
                 {nomes.map((nome, index) => (
                   <div
-                    key={`nome-${index}`}
-                    className={`field ${quantidade === 1 ? 'field-span-2' : ''}`}
+                    key={`linha-${index}`}
+                    className="field field-span-2 evento-convite-linha"
                   >
-                    <label htmlFor={`nome_${index}`}>
-                      Nome do convite {index + 1}
-                    </label>
-                    <input
-                      id={`nome_${index}`}
-                      className="input"
-                      value={nome}
-                      onChange={(e) => {
-                        const value = e.target.value
-                        setNomes((prev) =>
-                          prev.map((n, i) => (i === index ? value : n)),
-                        )
-                      }}
-                      disabled={pixOpen || paying}
-                      required
-                    />
+                    <div className="evento-convite-linha-grid">
+                      <div className="field" style={{ margin: 0 }}>
+                        <label htmlFor={`nome_${index}`}>
+                          Nome do convite {index + 1}
+                        </label>
+                        <input
+                          id={`nome_${index}`}
+                          className="input"
+                          value={nome}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            setNomes((prev) =>
+                              prev.map((n, i) => (i === index ? value : n)),
+                            )
+                          }}
+                          disabled={pixOpen || paying}
+                          required
+                        />
+                      </div>
+                      <div className="field" style={{ margin: 0 }}>
+                        <label htmlFor={`tipo_${index}`}>Tipo</label>
+                        <select
+                          id={`tipo_${index}`}
+                          className="select"
+                          value={tipoIds[index] || tipoPadraoId}
+                          onChange={(e) => {
+                            const value = Number(e.target.value)
+                            setTipoIds((prev) =>
+                              prev.map((t, i) => (i === index ? value : t)),
+                            )
+                          }}
+                          disabled={pixOpen || paying || tipos.length === 0}
+                          required
+                        >
+                          {tipos.map((t) => (
+                            <option key={t.tipo_id} value={t.tipo_id}>
+                              {tipoOptionLabel(t)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                   </div>
                 ))}
 

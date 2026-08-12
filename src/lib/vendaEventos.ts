@@ -20,6 +20,7 @@ export async function comprarConvitesEvento(input: {
   nomes: string[]
   compradorTelefone?: string
   formaPagamento: VendaEventoFormaPagamento
+  tipoIds?: number[]
 }): Promise<{
   ok: boolean
   mensagem: string
@@ -31,6 +32,7 @@ export async function comprarConvitesEvento(input: {
     p_nomes: input.nomes,
     p_comprador_telefone: input.compradorTelefone?.trim() || null,
     p_forma_pagamento: input.formaPagamento,
+    p_tipo_ids: input.tipoIds ?? null,
   })
 
   if (error) {

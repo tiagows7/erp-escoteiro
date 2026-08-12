@@ -26,6 +26,7 @@ import type {
   VendaEvento,
   VendaEventoConvite,
   VendaEventoFormaPagamento,
+  VendaEventoTipo,
 } from '@/types/database'
 
 function formatDateBr(value: string | null | undefined) {
@@ -33,6 +34,10 @@ function formatDateBr(value: string | null | undefined) {
   const [y, m, d] = value.slice(0, 10).split('-')
   if (!y || !m || !d) return value
   return `${d}/${m}/${y}`
+}
+
+function tipoOptionLabel(t: Pick<VendaEventoTipo, 'label' | 'valor'>) {
+  return `${t.label} · ${formatMoney(Number(t.valor ?? 0))}`
 }
 
 export function VendaEventoVendaPage() {
@@ -46,11 +51,13 @@ export function VendaEventoVendaPage() {
   const toast = useToast()
 
   const [evento, setEvento] = useState<VendaEvento | null>(null)
+  const [tipos, setTipos] = useState<VendaEventoTipo[]>([])
   const [convites, setConvites] = useState<VendaEventoConvite[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [quantidade, setQuantidade] = useState(1)
   const [nomes, setNomes] = useState<string[]>([''])
+  const [tipoIds, setTipoIds] = useState<number[]>([0])
   const [telefone, setTelefone] = useState('')
   const [formaPagamento, setFormaPagamento] =
     useState<VendaEventoFormaPagamento | null>(null)
@@ -67,15 +74,20 @@ export function VendaEventoVendaPage() {
 
   const vendidos = convites.length
   const disponiveis = Math.max(0, total - vendidos)
-  const valorUnitario = Number(evento?.valor_convite ?? 0)
-  const totalSelecionado = Math.max(0, quantidade) * valorUnitario
+  const tipoPadraoId = tipos[0]?.tipo_id ?? 0
+  const totalSelecionado = useMemo(() => {
+    return tipoIds.reduce((sum, id) => {
+      const t = tipos.find((x) => x.tipo_id === id) ?? tipos[0]
+      return sum + Number(t?.valor ?? 0)
+    }, 0)
+  }, [tipoIds, tipos])
 
   async function reload() {
     if (!empresaId || !Number.isFinite(eventoId) || eventoId <= 0) return
     setLoading(true)
     setError(null)
 
-    const [eventoRes, convitesRes] = await Promise.all([
+    const [eventoRes, convitesRes, tiposRes] = await Promise.all([
       supabase
         .from('venda_eventos')
         .select(
@@ -87,17 +99,28 @@ export function VendaEventoVendaPage() {
       supabase
         .from('venda_evento_convite')
         .select(
-          'convite_id, empresa_id, evento_id, compra_id, numero, nome, created_at',
+          'convite_id, empresa_id, evento_id, compra_id, numero, nome, tipo_id, valor_unitario, tipo_label, created_at',
         )
         .eq('evento_id', eventoId)
         .eq('empresa_id', empresaId)
         .order('numero'),
+      supabase
+        .from('venda_evento_tipo')
+        .select(
+          'tipo_id, empresa_id, evento_id, label, valor, ordem, ativo, created_at',
+        )
+        .eq('evento_id', eventoId)
+        .eq('empresa_id', empresaId)
+        .eq('ativo', true)
+        .order('ordem')
+        .order('tipo_id'),
     ])
 
     if (eventoRes.error || !eventoRes.data) {
       setError(eventoRes.error?.message ?? 'Evento não encontrado.')
       setEvento(null)
       setConvites([])
+      setTipos([])
       setLoading(false)
       return
     }
@@ -110,6 +133,23 @@ export function VendaEventoVendaPage() {
 
     setEvento(eventoRes.data as VendaEvento)
     setConvites((convitesRes.data ?? []) as VendaEventoConvite[])
+    const tiposLoaded = (tiposRes.data ?? []) as VendaEventoTipo[]
+    if (tiposLoaded.length > 0) {
+      setTipos(tiposLoaded)
+    } else {
+      setTipos([
+        {
+          tipo_id: 0,
+          empresa_id: empresaId,
+          evento_id: eventoId,
+          label: 'Inteira',
+          valor: Number(eventoRes.data.valor_convite ?? 0),
+          ordem: 0,
+          ativo: true,
+          created_at: null,
+        },
+      ])
+    }
     setError(null)
     setLoading(false)
   }
@@ -177,11 +217,19 @@ export function VendaEventoVendaPage() {
       )
       return next
     })
-  }, [quantidade])
+    setTipoIds((prev) => {
+      const fallback = tipoPadraoId
+      return Array.from(
+        { length: Math.max(1, quantidade) },
+        (_, i) => prev[i] || fallback,
+      )
+    })
+  }, [quantidade, tipoPadraoId])
 
   function limparCompra() {
     setQuantidade(1)
     setNomes([''])
+    setTipoIds([tipoPadraoId])
     setTelefone('')
     setFormaPagamento(null)
     setUltimaNumeracao(null)
@@ -260,12 +308,22 @@ export function VendaEventoVendaPage() {
       setError('Preencha o nome de cada convite.')
       return
     }
+    if (tipos.length === 0 || tipoIds.some((id) => !id && tipos[0]?.tipo_id !== 0)) {
+      setError('Selecione o tipo de cada convite.')
+      return
+    }
     if (!formaPagamento) {
       setError(
         'Selecione a forma de pagamento: Dinheiro, PIX ou PIX direto.',
       )
       return
     }
+
+    const valor = Math.round(totalSelecionado * 100) / 100
+    const tipoIdsEnvio =
+      tipoPadraoId > 0
+        ? tipoIds.map((id) => id || tipoPadraoId)
+        : undefined
 
     if (formaPagamento === 'pix') {
       if (!telefone.trim()) {
@@ -276,12 +334,13 @@ export function VendaEventoVendaPage() {
         setError('Link de pagamento deste evento ainda não está disponível.')
         return
       }
-      if (!Number.isFinite(valorUnitario) || valorUnitario <= 0) {
-        setError('Este evento ainda não tem valor de convite configurado.')
+      if (!(valor > 0)) {
+        setError(
+          'Para convites isentos (R$ 0), use Dinheiro ou PIX direto.',
+        )
         return
       }
 
-      const valor = Math.round(valorUnitario * quantidade * 100) / 100
       const descricao = `${evento.nome} · ${quantidade} convite(s)`
       const fone = telefone.trim()
       setError(null)
@@ -293,6 +352,7 @@ export function VendaEventoVendaPage() {
       const created = await createInfinitePayEventoCheckout({
         linkToken: evento.link_token,
         nomes: nomesLimpos,
+        tipoIds: tipoIdsEnvio,
         compradorTelefone: fone,
         valor,
         descricao,
@@ -309,6 +369,7 @@ export function VendaEventoVendaPage() {
           kind: 'evento',
           linkToken: evento.link_token,
           nomes: nomesLimpos,
+          tipoIds: tipoIdsEnvio,
           compradorTelefone: fone,
           valor,
           descricao,
@@ -326,6 +387,7 @@ export function VendaEventoVendaPage() {
     const result = await comprarConvitesEvento({
       eventoId: evento.evento_id,
       nomes: nomesLimpos,
+      tipoIds: tipoIdsEnvio,
       compradorTelefone: telefone,
       formaPagamento,
     })
@@ -348,6 +410,7 @@ export function VendaEventoVendaPage() {
     toast.success('Compra registrada!', result.mensagem)
     setQuantidade(1)
     setNomes([''])
+    setTipoIds([tipoPadraoId])
     setTelefone('')
     setFormaPagamento(null)
     await reload()
@@ -397,7 +460,10 @@ export function VendaEventoVendaPage() {
             ) : null}
           </h2>
           <p>
-            {evento.nome} · {formatMoney(valorUnitario)} cada
+            {evento.nome}
+            {tipos.length > 0
+              ? ` · ${tipos.map((t) => tipoOptionLabel(t)).join(' · ')}`
+              : ''}
             {evento.data_evento
               ? ` · ${formatDateBr(evento.data_evento)}`
               : ''}
@@ -521,26 +587,54 @@ export function VendaEventoVendaPage() {
               {quantidade > 0 && disponiveis > 0
                 ? nomes.map((nome, index) => (
                     <div
-                      key={`nome-${index}`}
-                      className={`field ${quantidade === 1 ? 'field-span-2' : ''}`}
+                      key={`linha-${index}`}
+                      className="field field-span-2 evento-convite-linha"
                     >
-                      <label htmlFor={`nome_${index}`}>
-                        Nome do convite {index + 1}
-                      </label>
-                      <input
-                        id={`nome_${index}`}
-                        className="input"
-                        value={nome}
-                        onChange={(e) => {
-                          const value = e.target.value
-                          setNomes((prev) =>
-                            prev.map((n, i) => (i === index ? value : n)),
-                          )
-                        }}
-                        disabled={saving}
-                        required
-                        placeholder="Nome completo"
-                      />
+                      <div className="evento-convite-linha-grid">
+                        <div className="field" style={{ margin: 0 }}>
+                          <label htmlFor={`nome_${index}`}>
+                            Nome do convite {index + 1}
+                          </label>
+                          <input
+                            id={`nome_${index}`}
+                            className="input"
+                            value={nome}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              setNomes((prev) =>
+                                prev.map((n, i) => (i === index ? value : n)),
+                              )
+                            }}
+                            disabled={saving}
+                            required
+                            placeholder="Nome completo"
+                          />
+                        </div>
+                        <div className="field" style={{ margin: 0 }}>
+                          <label htmlFor={`tipo_${index}`}>Tipo</label>
+                          <select
+                            id={`tipo_${index}`}
+                            className="select"
+                            value={tipoIds[index] || tipoPadraoId}
+                            onChange={(e) => {
+                              const value = Number(e.target.value)
+                              setTipoIds((prev) =>
+                                prev.map((t, i) =>
+                                  i === index ? value : t,
+                                ),
+                              )
+                            }}
+                            disabled={saving || tipos.length === 0}
+                            required
+                          >
+                            {tipos.map((t) => (
+                              <option key={t.tipo_id} value={t.tipo_id}>
+                                {tipoOptionLabel(t)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
                     </div>
                   ))
                 : null}
@@ -707,6 +801,7 @@ export function VendaEventoVendaPage() {
                 <tr>
                   <th>Nº</th>
                   <th>Nome</th>
+                  <th>Tipo</th>
                 </tr>
               </thead>
               <tbody>
@@ -716,6 +811,15 @@ export function VendaEventoVendaPage() {
                       <strong>{c.numero}</strong>
                     </td>
                     <td>{c.nome}</td>
+                    <td>
+                      {c.tipo_label
+                        ? `${c.tipo_label}${
+                            c.valor_unitario != null
+                              ? ` · ${formatMoney(Number(c.valor_unitario))}`
+                              : ''
+                          }`
+                        : '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

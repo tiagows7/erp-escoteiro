@@ -965,6 +965,36 @@ button {
   display: none;
 }
 
+.evento-convite-linha-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 0.65rem;
+}
+
+@media (max-width: 640px) {
+  .evento-convite-linha-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.evento-tipos-editor {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.evento-tipo-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .evento-tipo-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .evento-convites-impressos {
   margin: 1rem 0 1.5rem;
 }
@@ -980,76 +1010,96 @@ button {
 
 .evento-convites-print-sheet {
   display: grid;
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.75rem;
 }
 
 .evento-convite-card {
-  border: 2px solid var(--line, #c9d2c4);
-  border-radius: 12px;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+  border: 1.5px solid var(--line, #c9d2c4);
+  border-radius: 10px;
   overflow: hidden;
   background: #fff;
+  min-height: 0;
   break-inside: avoid;
   page-break-inside: avoid;
 }
 
 .evento-convite-card-img {
   display: block;
-  width: 100%;
-  max-height: 160px;
+  flex: 0 0 96px;
+  width: 96px;
+  height: auto;
+  min-height: 100%;
+  max-height: 118px;
   object-fit: cover;
+  align-self: stretch;
 }
 
 .evento-convite-card-body {
-  padding: 1.1rem 1.25rem 1.25rem;
-  text-align: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.1rem;
 }
 
 .evento-convite-card-empresa {
-  margin: 0 0 0.35rem;
-  font-size: 0.85rem;
+  margin: 0;
+  font-size: 0.68rem;
   color: var(--ink-muted, #5c6b5a);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  line-height: 1.2;
 }
 
 .evento-convite-card-titulo {
-  margin: 0 0 0.35rem;
-  font-size: 1.35rem;
-  line-height: 1.25;
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.2;
   color: var(--ink, #1f2a1c);
 }
 
 .evento-convite-card-data {
-  margin: 0 0 0.9rem;
+  margin: 0;
+  font-size: 0.75rem;
   color: var(--ink-muted, #5c6b5a);
+}
+
+.evento-convite-card-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
 }
 
 .evento-convite-card-label {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   color: var(--ink-muted, #5c6b5a);
 }
 
 .evento-convite-card-numero {
-  margin: 0.15rem 0 0.65rem;
-  font-size: 2.6rem;
+  margin: 0;
+  font-size: 1.45rem;
   font-weight: 800;
   line-height: 1;
   color: var(--brand, #2f6b3a);
 }
 
 .evento-convite-card-nome {
-  margin: 0 0 0.85rem;
-  font-size: 1.15rem;
+  margin: 0.15rem 0 0;
+  font-size: 0.88rem;
   font-weight: 600;
-}
-
-.evento-convite-card-rodape {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--ink-muted, #5c6b5a);
+  line-height: 1.25;
 }
 
 @media print {
@@ -1065,15 +1115,37 @@ button {
     display: none !important;
   }
 
+  .evento-convites-impressos {
+    margin: 0;
+  }
+
+  .evento-convites-print-sheet {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.55rem;
+  }
+
   .evento-convite-card {
     border-color: #222;
     border-radius: 0;
-    margin: 0 0 1.25rem;
+    margin: 0;
   }
 
-  .evento-convite-card + .evento-convite-card {
-    page-break-before: always;
-    break-before: page;
+  .evento-convite-card-img {
+    flex-basis: 88px;
+    width: 88px;
+    max-height: 104px;
+  }
+
+  .evento-convite-card-body {
+    padding: 0.4rem 0.55rem;
+  }
+
+  .evento-convite-card-titulo {
+    font-size: 0.88rem;
+  }
+
+  .evento-convite-card-numero {
+    font-size: 1.3rem;
   }
 }
 

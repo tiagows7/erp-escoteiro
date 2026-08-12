@@ -176,7 +176,7 @@ export function VendaEventosPage() {
                   <th>Convites</th>
                   <th>Vendidos</th>
                   <th>Disponíveis</th>
-                  <th>Valor</th>
+                  <th>Valor (base)</th>
                   <th />
                 </tr>
               </thead>

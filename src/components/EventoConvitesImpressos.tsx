@@ -52,7 +52,7 @@ export function EventoConvitesImpressos({
         {convites.map((c) => (
           <article
             key={`${c.numero}-${c.nome}`}
-            className="evento-convite-card"
+            className={`evento-convite-card${imagemUrl ? ' has-img' : ''}`}
           >
             {imagemUrl ? (
               <img
@@ -69,12 +69,11 @@ export function EventoConvitesImpressos({
               {dataLabel ? (
                 <p className="evento-convite-card-data">{dataLabel}</p>
               ) : null}
-              <p className="evento-convite-card-label">Convite nº</p>
-              <p className="evento-convite-card-numero">{c.numero}</p>
+              <div className="evento-convite-card-meta">
+                <span className="evento-convite-card-label">Convite nº</span>
+                <strong className="evento-convite-card-numero">{c.numero}</strong>
+              </div>
               <p className="evento-convite-card-nome">{c.nome}</p>
-              <p className="evento-convite-card-rodape">
-                Apresente este convite no dia do evento.
-              </p>
             </div>
           </article>
         ))}

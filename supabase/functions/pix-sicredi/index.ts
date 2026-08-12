@@ -44,6 +44,7 @@ type CreatePublicEventoBody = {
   action: 'create_public_evento'
   link_token: string
   nomes: string[]
+  tipo_ids?: number[] | null
   comprador_telefone: string
   descricao?: string
 }
@@ -110,6 +111,70 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
+}
+
+type EventoTipoResolvido = {
+  tipo_id: number
+  label: string
+  valor: number
+}
+
+async function resolveEventoTiposLinhas(
+  admin: ReturnType<typeof createClient>,
+  eventoId: number,
+  nomesCount: number,
+  tipoIdsRaw: unknown,
+): Promise<
+  | { ok: true; linhas: EventoTipoResolvido[]; valorTotal: number; tipoIds: number[] }
+  | { ok: false; error: string }
+> {
+  const { data: tipos } = await admin
+    .from('venda_evento_tipo')
+    .select('tipo_id, label, valor, ordem')
+    .eq('evento_id', eventoId)
+    .eq('ativo', true)
+    .order('ordem')
+    .order('tipo_id')
+
+  const lista = (tipos ?? []) as EventoTipoResolvido[]
+  if (lista.length === 0) {
+    const { data: evento } = await admin
+      .from('venda_eventos')
+      .select('valor_convite')
+      .eq('evento_id', eventoId)
+      .maybeSingle()
+    const valor = Number(evento?.valor_convite ?? 0)
+    const fallback = { tipo_id: 0, label: 'Inteira', valor }
+    const linhas = Array.from({ length: nomesCount }, () => fallback)
+    return {
+      ok: true,
+      linhas,
+      valorTotal: Math.round(valor * nomesCount * 100) / 100,
+      tipoIds: [],
+    }
+  }
+
+  const defaultTipo = lista[0]
+  const requested = Array.isArray(tipoIdsRaw)
+    ? tipoIdsRaw.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0)
+    : []
+
+  const linhas: EventoTipoResolvido[] = []
+  const tipoIds: number[] = []
+  for (let i = 0; i < nomesCount; i += 1) {
+    const id = requested[i] ?? defaultTipo.tipo_id
+    const found = lista.find((t) => t.tipo_id === id) ?? defaultTipo
+    linhas.push({
+      tipo_id: found.tipo_id,
+      label: String(found.label ?? ''),
+      valor: Number(found.valor ?? 0),
+    })
+    tipoIds.push(found.tipo_id)
+  }
+
+  const valorTotal =
+    Math.round(linhas.reduce((s, l) => s + l.valor, 0) * 100) / 100
+  return { ok: true, linhas, valorTotal, tipoIds }
 }
 
 function configFromDbRow(
@@ -1010,6 +1075,16 @@ async function baixarVendaEvento(
     .eq('pix_cobranca_id', cobrancaId)
   if ((existing ?? 0) > 0) return
 
+  const resolvedTipos = await resolveEventoTiposLinhas(
+    admin,
+    eventoId,
+    nomes.length,
+    cob.tipo_ids,
+  )
+  if (!resolvedTipos.ok) {
+    throw new Error(resolvedTipos.error)
+  }
+
   const { data: evento, error: eventoError } = await admin
     .from('venda_eventos')
     .select('evento_id, empresa_id, numero_inicial, numero_final')
@@ -1054,7 +1129,7 @@ async function baixarVendaEvento(
       evento_id: eventoId,
       quantidade: nomes.length,
       comprador_telefone: telefone ? telefone.slice(0, 40) : null,
-      valor: valorTotal,
+      valor: Number.isFinite(valorTotal) ? valorTotal : resolvedTipos.valorTotal,
       forma_pagamento: 'pix',
       vendido_por: null,
       pix_cobranca_id: cobrancaId,
@@ -1066,13 +1141,20 @@ async function baixarVendaEvento(
     throw new Error(compraError?.message ?? 'Falha ao gravar compra.')
   }
 
-  const rows = nomes.map((nome, i) => ({
-    empresa_id: empresaId,
-    evento_id: eventoId,
-    compra_id: compra.compra_id,
-    numero: livres[i],
-    nome,
-  }))
+  const rows = nomes.map((nome, i) => {
+    const linha = resolvedTipos.linhas[i]
+    const tipoId = linha?.tipo_id && linha.tipo_id > 0 ? linha.tipo_id : null
+    return {
+      empresa_id: empresaId,
+      evento_id: eventoId,
+      compra_id: compra.compra_id,
+      numero: livres[i],
+      nome,
+      tipo_id: tipoId,
+      valor_unitario: linha?.valor ?? 0,
+      tipo_label: linha?.label ?? null,
+    }
+  })
 
   const { error: conviteError } = await admin
     .from('venda_evento_convite')
@@ -1387,15 +1469,25 @@ Deno.serve(async (req) => {
           )
         }
 
-        const valorUnit = Number(evento.valor_convite ?? 0)
-        if (!Number.isFinite(valorUnit) || valorUnit <= 0) {
+        const resolvedTipos = await resolveEventoTiposLinhas(
+          admin,
+          Number(evento.evento_id),
+          nomesOrdered.length,
+          body.tipo_ids,
+        )
+        if (!resolvedTipos.ok) {
+          return json({ error: resolvedTipos.error }, 400)
+        }
+        const valor = resolvedTipos.valorTotal
+        if (!Number.isFinite(valor) || valor <= 0) {
           return json(
-            { error: 'Valor do convite não configurado neste evento.' },
+            {
+              error:
+                'Valor total inválido. Convites isentos (R$ 0) devem ser registrados pela organização.',
+            },
             400,
           )
         }
-        const valor =
-          Math.round(valorUnit * nomesOrdered.length * 100) / 100
 
         // Preferência: PIX da seção → ramo → grupo.
         let ramoId = (evento.ramo as number | null) ?? null
@@ -1452,6 +1544,7 @@ Deno.serve(async (req) => {
             evento_id: evento.evento_id,
             link_token: token,
             nomes: nomesOrdered,
+            tipo_ids: resolvedTipos.tipoIds,
             comprador_telefone: fone.slice(0, 40),
             comprador_nome: nomesOrdered[0] ?? null,
             valor,

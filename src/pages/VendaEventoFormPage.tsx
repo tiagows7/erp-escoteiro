@@ -89,8 +89,21 @@ const emptyForm = {
   nome: '',
   numero_inicial: '1',
   numero_final: '100',
-  valor_convite: '0,00',
   data_evento: '',
+}
+
+type TipoFormRow = {
+  key: string
+  tipo_id?: number
+  label: string
+  valor: string
+}
+
+function defaultTiposForm(): TipoFormRow[] {
+  return [
+    { key: 'new-inteira', label: 'Inteira', valor: '0,00' },
+    { key: 'new-meia', label: 'Meia', valor: '0,00' },
+  ]
 }
 
 function unidadeLabel(ramoId: number | null): string {
@@ -117,6 +130,7 @@ export function VendaEventoFormPage() {
   const toast = useToast()
 
   const [form, setForm] = useState(emptyForm)
+  const [tiposForm, setTiposForm] = useState<TipoFormRow[]>(defaultTiposForm)
   const [ramos, setRamos] = useState<Ramo[]>([])
   const [secoes, setSecoes] = useState<Secao[]>([])
   const [patrulhas, setPatrulhas] = useState<Patrulha[]>([])
@@ -211,9 +225,6 @@ export function VendaEventoFormPage() {
         nome: data.nome ?? '',
         numero_inicial: String(data.numero_inicial ?? 1),
         numero_final: String(data.numero_final ?? 1),
-        valor_convite: formatMoney(Number(data.valor_convite ?? 0))
-          .replace('R$', '')
-          .trim(),
         data_evento: data.data_evento
           ? String(data.data_evento).slice(0, 10)
           : '',
@@ -222,6 +233,39 @@ export function VendaEventoFormPage() {
       setImagemPreview(data.imagem_url ?? null)
       setImagemFile(null)
       setEncerradoEm((data.encerrado_em as string | null) ?? null)
+
+      const { data: tiposData } = await supabase
+        .from('venda_evento_tipo')
+        .select('tipo_id, label, valor, ordem, ativo')
+        .eq('evento_id', data.evento_id)
+        .eq('empresa_id', empresaId)
+        .eq('ativo', true)
+        .order('ordem')
+        .order('tipo_id')
+
+      if (!mounted) return
+      if (tiposData && tiposData.length > 0) {
+        setTiposForm(
+          tiposData.map((t) => ({
+            key: `tipo-${t.tipo_id}`,
+            tipo_id: Number(t.tipo_id),
+            label: String(t.label ?? ''),
+            valor: formatMoney(Number(t.valor ?? 0))
+              .replace('R$', '')
+              .trim(),
+          })),
+        )
+      } else {
+        setTiposForm([
+          {
+            key: 'new-inteira',
+            label: 'Inteira',
+            valor: formatMoney(Number(data.valor_convite ?? 0))
+              .replace('R$', '')
+              .trim(),
+          },
+        ])
+      }
 
       const [r, d] = await Promise.all([
         supabase
@@ -366,6 +410,26 @@ export function VendaEventoFormPage() {
       return
     }
 
+    const tiposLimpos = tiposForm
+      .map((t, i) => ({
+        tipo_id: t.tipo_id,
+        label: t.label.trim().slice(0, 80),
+        valor: parseMoneyInput(t.valor),
+        ordem: i,
+      }))
+      .filter((t) => t.label.length > 0)
+
+    if (tiposLimpos.length === 0) {
+      setError('Informe ao menos um tipo de convite (ex.: Inteira, Meia, Isento).')
+      return
+    }
+
+    const labels = tiposLimpos.map((t) => t.label.toLowerCase())
+    if (new Set(labels).size !== labels.length) {
+      setError('Não use o mesmo nome em mais de um tipo de convite.')
+      return
+    }
+
     setSaving(true)
     setError(null)
 
@@ -375,6 +439,8 @@ export function VendaEventoFormPage() {
         : form.ramo
           ? Number(form.ramo)
           : null
+
+    const valorPadrao = tiposLimpos[0]?.valor ?? 0
 
     const payload = {
       empresa_id: empresaId,
@@ -386,7 +452,7 @@ export function VendaEventoFormPage() {
       nome: form.nome.trim(),
       numero_inicial: numeroInicial,
       numero_final: numeroFinal,
-      valor_convite: parseMoneyInput(form.valor_convite),
+      valor_convite: valorPadrao,
       data_evento: form.data_evento || null,
     }
 
@@ -411,6 +477,65 @@ export function VendaEventoFormPage() {
     }
 
     const eventoIdSalvo = Number(result.data?.evento_id ?? id)
+
+    // Sincroniza tipos: atualiza existentes, cria novos, desativa removidos
+    const keepIds = tiposLimpos
+      .map((t) => t.tipo_id)
+      .filter((id): id is number => id != null && Number.isFinite(id))
+
+    if (!isNew) {
+      let desativaQuery = supabase
+        .from('venda_evento_tipo')
+        .update({ ativo: false })
+        .eq('evento_id', eventoIdSalvo)
+        .eq('empresa_id', empresaId)
+      if (keepIds.length > 0) {
+        desativaQuery = desativaQuery.not('tipo_id', 'in', `(${keepIds.join(',')})`)
+      }
+      const { error: desativaError } = await desativaQuery
+      if (desativaError) {
+        setSaving(false)
+        setError(desativaError.message)
+        return
+      }
+    }
+
+    for (const tipo of tiposLimpos) {
+      if (tipo.tipo_id) {
+        const { error: updError } = await supabase
+          .from('venda_evento_tipo')
+          .update({
+            label: tipo.label,
+            valor: tipo.valor,
+            ordem: tipo.ordem,
+            ativo: true,
+          })
+          .eq('tipo_id', tipo.tipo_id)
+          .eq('empresa_id', empresaId)
+        if (updError) {
+          setSaving(false)
+          setError(updError.message)
+          return
+        }
+      } else {
+        const { error: insError } = await supabase
+          .from('venda_evento_tipo')
+          .insert({
+            empresa_id: empresaId,
+            evento_id: eventoIdSalvo,
+            label: tipo.label,
+            valor: tipo.valor,
+            ordem: tipo.ordem,
+            ativo: true,
+          })
+        if (insError) {
+          setSaving(false)
+          setError(insError.message)
+          return
+        }
+      }
+    }
+
     if (imagemFile && Number.isFinite(eventoIdSalvo) && eventoIdSalvo > 0) {
       const imgOk = await uploadVendaEventoImagem(
         empresaId,
@@ -660,16 +785,79 @@ export function VendaEventoFormPage() {
             />
           </div>
 
-          <div className="field">
-            <label htmlFor="valor_convite">Valor de cada convite</label>
-            <input
-              id="valor_convite"
-              className="input"
-              inputMode="decimal"
-              value={form.valor_convite}
-              onChange={(e) => update('valor_convite', e.target.value)}
-              disabled={disabled}
-            />
+          <div className="field field-span-2">
+            <label>Tipos de convite e valores</label>
+            <p className="field-hint" style={{ marginTop: 0 }}>
+              Cadastre Inteira, Meia, Isento ou outros. Em isento, use o texto
+              desejado e o valor (pode ser 0,00).
+            </p>
+            <div className="evento-tipos-editor">
+              {tiposForm.map((tipo, index) => (
+                <div key={tipo.key} className="evento-tipo-row">
+                  <input
+                    className="input"
+                    value={tipo.label}
+                    placeholder="Ex.: Inteira, Meia, Isento"
+                    disabled={disabled}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setTiposForm((prev) =>
+                        prev.map((t, i) =>
+                          i === index ? { ...t, label: value } : t,
+                        ),
+                      )
+                    }}
+                    required
+                  />
+                  <input
+                    className="input"
+                    inputMode="decimal"
+                    value={tipo.valor}
+                    placeholder="0,00"
+                    disabled={disabled}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setTiposForm((prev) =>
+                        prev.map((t, i) =>
+                          i === index ? { ...t, valor: value } : t,
+                        ),
+                      )
+                    }}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-soft"
+                    disabled={disabled || tiposForm.length <= 1}
+                    onClick={() =>
+                      setTiposForm((prev) =>
+                        prev.filter((_, i) => i !== index),
+                      )
+                    }
+                    title="Remover tipo"
+                  >
+                    Remover
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="btn btn-soft"
+                disabled={disabled}
+                onClick={() =>
+                  setTiposForm((prev) => [
+                    ...prev,
+                    {
+                      key: `new-${Date.now()}`,
+                      label: '',
+                      valor: '0,00',
+                    },
+                  ])
+                }
+              >
+                Adicionar tipo
+              </button>
+            </div>
           </div>
 
           <div className="field">
