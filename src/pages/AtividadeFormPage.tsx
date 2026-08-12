@@ -43,6 +43,8 @@ export function AtividadeFormPage() {
   const navigate = useNavigate()
   const { empresa, profile, hasPermission } = useAuth()
   const canWrite = hasPermission('atividades.write')
+  const canFinanceiro =
+    !isAssociadoLogin(profile) && hasPermission('financeiro.write')
   const empresaId = empresa?.id
   const associadoLogin = isAssociadoLogin(profile)
   const ramoScoped = useMemo(() => staffRamoScope(profile), [profile])
@@ -301,6 +303,22 @@ export function AtividadeFormPage() {
             >
               Contas
             </Link>
+          ) : null}
+          {!isNew && canFinanceiro ? (
+            <>
+              <Link
+                className="btn btn-accent"
+                to={`/despesas/inclusao/novo?atividade_id=${id}`}
+              >
+                Lançar despesa
+              </Link>
+              <Link
+                className="btn btn-soft"
+                to={`/receitas/inclusao/novo?atividade_id=${id}`}
+              >
+                Lançar receita
+              </Link>
+            </>
           ) : null}
           <Link className="btn btn-soft" to="/atividades">
             Voltar

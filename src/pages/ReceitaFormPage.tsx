@@ -89,10 +89,13 @@ export function ReceitaFormPage() {
   const projetoIdParam = searchParams.get('projeto_id')
   const eventoIdParam = searchParams.get('evento_id')
   const acaoIdParam = searchParams.get('acao_id')
+  const atividadeIdParam = searchParams.get('atividade_id')
   const lockedByProjeto = isNew && !!projetoIdParam
   const lockedByEvento = isNew && !!eventoIdParam
   const lockedByAcao = isNew && !!acaoIdParam
-  const lockedByVinculo = lockedByProjeto || lockedByEvento || lockedByAcao
+  const lockedByAtividade = isNew && !!atividadeIdParam
+  const lockedByVinculo =
+    lockedByProjeto || lockedByEvento || lockedByAcao || lockedByAtividade
 
   const [form, setForm] = useState({
     ...emptyForm,
@@ -257,6 +260,9 @@ export function ReceitaFormPage() {
       setForm((prev) => ({
         ...prev,
         projeto_id: String(fromList.projeto_id),
+        evento_id: '',
+        acao_id: '',
+        atividade_id: '',
         receita_ramo: fromList.ramo != null ? String(fromList.ramo) : '',
         receita_secao: fromList.secao != null ? String(fromList.secao) : '',
         receita_descricao:
@@ -283,6 +289,9 @@ export function ReceitaFormPage() {
         setForm((prev) => ({
           ...prev,
           projeto_id: String(data.projeto_id),
+          evento_id: '',
+          acao_id: '',
+          atividade_id: '',
           receita_ramo: data.ramo != null ? String(data.ramo) : '',
           receita_secao: data.secao != null ? String(data.secao) : '',
           receita_descricao:
@@ -302,6 +311,9 @@ export function ReceitaFormPage() {
       setForm((prev) => ({
         ...prev,
         evento_id: String(fromList.evento_id),
+        projeto_id: '',
+        acao_id: '',
+        atividade_id: '',
         receita_ramo: fromList.ramo != null ? String(fromList.ramo) : '',
         receita_secao: fromList.secao != null ? String(fromList.secao) : '',
         receita_descricao:
@@ -328,6 +340,9 @@ export function ReceitaFormPage() {
         setForm((prev) => ({
           ...prev,
           evento_id: String(data.evento_id),
+          projeto_id: '',
+          acao_id: '',
+          atividade_id: '',
           receita_ramo: data.ramo != null ? String(data.ramo) : '',
           receita_secao: data.secao != null ? String(data.secao) : '',
           receita_descricao:
@@ -347,6 +362,9 @@ export function ReceitaFormPage() {
       setForm((prev) => ({
         ...prev,
         acao_id: String(fromList.acao_id),
+        projeto_id: '',
+        evento_id: '',
+        atividade_id: '',
         receita_ramo: fromList.ramo != null ? String(fromList.ramo) : '',
         receita_secao: fromList.secao != null ? String(fromList.secao) : '',
         receita_descricao:
@@ -374,6 +392,9 @@ export function ReceitaFormPage() {
         setForm((prev) => ({
           ...prev,
           acao_id: String(data.acao_id),
+          projeto_id: '',
+          evento_id: '',
+          atividade_id: '',
           receita_ramo: data.ramo != null ? String(data.ramo) : '',
           receita_secao: data.secao != null ? String(data.secao) : '',
           receita_descricao:
@@ -383,6 +404,53 @@ export function ReceitaFormPage() {
         }))
       })
   }, [isNew, acaoIdParam, acoes, empresaId])
+
+  useEffect(() => {
+    if (!isNew || !atividadeIdParam || !empresaId) return
+    const aid = Number(atividadeIdParam)
+    if (!Number.isFinite(aid) || aid <= 0) return
+
+    const fromList = atividades.find((a) => a.atividade_id === aid)
+    if (fromList) {
+      setForm((prev) => ({
+        ...prev,
+        atividade_id: String(fromList.atividade_id),
+        projeto_id: '',
+        evento_id: '',
+        acao_id: '',
+        receita_ramo: fromList.ramo != null ? String(fromList.ramo) : '',
+        receita_secao: fromList.secao != null ? String(fromList.secao) : '',
+        receita_descricao:
+          prev.receita_descricao.trim() ||
+          `Atividade: ${fromList.descricao}`,
+        receita_valor: '0,00',
+      }))
+      return
+    }
+
+    void supabase
+      .from('atividades')
+      .select('atividade_id, descricao, ramo, secao')
+      .eq('empresa_id', empresaId)
+      .eq('atividade_id', aid)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return
+        setForm((prev) => ({
+          ...prev,
+          atividade_id: String(data.atividade_id),
+          projeto_id: '',
+          evento_id: '',
+          acao_id: '',
+          receita_ramo: data.ramo != null ? String(data.ramo) : '',
+          receita_secao: data.secao != null ? String(data.secao) : '',
+          receita_descricao:
+            prev.receita_descricao.trim() ||
+            `Atividade: ${data.descricao}`,
+          receita_valor: '0,00',
+        }))
+      })
+  }, [isNew, atividadeIdParam, atividades, empresaId])
 
   useEffect(() => {
     if (isNew || !empresaId) return
@@ -799,9 +867,10 @@ export function ReceitaFormPage() {
               className="select"
               value={form.atividade_id}
               onChange={(e) => {
+                if (lockedByVinculo) return
                 const value = e.target.value
                 update('atividade_id', value)
-                if (!value || lockedByVinculo) return
+                if (!value) return
                 const ativ = atividades.find(
                   (a) => a.atividade_id === Number(value),
                 )
@@ -809,7 +878,7 @@ export function ReceitaFormPage() {
                 if (ativ.ramo != null) update('receita_ramo', String(ativ.ramo))
                 if (ativ.secao != null) update('receita_secao', String(ativ.secao))
               }}
-              disabled={disabled || isPaid}
+              disabled={disabled || isPaid || lockedByVinculo}
             >
               <option value="">Nenhuma</option>
               {atividadesFiltradas.map((a) => (
@@ -827,10 +896,10 @@ export function ReceitaFormPage() {
               className="select"
               value={form.projeto_id}
               onChange={(e) => {
-                if (lockedByProjeto) return
+                if (lockedByVinculo) return
                 const value = e.target.value
                 update('projeto_id', value)
-                if (!value || lockedByEvento || lockedByAcao) return
+                if (!value) return
                 const proj = projetos.find(
                   (p) => p.projeto_id === Number(value),
                 )
@@ -839,7 +908,7 @@ export function ReceitaFormPage() {
                 if (proj.secao != null)
                   update('receita_secao', String(proj.secao))
               }}
-              disabled={disabled || isPaid || lockedByProjeto}
+              disabled={disabled || isPaid || lockedByVinculo}
             >
               <option value="">Nenhum</option>
               {projetosFiltrados.map((p) => (
@@ -857,16 +926,16 @@ export function ReceitaFormPage() {
               className="select"
               value={form.evento_id}
               onChange={(e) => {
-                if (lockedByEvento) return
+                if (lockedByVinculo) return
                 const value = e.target.value
                 update('evento_id', value)
-                if (!value || lockedByProjeto || lockedByAcao) return
+                if (!value) return
                 const ev = eventos.find((item) => item.evento_id === Number(value))
                 if (!ev || scope) return
                 if (ev.ramo != null) update('receita_ramo', String(ev.ramo))
                 if (ev.secao != null) update('receita_secao', String(ev.secao))
               }}
-              disabled={disabled || isPaid || lockedByEvento}
+              disabled={disabled || isPaid || lockedByVinculo}
             >
               <option value="">Nenhum</option>
               {eventosFiltrados.map((e) => (
@@ -884,16 +953,16 @@ export function ReceitaFormPage() {
               className="select"
               value={form.acao_id}
               onChange={(e) => {
-                if (lockedByAcao) return
+                if (lockedByVinculo) return
                 const value = e.target.value
                 update('acao_id', value)
-                if (!value || lockedByProjeto || lockedByEvento) return
+                if (!value) return
                 const ac = acoes.find((item) => item.acao_id === Number(value))
                 if (!ac || scope) return
                 if (ac.ramo != null) update('receita_ramo', String(ac.ramo))
                 if (ac.secao != null) update('receita_secao', String(ac.secao))
               }}
-              disabled={disabled || isPaid || lockedByAcao}
+              disabled={disabled || isPaid || lockedByVinculo}
             >
               <option value="">Nenhuma</option>
               {acoesFiltradas.map((a) => (

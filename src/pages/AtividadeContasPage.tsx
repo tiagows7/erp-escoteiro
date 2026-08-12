@@ -44,9 +44,10 @@ function formatDate(value: string | null) {
 export function AtividadeContasPage() {
   const { id } = useParams()
   const atividadeId = Number(id)
-  const { empresa, profile } = useAuth()
+  const { empresa, profile, hasPermission } = useAuth()
   const empresaId = empresa?.id
   const associadoLogin = isAssociadoLogin(profile)
+  const canFinanceiro = !associadoLogin && hasPermission('financeiro.write')
   const ramoScoped = useMemo(() => staffRamoScope(profile), [profile])
 
   const [atividade, setAtividade] = useState<Atividade | null>(null)
@@ -260,6 +261,22 @@ export function AtividadeContasPage() {
           </p>
         </div>
         <div className="page-header-actions actions-pair">
+          {canFinanceiro ? (
+            <>
+              <Link
+                className="btn btn-accent"
+                to={`/despesas/inclusao/novo?atividade_id=${atividade.atividade_id}`}
+              >
+                Lançar despesa
+              </Link>
+              <Link
+                className="btn btn-primary"
+                to={`/receitas/inclusao/novo?atividade_id=${atividade.atividade_id}`}
+              >
+                Lançar receita
+              </Link>
+            </>
+          ) : null}
           {!associadoLogin ? (
             <Link
               className="btn btn-soft"

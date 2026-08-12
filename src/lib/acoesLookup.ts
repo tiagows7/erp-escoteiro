@@ -6,6 +6,7 @@ export type AcaoLookup = {
   nome: string
   ramo: number | null
   secao: number | null
+  patrulha_matilha: number | null
   data_sorteio: string | null
   encerrado_em: string | null
 }
@@ -33,7 +34,9 @@ export async function loadAcoesLookup(
 ): Promise<{ data: AcaoLookup[]; error: string | null }> {
   let query = supabase
     .from('acao_entre_amigos')
-    .select('acao_id, nome, ramo, secao, data_sorteio, encerrado_em')
+    .select(
+      'acao_id, nome, ramo, secao, patrulha_matilha, data_sorteio, encerrado_em',
+    )
     .eq('empresa_id', empresaId)
     .order('data_sorteio', { ascending: false })
     .limit(500)

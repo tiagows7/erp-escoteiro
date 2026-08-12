@@ -86,10 +86,14 @@ export function DespesaFormPage() {
   const projetoIdParam = searchParams.get('projeto_id')
   const eventoIdParam = searchParams.get('evento_id')
   const acaoIdParam = searchParams.get('acao_id')
+  const atividadeIdParam = searchParams.get('atividade_id')
   const lockedByProjeto = isNew && !!projetoIdParam
   const lockedByEvento = isNew && !!eventoIdParam
   const lockedByAcao = isNew && !!acaoIdParam
-  const lockedByVinculo = lockedByProjeto || lockedByEvento || lockedByAcao
+  const lockedByAtividade = isNew && !!atividadeIdParam
+  /** Vínculo externo: trava projeto/evento/ação/atividade e estrutura do cadastro. */
+  const lockedByVinculo =
+    lockedByProjeto || lockedByEvento || lockedByAcao || lockedByAtividade
 
   const [form, setForm] = useState({
     ...emptyForm,
@@ -271,6 +275,9 @@ export function DespesaFormPage() {
       setForm((prev) => ({
         ...prev,
         projeto_id: String(fromList.projeto_id),
+        evento_id: '',
+        acao_id: '',
+        atividade_id: '',
         despesa_ramo: fromList.ramo != null ? String(fromList.ramo) : '',
         despesa_secao: fromList.secao != null ? String(fromList.secao) : '',
         despesa_secaonome: '',
@@ -299,6 +306,9 @@ export function DespesaFormPage() {
         setForm((prev) => ({
           ...prev,
           projeto_id: String(data.projeto_id),
+          evento_id: '',
+          acao_id: '',
+          atividade_id: '',
           despesa_ramo: data.ramo != null ? String(data.ramo) : '',
           despesa_secao: data.secao != null ? String(data.secao) : '',
           despesa_secaonome: '',
@@ -320,6 +330,9 @@ export function DespesaFormPage() {
       setForm((prev) => ({
         ...prev,
         evento_id: String(fromList.evento_id),
+        projeto_id: '',
+        acao_id: '',
+        atividade_id: '',
         despesa_ramo: fromList.ramo != null ? String(fromList.ramo) : '',
         despesa_secao: fromList.secao != null ? String(fromList.secao) : '',
         despesa_secaonome: '',
@@ -347,6 +360,9 @@ export function DespesaFormPage() {
         setForm((prev) => ({
           ...prev,
           evento_id: String(data.evento_id),
+          projeto_id: '',
+          acao_id: '',
+          atividade_id: '',
           despesa_ramo: data.ramo != null ? String(data.ramo) : '',
           despesa_secao: data.secao != null ? String(data.secao) : '',
           despesa_secaonome: '',
@@ -367,9 +383,15 @@ export function DespesaFormPage() {
       setForm((prev) => ({
         ...prev,
         acao_id: String(fromList.acao_id),
+        projeto_id: '',
+        evento_id: '',
+        atividade_id: '',
         despesa_ramo: fromList.ramo != null ? String(fromList.ramo) : '',
         despesa_secao: fromList.secao != null ? String(fromList.secao) : '',
-        despesa_secaonome: '',
+        despesa_secaonome:
+          fromList.patrulha_matilha != null
+            ? String(fromList.patrulha_matilha)
+            : '',
         despesa_valor: '0,00',
         despesa_finalidade:
           prev.despesa_finalidade.trim() ||
@@ -380,7 +402,7 @@ export function DespesaFormPage() {
 
     void supabase
       .from('acao_entre_amigos')
-      .select('acao_id, nome, ramo, secao, encerrado_em')
+      .select('acao_id, nome, ramo, secao, patrulha_matilha, encerrado_em')
       .eq('empresa_id', empresaId)
       .eq('acao_id', aid)
       .maybeSingle()
@@ -395,9 +417,15 @@ export function DespesaFormPage() {
         setForm((prev) => ({
           ...prev,
           acao_id: String(data.acao_id),
+          projeto_id: '',
+          evento_id: '',
+          atividade_id: '',
           despesa_ramo: data.ramo != null ? String(data.ramo) : '',
           despesa_secao: data.secao != null ? String(data.secao) : '',
-          despesa_secaonome: '',
+          despesa_secaonome:
+            data.patrulha_matilha != null
+              ? String(data.patrulha_matilha)
+              : '',
           despesa_valor: '0,00',
           despesa_finalidade:
             prev.despesa_finalidade.trim() ||
@@ -405,6 +433,61 @@ export function DespesaFormPage() {
         }))
       })
   }, [isNew, acaoIdParam, acoes, empresaId])
+
+  useEffect(() => {
+    if (!isNew || !atividadeIdParam || !empresaId) return
+    const aid = Number(atividadeIdParam)
+    if (!Number.isFinite(aid) || aid <= 0) return
+
+    const fromList = atividades.find((a) => a.atividade_id === aid)
+    if (fromList) {
+      setForm((prev) => ({
+        ...prev,
+        atividade_id: String(fromList.atividade_id),
+        projeto_id: '',
+        evento_id: '',
+        acao_id: '',
+        despesa_ramo: fromList.ramo != null ? String(fromList.ramo) : '',
+        despesa_secao: fromList.secao != null ? String(fromList.secao) : '',
+        despesa_secaonome:
+          fromList.patrulha_matilha != null
+            ? String(fromList.patrulha_matilha)
+            : '',
+        despesa_valor: '0,00',
+        despesa_finalidade:
+          prev.despesa_finalidade.trim() ||
+          `Atividade: ${fromList.descricao}`,
+      }))
+      return
+    }
+
+    void supabase
+      .from('atividades')
+      .select('atividade_id, descricao, ramo, secao, patrulha_matilha')
+      .eq('empresa_id', empresaId)
+      .eq('atividade_id', aid)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return
+        setForm((prev) => ({
+          ...prev,
+          atividade_id: String(data.atividade_id),
+          projeto_id: '',
+          evento_id: '',
+          acao_id: '',
+          despesa_ramo: data.ramo != null ? String(data.ramo) : '',
+          despesa_secao: data.secao != null ? String(data.secao) : '',
+          despesa_secaonome:
+            data.patrulha_matilha != null
+              ? String(data.patrulha_matilha)
+              : '',
+          despesa_valor: '0,00',
+          despesa_finalidade:
+            prev.despesa_finalidade.trim() ||
+            `Atividade: ${data.descricao}`,
+        }))
+      })
+  }, [isNew, atividadeIdParam, atividades, empresaId])
 
   useEffect(() => {
     if (isNew || !empresaId) return
@@ -511,9 +594,7 @@ export function DespesaFormPage() {
       : scope?.secao != null
         ? scope.secao
         : numOrNull(form.despesa_secao)
-    const secaonomePayload = lockedByVinculo
-      ? null
-      : numOrNull(form.despesa_secaonome)
+    const secaonomePayload = numOrNull(form.despesa_secaonome)
 
     setSaving(true)
     setError(null)
@@ -798,17 +879,24 @@ export function DespesaFormPage() {
               className="select"
               value={form.atividade_id}
               onChange={(e) => {
+                if (lockedByVinculo) return
                 const value = e.target.value
                 update('atividade_id', value)
-                if (!value || lockedByVinculo) return
+                if (!value) return
                 const ativ = atividades.find(
                   (a) => a.atividade_id === Number(value),
                 )
                 if (!ativ || scope) return
                 if (ativ.ramo != null) update('despesa_ramo', String(ativ.ramo))
                 if (ativ.secao != null) update('despesa_secao', String(ativ.secao))
+                update(
+                  'despesa_secaonome',
+                  ativ.patrulha_matilha != null
+                    ? String(ativ.patrulha_matilha)
+                    : '',
+                )
               }}
-              disabled={disabled || isPaid}
+              disabled={disabled || isPaid || lockedByVinculo}
             >
               <option value="">Nenhuma</option>
               {atividadesFiltradas.map((a) => (
@@ -826,10 +914,10 @@ export function DespesaFormPage() {
               className="select"
               value={form.projeto_id}
               onChange={(e) => {
-                if (lockedByProjeto) return
+                if (lockedByVinculo) return
                 const value = e.target.value
                 update('projeto_id', value)
-                if (!value || lockedByEvento || lockedByAcao) return
+                if (!value) return
                 const proj = projetos.find(
                   (p) => p.projeto_id === Number(value),
                 )
@@ -838,7 +926,7 @@ export function DespesaFormPage() {
                 if (proj.secao != null)
                   update('despesa_secao', String(proj.secao))
               }}
-              disabled={disabled || isPaid || lockedByProjeto}
+              disabled={disabled || isPaid || lockedByVinculo}
             >
               <option value="">Nenhum</option>
               {projetosFiltrados.map((p) => (
@@ -856,16 +944,16 @@ export function DespesaFormPage() {
               className="select"
               value={form.evento_id}
               onChange={(e) => {
-                if (lockedByEvento) return
+                if (lockedByVinculo) return
                 const value = e.target.value
                 update('evento_id', value)
-                if (!value || lockedByProjeto || lockedByAcao) return
+                if (!value) return
                 const ev = eventos.find((item) => item.evento_id === Number(value))
                 if (!ev || scope) return
                 if (ev.ramo != null) update('despesa_ramo', String(ev.ramo))
                 if (ev.secao != null) update('despesa_secao', String(ev.secao))
               }}
-              disabled={disabled || isPaid || lockedByEvento}
+              disabled={disabled || isPaid || lockedByVinculo}
             >
               <option value="">Nenhum</option>
               {eventosFiltrados.map((e) => (
@@ -883,16 +971,22 @@ export function DespesaFormPage() {
               className="select"
               value={form.acao_id}
               onChange={(e) => {
-                if (lockedByAcao) return
+                if (lockedByVinculo) return
                 const value = e.target.value
                 update('acao_id', value)
-                if (!value || lockedByProjeto || lockedByEvento) return
+                if (!value) return
                 const ac = acoes.find((item) => item.acao_id === Number(value))
                 if (!ac || scope) return
                 if (ac.ramo != null) update('despesa_ramo', String(ac.ramo))
                 if (ac.secao != null) update('despesa_secao', String(ac.secao))
+                update(
+                  'despesa_secaonome',
+                  ac.patrulha_matilha != null
+                    ? String(ac.patrulha_matilha)
+                    : '',
+                )
               }}
-              disabled={disabled || isPaid || lockedByAcao}
+              disabled={disabled || isPaid || lockedByVinculo}
             >
               <option value="">Nenhuma</option>
               {acoesFiltradas.map((a) => (

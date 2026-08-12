@@ -7,6 +7,7 @@ export type AtividadeLookup = {
   local: string | null
   ramo: number | null
   secao: number | null
+  patrulha_matilha: number | null
   valor: number
 }
 
@@ -26,7 +27,9 @@ export async function loadAtividadesLookup(
 ): Promise<{ data: AtividadeLookup[]; error: string | null }> {
   let query = supabase
     .from('atividades')
-    .select('atividade_id, descricao, local, ramo, secao, valor')
+    .select(
+      'atividade_id, descricao, local, ramo, secao, patrulha_matilha, valor',
+    )
     .eq('empresa_id', empresaId)
     .order('created_at', { ascending: false })
     .limit(500)
