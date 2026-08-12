@@ -39,6 +39,11 @@ import {
   loadEventosLookup,
   type EventoLookup,
 } from '@/lib/eventosLookup'
+import {
+  acaoLabel,
+  loadAcoesLookup,
+  type AcaoLookup,
+} from '@/lib/acoesLookup'
 import type { Ramo } from '@/types/database'
 
 type Lookup = { id: number; nome: string; ramo?: number | null }
@@ -51,6 +56,7 @@ const emptyForm = {
   atividade_id: '',
   projeto_id: '',
   evento_id: '',
+  acao_id: '',
   receita_emissao: '',
   receita_vencimento: '',
   receita_valor: '',
@@ -82,9 +88,11 @@ export function ReceitaFormPage() {
   const toast = useToast()
   const projetoIdParam = searchParams.get('projeto_id')
   const eventoIdParam = searchParams.get('evento_id')
+  const acaoIdParam = searchParams.get('acao_id')
   const lockedByProjeto = isNew && !!projetoIdParam
   const lockedByEvento = isNew && !!eventoIdParam
-  const lockedByVinculo = lockedByProjeto || lockedByEvento
+  const lockedByAcao = isNew && !!acaoIdParam
+  const lockedByVinculo = lockedByProjeto || lockedByEvento || lockedByAcao
 
   const [form, setForm] = useState({
     ...emptyForm,
@@ -101,6 +109,7 @@ export function ReceitaFormPage() {
   const [atividades, setAtividades] = useState<AtividadeLookup[]>([])
   const [projetos, setProjetos] = useState<ProjetoLookup[]>([])
   const [eventos, setEventos] = useState<EventoLookup[]>([])
+  const [acoes, setAcoes] = useState<AcaoLookup[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
@@ -207,6 +216,21 @@ export function ReceitaFormPage() {
     return list
   }, [eventos, form.receita_ramo, form.receita_secao])
 
+  const acoesFiltradas = useMemo(() => {
+    let list = acoes
+    if (form.receita_ramo) {
+      list = list.filter(
+        (a) => a.ramo == null || a.ramo === Number(form.receita_ramo),
+      )
+    }
+    if (form.receita_secao) {
+      list = list.filter(
+        (a) => a.secao == null || a.secao === Number(form.receita_secao),
+      )
+    }
+    return list
+  }, [acoes, form.receita_ramo, form.receita_secao])
+
   useEffect(() => {
     if (!empresaId) return
     void loadAtividadesLookup(empresaId, { scope }).then((res) => {
@@ -217,6 +241,9 @@ export function ReceitaFormPage() {
     })
     void loadEventosLookup(empresaId, { scope }).then((res) => {
       if (!res.error) setEventos(res.data)
+    })
+    void loadAcoesLookup(empresaId, { scope }).then((res) => {
+      if (!res.error) setAcoes(res.data)
     })
   }, [empresaId, scope])
 
@@ -311,6 +338,53 @@ export function ReceitaFormPage() {
   }, [isNew, eventoIdParam, eventos, empresaId])
 
   useEffect(() => {
+    if (!isNew || !acaoIdParam || !empresaId) return
+    const aid = Number(acaoIdParam)
+    if (!Number.isFinite(aid) || aid <= 0) return
+
+    const fromList = acoes.find((a) => a.acao_id === aid)
+    if (fromList) {
+      setForm((prev) => ({
+        ...prev,
+        acao_id: String(fromList.acao_id),
+        receita_ramo: fromList.ramo != null ? String(fromList.ramo) : '',
+        receita_secao: fromList.secao != null ? String(fromList.secao) : '',
+        receita_descricao:
+          prev.receita_descricao.trim() ||
+          `Ação entre amigos: ${fromList.nome}`,
+        receita_valor: '0,00',
+      }))
+      return
+    }
+
+    void supabase
+      .from('acao_entre_amigos')
+      .select('acao_id, nome, ramo, secao, encerrado_em')
+      .eq('empresa_id', empresaId)
+      .eq('acao_id', aid)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return
+        if (data.encerrado_em) {
+          setError(
+            'Esta ação está encerrada — não é possível lançar receitas.',
+          )
+          return
+        }
+        setForm((prev) => ({
+          ...prev,
+          acao_id: String(data.acao_id),
+          receita_ramo: data.ramo != null ? String(data.ramo) : '',
+          receita_secao: data.secao != null ? String(data.secao) : '',
+          receita_descricao:
+            prev.receita_descricao.trim() ||
+            `Ação entre amigos: ${data.nome}`,
+          receita_valor: '0,00',
+        }))
+      })
+  }, [isNew, acaoIdParam, acoes, empresaId])
+
+  useEffect(() => {
     if (isNew || !empresaId) return
     let mounted = true
 
@@ -318,7 +392,7 @@ export function ReceitaFormPage() {
       const { data, error: loadError } = await supabase
         .from('receitas')
         .select(
-          'receita_id, receita_descricao, associado_id, receita_ramo, receita_secao, atividade_id, projeto_id, evento_id, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, receita_observacao, receita_origem, receita_documento',
+          'receita_id, receita_descricao, associado_id, receita_ramo, receita_secao, atividade_id, projeto_id, evento_id, acao_id, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, receita_observacao, receita_origem, receita_documento',
         )
         .eq('receita_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -354,6 +428,7 @@ export function ReceitaFormPage() {
         atividade_id: data.atividade_id?.toString() ?? '',
         projeto_id: data.projeto_id?.toString() ?? '',
         evento_id: data.evento_id?.toString() ?? '',
+        acao_id: data.acao_id?.toString() ?? '',
         receita_emissao: data.receita_emissao?.slice(0, 10) ?? '',
         receita_vencimento: data.receita_vencimento?.slice(0, 10) ?? '',
         receita_valor: data.receita_valor != null ? String(data.receita_valor) : '',
@@ -437,6 +512,7 @@ export function ReceitaFormPage() {
           atividade_id: numOrNull(form.atividade_id),
           projeto_id: numOrNull(form.projeto_id),
           evento_id: numOrNull(form.evento_id),
+          acao_id: numOrNull(form.acao_id),
           receita_emissao: strOrNull(form.receita_emissao),
           receita_vencimento: strOrNull(form.receita_vencimento),
           receita_valor: valor,
@@ -489,6 +565,7 @@ export function ReceitaFormPage() {
           atividade_id: numOrNull(form.atividade_id),
           projeto_id: numOrNull(form.projeto_id),
           evento_id: numOrNull(form.evento_id),
+          acao_id: numOrNull(form.acao_id),
           receita_emissao: strOrNull(form.receita_emissao),
           receita_vencimento: strOrNull(form.receita_vencimento),
           receita_valor: valor,
@@ -753,7 +830,7 @@ export function ReceitaFormPage() {
                 if (lockedByProjeto) return
                 const value = e.target.value
                 update('projeto_id', value)
-                if (!value || lockedByEvento) return
+                if (!value || lockedByEvento || lockedByAcao) return
                 const proj = projetos.find(
                   (p) => p.projeto_id === Number(value),
                 )
@@ -783,7 +860,7 @@ export function ReceitaFormPage() {
                 if (lockedByEvento) return
                 const value = e.target.value
                 update('evento_id', value)
-                if (!value || lockedByProjeto) return
+                if (!value || lockedByProjeto || lockedByAcao) return
                 const ev = eventos.find((item) => item.evento_id === Number(value))
                 if (!ev || scope) return
                 if (ev.ramo != null) update('receita_ramo', String(ev.ramo))
@@ -795,6 +872,33 @@ export function ReceitaFormPage() {
               {eventosFiltrados.map((e) => (
                 <option key={e.evento_id} value={e.evento_id}>
                   {eventoLabel(e)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="acao_id">Ação entre amigos</label>
+            <select
+              id="acao_id"
+              className="select"
+              value={form.acao_id}
+              onChange={(e) => {
+                if (lockedByAcao) return
+                const value = e.target.value
+                update('acao_id', value)
+                if (!value || lockedByProjeto || lockedByEvento) return
+                const ac = acoes.find((item) => item.acao_id === Number(value))
+                if (!ac || scope) return
+                if (ac.ramo != null) update('receita_ramo', String(ac.ramo))
+                if (ac.secao != null) update('receita_secao', String(ac.secao))
+              }}
+              disabled={disabled || isPaid || lockedByAcao}
+            >
+              <option value="">Nenhuma</option>
+              {acoesFiltradas.map((a) => (
+                <option key={a.acao_id} value={a.acao_id}>
+                  {acaoLabel(a)}
                 </option>
               ))}
             </select>

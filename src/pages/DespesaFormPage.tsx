@@ -35,6 +35,11 @@ import {
   loadEventosLookup,
   type EventoLookup,
 } from '@/lib/eventosLookup'
+import {
+  acaoLabel,
+  loadAcoesLookup,
+  type AcaoLookup,
+} from '@/lib/acoesLookup'
 import type { Ramo } from '@/types/database'
 
 type Lookup = { id: number; nome: string; ramo?: number | null; secao?: number | null }
@@ -47,6 +52,7 @@ const emptyForm = {
   atividade_id: '',
   projeto_id: '',
   evento_id: '',
+  acao_id: '',
   despesa_numeronota: '',
   despesa_emissao: '',
   despesa_vencimento: '',
@@ -79,9 +85,11 @@ export function DespesaFormPage() {
   const toast = useToast()
   const projetoIdParam = searchParams.get('projeto_id')
   const eventoIdParam = searchParams.get('evento_id')
+  const acaoIdParam = searchParams.get('acao_id')
   const lockedByProjeto = isNew && !!projetoIdParam
   const lockedByEvento = isNew && !!eventoIdParam
-  const lockedByVinculo = lockedByProjeto || lockedByEvento
+  const lockedByAcao = isNew && !!acaoIdParam
+  const lockedByVinculo = lockedByProjeto || lockedByEvento || lockedByAcao
 
   const [form, setForm] = useState({
     ...emptyForm,
@@ -98,6 +106,7 @@ export function DespesaFormPage() {
   const [atividades, setAtividades] = useState<AtividadeLookup[]>([])
   const [projetos, setProjetos] = useState<ProjetoLookup[]>([])
   const [eventos, setEventos] = useState<EventoLookup[]>([])
+  const [acoes, setAcoes] = useState<AcaoLookup[]>([])
   const [documentoUrls, setDocumentoUrls] = useState<string[]>([])
   const [notaFiles, setNotaFiles] = useState<File[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -221,6 +230,21 @@ export function DespesaFormPage() {
     return list
   }, [eventos, form.despesa_ramo, form.despesa_secao])
 
+  const acoesFiltradas = useMemo(() => {
+    let list = acoes
+    if (form.despesa_ramo) {
+      list = list.filter(
+        (a) => a.ramo == null || a.ramo === Number(form.despesa_ramo),
+      )
+    }
+    if (form.despesa_secao) {
+      list = list.filter(
+        (a) => a.secao == null || a.secao === Number(form.despesa_secao),
+      )
+    }
+    return list
+  }, [acoes, form.despesa_ramo, form.despesa_secao])
+
   useEffect(() => {
     if (!empresaId) return
     void loadAtividadesLookup(empresaId, { scope }).then((res) => {
@@ -231,6 +255,9 @@ export function DespesaFormPage() {
     })
     void loadEventosLookup(empresaId, { scope }).then((res) => {
       if (!res.error) setEventos(res.data)
+    })
+    void loadAcoesLookup(empresaId, { scope }).then((res) => {
+      if (!res.error) setAcoes(res.data)
     })
   }, [empresaId, scope])
 
@@ -331,6 +358,55 @@ export function DespesaFormPage() {
   }, [isNew, eventoIdParam, eventos, empresaId])
 
   useEffect(() => {
+    if (!isNew || !acaoIdParam || !empresaId) return
+    const aid = Number(acaoIdParam)
+    if (!Number.isFinite(aid) || aid <= 0) return
+
+    const fromList = acoes.find((a) => a.acao_id === aid)
+    if (fromList) {
+      setForm((prev) => ({
+        ...prev,
+        acao_id: String(fromList.acao_id),
+        despesa_ramo: fromList.ramo != null ? String(fromList.ramo) : '',
+        despesa_secao: fromList.secao != null ? String(fromList.secao) : '',
+        despesa_secaonome: '',
+        despesa_valor: '0,00',
+        despesa_finalidade:
+          prev.despesa_finalidade.trim() ||
+          `Ação entre amigos: ${fromList.nome}`,
+      }))
+      return
+    }
+
+    void supabase
+      .from('acao_entre_amigos')
+      .select('acao_id, nome, ramo, secao, encerrado_em')
+      .eq('empresa_id', empresaId)
+      .eq('acao_id', aid)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return
+        if (data.encerrado_em) {
+          setError(
+            'Esta ação está encerrada — não é possível lançar despesas.',
+          )
+          return
+        }
+        setForm((prev) => ({
+          ...prev,
+          acao_id: String(data.acao_id),
+          despesa_ramo: data.ramo != null ? String(data.ramo) : '',
+          despesa_secao: data.secao != null ? String(data.secao) : '',
+          despesa_secaonome: '',
+          despesa_valor: '0,00',
+          despesa_finalidade:
+            prev.despesa_finalidade.trim() ||
+            `Ação entre amigos: ${data.nome}`,
+        }))
+      })
+  }, [isNew, acaoIdParam, acoes, empresaId])
+
+  useEffect(() => {
     if (isNew || !empresaId) return
     let mounted = true
 
@@ -338,7 +414,7 @@ export function DespesaFormPage() {
       const { data, error: loadError } = await supabase
         .from('despesas')
         .select(
-          'despesa_id, despesa_fornecedor, despesa_ramo, despesa_secao, despesa_secaonome, atividade_id, projeto_id, evento_id, despesa_numeronota, despesa_emissao, despesa_vencimento, despesa_valor, despesa_saldo, despesa_situacao, despesa_finalidade, despesa_documento',
+          'despesa_id, despesa_fornecedor, despesa_ramo, despesa_secao, despesa_secaonome, atividade_id, projeto_id, evento_id, acao_id, despesa_numeronota, despesa_emissao, despesa_vencimento, despesa_valor, despesa_saldo, despesa_situacao, despesa_finalidade, despesa_documento',
         )
         .eq('despesa_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -374,6 +450,7 @@ export function DespesaFormPage() {
         atividade_id: data.atividade_id?.toString() ?? '',
         projeto_id: data.projeto_id?.toString() ?? '',
         evento_id: data.evento_id?.toString() ?? '',
+        acao_id: data.acao_id?.toString() ?? '',
         despesa_numeronota: data.despesa_numeronota ?? '',
         despesa_emissao: data.despesa_emissao?.slice(0, 10) ?? '',
         despesa_vencimento: data.despesa_vencimento?.slice(0, 10) ?? '',
@@ -453,6 +530,7 @@ export function DespesaFormPage() {
           atividade_id: numOrNull(form.atividade_id),
           projeto_id: numOrNull(form.projeto_id),
           evento_id: numOrNull(form.evento_id),
+          acao_id: numOrNull(form.acao_id),
           despesa_numeronota: strOrNull(form.despesa_numeronota),
           despesa_emissao: strOrNull(form.despesa_emissao),
           despesa_vencimento: strOrNull(form.despesa_vencimento),
@@ -500,6 +578,7 @@ export function DespesaFormPage() {
           atividade_id: numOrNull(form.atividade_id),
           projeto_id: numOrNull(form.projeto_id),
           evento_id: numOrNull(form.evento_id),
+          acao_id: numOrNull(form.acao_id),
           despesa_numeronota: strOrNull(form.despesa_numeronota),
           despesa_emissao: strOrNull(form.despesa_emissao),
           despesa_vencimento: strOrNull(form.despesa_vencimento),
@@ -750,7 +829,7 @@ export function DespesaFormPage() {
                 if (lockedByProjeto) return
                 const value = e.target.value
                 update('projeto_id', value)
-                if (!value || lockedByEvento) return
+                if (!value || lockedByEvento || lockedByAcao) return
                 const proj = projetos.find(
                   (p) => p.projeto_id === Number(value),
                 )
@@ -780,7 +859,7 @@ export function DespesaFormPage() {
                 if (lockedByEvento) return
                 const value = e.target.value
                 update('evento_id', value)
-                if (!value || lockedByProjeto) return
+                if (!value || lockedByProjeto || lockedByAcao) return
                 const ev = eventos.find((item) => item.evento_id === Number(value))
                 if (!ev || scope) return
                 if (ev.ramo != null) update('despesa_ramo', String(ev.ramo))
@@ -792,6 +871,33 @@ export function DespesaFormPage() {
               {eventosFiltrados.map((e) => (
                 <option key={e.evento_id} value={e.evento_id}>
                   {eventoLabel(e)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="acao_id">Ação entre amigos</label>
+            <select
+              id="acao_id"
+              className="select"
+              value={form.acao_id}
+              onChange={(e) => {
+                if (lockedByAcao) return
+                const value = e.target.value
+                update('acao_id', value)
+                if (!value || lockedByProjeto || lockedByEvento) return
+                const ac = acoes.find((item) => item.acao_id === Number(value))
+                if (!ac || scope) return
+                if (ac.ramo != null) update('despesa_ramo', String(ac.ramo))
+                if (ac.secao != null) update('despesa_secao', String(ac.secao))
+              }}
+              disabled={disabled || isPaid || lockedByAcao}
+            >
+              <option value="">Nenhuma</option>
+              {acoesFiltradas.map((a) => (
+                <option key={a.acao_id} value={a.acao_id}>
+                  {acaoLabel(a)}
                 </option>
               ))}
             </select>
