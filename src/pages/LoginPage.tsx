@@ -119,16 +119,15 @@ export function LoginPage() {
           <section className="login-intro">
             <div className="login-logo-wrap">
               <img
-                className="login-logo"
-                src="/logo-erp.png"
-                alt="ERP Escoteiro"
-                width={320}
-                height={320}
+                className="login-logo login-hero"
+                src="/login-hero.png"
+                alt="Sistema ERP Escoteiro — gestão financeira para grupos escoteiros"
+                width={1200}
+                height={630}
               />
             </div>
             <div className="login-brand-copy">
-              <p className="login-kicker">Sistema de gestão escoteira</p>
-              <h1 className="login-brand-title">ERP Escoteiro</h1>
+              <h1 className="sr-only">ERP Escoteiro</h1>
               <p className="login-intro-lead">
                 Organize associados, finanças, eventos com pagamento online e a
                 transparência do seu grupo em um só lugar.
