@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import {
+  EventoConvitesImpressos,
+  type ConviteImpressoItem,
+} from '@/components/EventoConvitesImpressos'
 import { PixSicrediPublicCheckoutModal } from '@/components/PixSicrediPublicCheckoutModal'
 import { formatMoney } from '@/lib/despesas'
-import { createInfinitePayEventoCheckout } from '@/lib/infinitePayCheckout'
+import {
+  checkInfinitePayPedidoStatus,
+  createInfinitePayEventoCheckout,
+} from '@/lib/infinitePayCheckout'
 import type { PixPublicEventoInput } from '@/lib/pixSicrediPublic'
 import {
   comprarConvitesEvento,
@@ -30,6 +37,7 @@ function formatDateBr(value: string | null | undefined) {
 
 export function VendaEventoVendaPage() {
   const { id } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const eventoId = Number(id)
   const { empresa, profile, hasPermission } = useAuth()
   const empresaId = empresa?.id
@@ -48,6 +56,7 @@ export function VendaEventoVendaPage() {
     useState<VendaEventoFormaPagamento | null>(null)
   const [saving, setSaving] = useState(false)
   const [ultimaNumeracao, setUltimaNumeracao] = useState<number[] | null>(null)
+  const [convitesPagos, setConvitesPagos] = useState<ConviteImpressoItem[]>([])
   const [pixOpen, setPixOpen] = useState(false)
   const [pixInput, setPixInput] = useState<PixPublicEventoInput | null>(null)
 
@@ -110,6 +119,57 @@ export function VendaEventoVendaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId, eventoId])
 
+  // Retorno do checkout InfinitePay
+  useEffect(() => {
+    const pago = searchParams.get('pago')
+    const orderNsu = searchParams.get('order_nsu')
+    if (pago !== '1' || !orderNsu) return
+
+    let cancelled = false
+    void (async () => {
+      const slug = searchParams.get('slug') ?? undefined
+      const transactionNsu =
+        searchParams.get('transaction_nsu') ?? undefined
+      const status = await checkInfinitePayPedidoStatus(orderNsu, {
+        slug,
+        transactionNsu,
+      })
+      if (cancelled) return
+      if (status.ok && status.paid) {
+        if (status.convites.length > 0) {
+          setConvitesPagos(status.convites)
+          setUltimaNumeracao(status.convites.map((c) => c.numero))
+        }
+        toast.success(
+          'Pagamento confirmado!',
+          status.convites.length > 0
+            ? `Convite(s): ${status.convites.map((c) => c.numero).join(', ')}`
+            : 'Os convites já constam na lista do evento.',
+        )
+        setQuantidade(1)
+        setNomes([''])
+        setTelefone('')
+        setFormaPagamento(null)
+        await reload()
+      } else if (!status.ok) {
+        setError(status.error)
+      }
+      const next = new URLSearchParams(searchParams)
+      next.delete('pago')
+      next.delete('order_nsu')
+      next.delete('slug')
+      next.delete('transaction_nsu')
+      next.delete('receipt_url')
+      next.delete('capture_method')
+      setSearchParams(next, { replace: true })
+    })()
+
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
   useEffect(() => {
     setNomes((prev) => {
       const next = Array.from({ length: Math.max(1, quantidade) }, (_, i) =>
@@ -125,12 +185,13 @@ export function VendaEventoVendaPage() {
     setTelefone('')
     setFormaPagamento(null)
     setUltimaNumeracao(null)
+    setConvitesPagos([])
     setError(null)
     setPixOpen(false)
     setPixInput(null)
   }
 
-  async function buscarNumeracaoAposPix(fone: string) {
+  async function buscarConvitesAposPix(fone: string) {
     if (!empresaId || !evento?.evento_id) return null
     const { data: compra } = await supabase
       .from('venda_evento_compra')
@@ -147,14 +208,17 @@ export function VendaEventoVendaPage() {
 
     const { data: rows } = await supabase
       .from('venda_evento_convite')
-      .select('numero')
+      .select('numero, nome')
       .eq('compra_id', compra.compra_id)
       .order('numero')
 
-    const numeros = (rows ?? [])
-      .map((r) => Number(r.numero))
-      .filter((n) => Number.isFinite(n))
-    return numeros.length > 0 ? numeros : null
+    const itens = (rows ?? [])
+      .map((r) => ({
+        numero: Number(r.numero),
+        nome: String(r.nome ?? ''),
+      }))
+      .filter((c) => Number.isFinite(c.numero))
+    return itens.length > 0 ? itens : null
   }
 
   async function copiarLink(token: string | null | undefined) {
@@ -222,6 +286,7 @@ export function VendaEventoVendaPage() {
       const fone = telefone.trim()
       setError(null)
       setUltimaNumeracao(null)
+      setConvitesPagos([])
 
       // Prefere InfinitePay (tag na conta bancária); senão PIX Sicredi.
       setSaving(true)
@@ -231,7 +296,7 @@ export function VendaEventoVendaPage() {
         compradorTelefone: fone,
         valor,
         descricao,
-        redirectUrl: `${window.location.origin}/vendas/eventos/${evento.evento_id}/vender?pago=1`,
+        redirectUrl: `${window.location.origin}/vendas/eventos/${evento.evento_id}/vender`,
       })
       setSaving(false)
 
@@ -274,6 +339,12 @@ export function VendaEventoVendaPage() {
     }
 
     setUltimaNumeracao(result.numeros)
+    setConvitesPagos(
+      result.numeros.map((numero, i) => ({
+        numero,
+        nome: nomesLimpos[i] ?? '',
+      })),
+    )
     toast.success('Compra registrada!', result.mensagem)
     setQuantidade(1)
     setNomes([''])
@@ -373,6 +444,18 @@ export function VendaEventoVendaPage() {
         </AlertMessage>
       ) : null}
 
+      {convitesPagos.length > 0 && evento ? (
+        <section className="panel">
+          <EventoConvitesImpressos
+            eventoNome={evento.nome}
+            empresaNome={empresa?.nome}
+            dataEvento={evento.data_evento}
+            imagemUrl={evento.imagem_url}
+            convites={convitesPagos}
+          />
+        </section>
+      ) : null}
+
       <section className="panel">
         <div
           className={`acao-venda-layout ${evento.imagem_url ? 'has-imagem' : ''}`}
@@ -422,6 +505,7 @@ export function VendaEventoVendaPage() {
                         : 1,
                     )
                     setUltimaNumeracao(null)
+                    setConvitesPagos([])
                   }}
                   disabled={saving || disponiveis === 0}
                   required
@@ -579,7 +663,7 @@ export function VendaEventoVendaPage() {
           setPixOpen(false)
           setPixInput(null)
         }}
-        onPaid={() => {
+        onPaid={(payload) => {
           const fone = pixInput?.compradorTelefone?.trim() ?? telefone.trim()
           setPixOpen(false)
           setPixInput(null)
@@ -588,12 +672,20 @@ export function VendaEventoVendaPage() {
           setTelefone('')
           setFormaPagamento(null)
           void (async () => {
-            const numeros = fone ? await buscarNumeracaoAposPix(fone) : null
-            if (numeros) setUltimaNumeracao(numeros)
+            const fromPayload =
+              payload?.convites && payload.convites.length > 0
+                ? payload.convites
+                : null
+            const itens =
+              fromPayload ?? (fone ? await buscarConvitesAposPix(fone) : null)
+            if (itens) {
+              setConvitesPagos(itens)
+              setUltimaNumeracao(itens.map((c) => c.numero))
+            }
             toast.success(
               'Pagamento confirmado!',
-              numeros
-                ? `Convite(s): ${numeros.join(', ')}`
+              itens
+                ? `Convite(s): ${itens.map((c) => c.numero).join(', ')}`
                 : 'Os convites já constam na lista do evento.',
             )
             await reload()

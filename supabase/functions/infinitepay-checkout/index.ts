@@ -86,6 +86,36 @@ async function resolveEventoRamo(
   return ramoId
 }
 
+async function fetchConvitesByCompraId(
+  admin: ReturnType<typeof createClient>,
+  compraId: number | null | undefined,
+): Promise<{ numero: number; nome: string }[]> {
+  if (!compraId) return []
+  const { data } = await admin
+    .from('venda_evento_convite')
+    .select('numero, nome')
+    .eq('compra_id', compraId)
+    .order('numero')
+  return (data ?? []).map((r) => ({
+    numero: Number(r.numero),
+    nome: String(r.nome ?? ''),
+  }))
+}
+
+async function resolveCompraIdPedido(
+  admin: ReturnType<typeof createClient>,
+  pedido: Record<string, unknown>,
+): Promise<number | null> {
+  if (pedido.compra_id != null) return Number(pedido.compra_id)
+  const pedidoId = pedido.id as number
+  const { data } = await admin
+    .from('venda_evento_compra')
+    .select('compra_id')
+    .eq('infinitepay_pedido_id', pedidoId)
+    .maybeSingle()
+  return data?.compra_id != null ? Number(data.compra_id) : null
+}
+
 async function baixarPedidoEvento(
   admin: ReturnType<typeof createClient>,
   pedido: Record<string, unknown>,
@@ -108,24 +138,42 @@ async function baixarPedidoEvento(
   }
 
   if (pedido.compra_id || pedido.status === 'pago') {
-    return { already: true as const }
+    const compraId = await resolveCompraIdPedido(admin, pedido)
+    const convites = await fetchConvitesByCompraId(admin, compraId)
+    return {
+      already: true as const,
+      compra_id: compraId,
+      convites,
+      numeros: convites.map((c) => c.numero),
+    }
   }
 
-  const { count: existing } = await admin
+  const { data: existingCompra } = await admin
     .from('venda_evento_compra')
-    .select('compra_id', { count: 'exact', head: true })
+    .select('compra_id')
     .eq('infinitepay_pedido_id', pedidoId)
-  if ((existing ?? 0) > 0) {
+    .maybeSingle()
+  if (existingCompra?.compra_id) {
     await admin
       .from('infinitepay_pedidos')
       .update({
         status: 'pago',
+        compra_id: existingCompra.compra_id,
         paid_at: new Date().toISOString(),
         raw_webhook: webhookPayload,
         updated_at: new Date().toISOString(),
       })
       .eq('id', pedidoId)
-    return { already: true as const }
+    const convites = await fetchConvitesByCompraId(
+      admin,
+      existingCompra.compra_id,
+    )
+    return {
+      already: true as const,
+      compra_id: Number(existingCompra.compra_id),
+      convites,
+      numeros: convites.map((c) => c.numero),
+    }
   }
 
   const { data: evento, error: eventoError } = await admin
@@ -220,7 +268,28 @@ async function baixarPedidoEvento(
     })
     .eq('id', pedidoId)
 
-  return { already: false as const, compra_id: compra.compra_id, numeros: livres }
+  const convites = livres.map((numero, i) => ({
+    numero,
+    nome: nomes[i] ?? '',
+  }))
+  return {
+    already: false as const,
+    compra_id: compra.compra_id,
+    numeros: livres,
+    convites,
+  }
+}
+
+function withPagoRedirect(url: string, orderNsu: string): string {
+  try {
+    const u = new URL(url)
+    u.searchParams.set('pago', '1')
+    u.searchParams.set('order_nsu', orderNsu)
+    return u.toString()
+  } catch {
+    const sep = url.includes('?') ? '&' : '?'
+    return `${url}${sep}pago=1&order_nsu=${encodeURIComponent(orderNsu)}`
+  }
 }
 
 Deno.serve(async (req) => {
@@ -441,11 +510,11 @@ Deno.serve(async (req) => {
 
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!
       const webhookUrl = `${supabaseUrl}/functions/v1/infinitepay-checkout`
-      const finalRedirect =
-        redirectUrl ||
-        (siteOrigin
+      const finalRedirect = redirectUrl
+        ? withPagoRedirect(redirectUrl, orderNsu)
+        : siteOrigin
           ? `${siteOrigin.replace(/\/$/, '')}/ingresso/${token}?pago=1&order_nsu=${orderNsu}`
-          : undefined)
+          : undefined
 
       const { data: pedido, error: insertError } = await admin
         .from('infinitepay_pedidos')
@@ -558,15 +627,22 @@ Deno.serve(async (req) => {
       }
 
       if (pedido.status === 'pago') {
+        const compraId = await resolveCompraIdPedido(
+          admin,
+          pedido as Record<string, unknown>,
+        )
+        const convites = await fetchConvitesByCompraId(admin, compraId)
         return json({
           ok: true,
           paid: true,
+          compra_id: compraId,
+          convites,
           pedido: {
             id: pedido.id,
             order_nsu: pedido.order_nsu,
             status: pedido.status,
             valor: pedido.valor,
-            compra_id: pedido.compra_id,
+            compra_id: compraId,
           },
         })
       }
@@ -590,12 +666,22 @@ Deno.serve(async (req) => {
         })
         const checkBody = await checkRes.json().catch(() => ({}))
         if (checkBody?.paid || checkBody?.success === true) {
-          await baixarPedidoEvento(
+          const baixado = await baixarPedidoEvento(
             admin,
             pedido as Record<string, unknown>,
-            { ...checkBody, order_nsu: orderNsu, invoice_slug: slug, transaction_nsu: transactionNsu },
+            {
+              ...checkBody,
+              order_nsu: orderNsu,
+              invoice_slug: slug,
+              transaction_nsu: transactionNsu,
+            },
           )
-          return json({ ok: true, paid: true })
+          return json({
+            ok: true,
+            paid: true,
+            compra_id: baixado.compra_id ?? null,
+            convites: baixado.convites ?? [],
+          })
         }
       }
 

@@ -115,10 +115,30 @@ export async function createInfinitePayEventoCheckout(input: {
   }
 }
 
+export type EventoConvitePago = {
+  numero: number
+  nome: string
+}
+
+function parseConvitesPago(raw: unknown): EventoConvitePago[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      const row = item as { numero?: unknown; nome?: unknown }
+      const numero = Number(row.numero)
+      if (!Number.isFinite(numero)) return null
+      return { numero, nome: String(row.nome ?? '').trim() }
+    })
+    .filter((c): c is EventoConvitePago => c != null)
+}
+
 export async function checkInfinitePayPedidoStatus(
   orderNsu: string,
   opts?: { slug?: string; transactionNsu?: string },
-): Promise<{ ok: true; paid: boolean } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; paid: boolean; compraId: number | null; convites: EventoConvitePago[] }
+  | { ok: false; error: string }
+> {
   const { data, error } = await supabase.functions.invoke(
     'infinitepay-checkout',
     {
@@ -136,5 +156,10 @@ export async function checkInfinitePayPedidoStatus(
     return { ok: false, error: fromBody || error.message }
   }
   if (data?.error) return { ok: false, error: String(data.error) }
-  return { ok: true, paid: !!data?.paid }
+  return {
+    ok: true,
+    paid: !!data?.paid,
+    compraId: data?.compra_id != null ? Number(data.compra_id) : null,
+    convites: parseConvitesPago(data?.convites),
+  }
 }

@@ -119,6 +119,23 @@ export async function createPixSicrediPublicAcao(
   return createPixSicrediPublic(input)
 }
 
+export type EventoConvitePagoPublic = {
+  numero: number
+  nome: string
+}
+
+function parseConvitesPago(raw: unknown): EventoConvitePagoPublic[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      const row = item as { numero?: unknown; nome?: unknown }
+      const numero = Number(row.numero)
+      if (!Number.isFinite(numero)) return null
+      return { numero, nome: String(row.nome ?? '').trim() }
+    })
+    .filter((c): c is EventoConvitePagoPublic => c != null)
+}
+
 export async function checkPixSicrediPublicStatus(
   cobrancaId: number,
   linkToken: string,
@@ -128,6 +145,7 @@ export async function checkPixSicrediPublicStatus(
       paid: boolean
       baixado: boolean
       cobranca: PixCobrancaResumo
+      convites: EventoConvitePagoPublic[]
     }
   | { ok: false; error: string }
 > {
@@ -153,5 +171,6 @@ export async function checkPixSicrediPublicStatus(
     paid: !!data?.paid,
     baixado: !!data?.baixado,
     cobranca: data.cobranca as PixCobrancaResumo,
+    convites: parseConvitesPago(data?.convites),
   }
 }

@@ -961,6 +961,29 @@ async function concluirEBaixar(
   return { paid: true, baixado: true }
 }
 
+async function fetchConvitesVendaEventoByCobranca(
+  admin: ReturnType<typeof createClient>,
+  cobrancaId: number,
+  tipo: string,
+): Promise<{ numero: number; nome: string }[]> {
+  if (tipo !== 'venda_evento') return []
+  const { data: compra } = await admin
+    .from('venda_evento_compra')
+    .select('compra_id')
+    .eq('pix_cobranca_id', cobrancaId)
+    .maybeSingle()
+  if (!compra?.compra_id) return []
+  const { data } = await admin
+    .from('venda_evento_convite')
+    .select('numero, nome')
+    .eq('compra_id', compra.compra_id)
+    .order('numero')
+  return (data ?? []).map((r) => ({
+    numero: Number(r.numero),
+    nome: String(r.nome ?? ''),
+  }))
+}
+
 async function baixarVendaEvento(
   admin: ReturnType<typeof createClient>,
   cob: Record<string, unknown>,
@@ -1478,10 +1501,16 @@ Deno.serve(async (req) => {
         }
 
         if (cob.baixado_em || cob.status === 'CONCLUIDA') {
+          const convites = await fetchConvitesVendaEventoByCobranca(
+            admin,
+            Number(cob.id),
+            String(cob.tipo),
+          )
           return json({
             ok: true,
             paid: true,
             baixado: true,
+            convites,
             cobranca: {
               id: cob.id,
               txid: cob.txid,
@@ -1529,9 +1558,15 @@ Deno.serve(async (req) => {
             cob as Record<string, unknown>,
             remote,
           )
+          const convites = await fetchConvitesVendaEventoByCobranca(
+            admin,
+            Number(cob.id),
+            String(cob.tipo),
+          )
           return json({
             ok: true,
             ...result,
+            convites,
             cobranca: {
               id: cob.id,
               txid: cob.txid,

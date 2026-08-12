@@ -6,8 +6,13 @@ import {
   checkPixSicrediPublicStatus,
   createPixSicrediPublic,
   pixPublicPaymentKey,
+  type EventoConvitePagoPublic,
   type PixPublicInput,
 } from '@/lib/pixSicrediPublic'
+
+export type PixPublicPaidPayload = {
+  convites: EventoConvitePagoPublic[]
+}
 
 type Props = {
   open: boolean
@@ -15,7 +20,7 @@ type Props = {
   input: PixPublicInput | null
   paidMessage?: string
   onClose: () => void
-  onPaid: () => void
+  onPaid: (payload?: PixPublicPaidPayload) => void
 }
 
 export function PixSicrediPublicCheckoutModal({
@@ -138,7 +143,9 @@ export function PixSicrediPublicCheckoutModal({
         setMessage(paidMessage)
         if (!paidNotified.current) {
           paidNotified.current = true
-          onPaidRef.current()
+          onPaidRef.current({
+            convites: result.convites ?? [],
+          })
         }
       }
     }

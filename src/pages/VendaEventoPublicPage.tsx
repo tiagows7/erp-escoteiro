@@ -1,6 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { AlertMessage } from '@/components/AlertMessage'
+import {
+  EventoConvitesImpressos,
+  type ConviteImpressoItem,
+} from '@/components/EventoConvitesImpressos'
 import { PixSicrediPublicCheckoutModal } from '@/components/PixSicrediPublicCheckoutModal'
 import { formatMoney } from '@/lib/despesas'
 import {
@@ -36,6 +40,7 @@ export function VendaEventoPublicPage() {
   const [telefone, setTelefone] = useState('')
   const [pixOpen, setPixOpen] = useState(false)
   const [pixInput, setPixInput] = useState<PixPublicEventoInput | null>(null)
+  const [convitesPagos, setConvitesPagos] = useState<ConviteImpressoItem[]>([])
 
   async function load() {
     if (!token) {
@@ -92,6 +97,9 @@ export function VendaEventoPublicPage() {
         setSuccess(
           'Pagamento confirmado! Seus convites já constam na lista do evento.',
         )
+        if (status.convites.length > 0) {
+          setConvitesPagos(status.convites)
+        }
         setQuantidade(1)
         setNomes([''])
         setTelefone('')
@@ -175,6 +183,7 @@ export function VendaEventoPublicPage() {
 
     setError(null)
     setSuccess(null)
+    setConvitesPagos([])
 
     const prefer = payConfig?.prefer ?? 'nenhum'
     const hasInfinite = payConfig?.infinitepay === true
@@ -276,6 +285,18 @@ export function VendaEventoPublicPage() {
         <AlertMessage tone="success" title="Pronto!">
           {success}
         </AlertMessage>
+      ) : null}
+
+      {convitesPagos.length > 0 ? (
+        <section className="panel">
+          <EventoConvitesImpressos
+            eventoNome={info.evento_nome}
+            empresaNome={info.empresa_nome}
+            dataEvento={info.data_evento}
+            imagemUrl={info.imagem_url}
+            convites={convitesPagos}
+          />
+        </section>
       ) : null}
 
       <section className="panel">
@@ -404,10 +425,13 @@ export function VendaEventoPublicPage() {
           setPixOpen(false)
           setPixInput(null)
         }}
-        onPaid={() => {
+        onPaid={(payload) => {
           setSuccess(
             'Pagamento confirmado! Seus convites já constam na lista do evento.',
           )
+          if (payload?.convites?.length) {
+            setConvitesPagos(payload.convites)
+          }
           setQuantidade(1)
           setNomes([''])
           setTelefone('')

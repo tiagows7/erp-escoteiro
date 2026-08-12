@@ -965,6 +965,118 @@ button {
   display: none;
 }
 
+.evento-convites-impressos {
+  margin: 1rem 0 1.5rem;
+}
+
+.evento-convites-impressos-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.evento-convites-print-sheet {
+  display: grid;
+  gap: 1rem;
+}
+
+.evento-convite-card {
+  border: 2px solid var(--line, #c9d2c4);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.evento-convite-card-img {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+}
+
+.evento-convite-card-body {
+  padding: 1.1rem 1.25rem 1.25rem;
+  text-align: center;
+}
+
+.evento-convite-card-empresa {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  color: var(--ink-muted, #5c6b5a);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.evento-convite-card-titulo {
+  margin: 0 0 0.35rem;
+  font-size: 1.35rem;
+  line-height: 1.25;
+  color: var(--ink, #1f2a1c);
+}
+
+.evento-convite-card-data {
+  margin: 0 0 0.9rem;
+  color: var(--ink-muted, #5c6b5a);
+}
+
+.evento-convite-card-label {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted, #5c6b5a);
+}
+
+.evento-convite-card-numero {
+  margin: 0.15rem 0 0.65rem;
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--brand, #2f6b3a);
+}
+
+.evento-convite-card-nome {
+  margin: 0 0 0.85rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.evento-convite-card-rodape {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-muted, #5c6b5a);
+}
+
+@media print {
+  .evento-convites-impressos-actions {
+    display: none !important;
+  }
+
+  body:has(.evento-convites-impressos) .page-header,
+  body:has(.evento-convites-impressos) .public-rifa-header,
+  body:has(.evento-convites-impressos) .alert-message,
+  body:has(.evento-convites-impressos) .panel:not(:has(.evento-convites-impressos)),
+  body:has(.evento-convites-impressos) .confirm-overlay {
+    display: none !important;
+  }
+
+  .evento-convite-card {
+    border-color: #222;
+    border-radius: 0;
+    margin: 0 0 1.25rem;
+  }
+
+  .evento-convite-card + .evento-convite-card {
+    page-break-before: always;
+    break-before: page;
+  }
+}
+
 @media (max-width: 900px) {
   .despesas-relatorio-resumo-grid {
     grid-template-columns: 1fr;
