@@ -120,37 +120,37 @@ export async function createInfinitePayEventoCheckout(input: {
 export type EventoConvitePago = {
   numero: number
   nome: string
-  tipo_label?: string | null
-  valor_unitario?: number | null
+  tipo_label: string | null
+  valor_unitario: number | null
 }
 
 function parseConvitesPago(raw: unknown): EventoConvitePago[] {
   if (!Array.isArray(raw)) return []
-  return raw
-    .map((item) => {
-      const row = item as {
-        numero?: unknown
-        nome?: unknown
-        tipo_label?: unknown
-        valor_unitario?: unknown
-      }
-      const numero = Number(row.numero)
-      if (!Number.isFinite(numero)) return null
-      const valor =
-        row.valor_unitario != null && Number.isFinite(Number(row.valor_unitario))
-          ? Number(row.valor_unitario)
-          : null
-      return {
-        numero,
-        nome: String(row.nome ?? '').trim(),
-        tipo_label:
-          row.tipo_label != null && String(row.tipo_label).trim()
-            ? String(row.tipo_label).trim()
-            : null,
-        valor_unitario: valor,
-      }
+  const out: EventoConvitePago[] = []
+  for (const item of raw) {
+    const row = item as {
+      numero?: unknown
+      nome?: unknown
+      tipo_label?: unknown
+      valor_unitario?: unknown
+    }
+    const numero = Number(row.numero)
+    if (!Number.isFinite(numero)) continue
+    const valor =
+      row.valor_unitario != null && Number.isFinite(Number(row.valor_unitario))
+        ? Number(row.valor_unitario)
+        : null
+    out.push({
+      numero,
+      nome: String(row.nome ?? '').trim(),
+      tipo_label:
+        row.tipo_label != null && String(row.tipo_label).trim()
+          ? String(row.tipo_label).trim()
+          : null,
+      valor_unitario: valor,
     })
-    .filter((c): c is EventoConvitePago => c != null)
+  }
+  return out
 }
 
 export async function checkInfinitePayPedidoStatus(
