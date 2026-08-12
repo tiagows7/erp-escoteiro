@@ -33,6 +33,21 @@ function adminClient() {
   })
 }
 
+async function resolveCallerUserId(req: Request): Promise<string | null> {
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader?.startsWith('Bearer ')) return null
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+  const caller = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: authHeader } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  const {
+    data: { user },
+  } = await caller.auth.getUser()
+  return user?.id ?? null
+}
+
 type EventoTipoResolvido = {
   tipo_id: number
   label: string
@@ -312,7 +327,9 @@ async function baixarPedidoEvento(
       comprador_telefone: telefone ? telefone.slice(0, 40) : null,
       valor: valorTotal,
       forma_pagamento: 'infinitepay',
-      vendido_por: null,
+      vendido_por: pedido.vendido_por
+        ? String(pedido.vendido_por)
+        : null,
       infinitepay_pedido_id: pedidoId,
     })
     .select('compra_id')
@@ -617,6 +634,8 @@ Deno.serve(async (req) => {
         String(body.descricao ?? '').trim() ||
         `${evento.nome} · ${nomesOrdered.length} convite(s)`
 
+      const vendidoPor = await resolveCallerUserId(req)
+
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!
       const webhookUrl = `${supabaseUrl}/functions/v1/infinitepay-checkout`
       const finalRedirect = redirectUrl
@@ -639,6 +658,7 @@ Deno.serve(async (req) => {
           valor,
           descricao,
           status: 'pendente',
+          vendido_por: vendidoPor,
         })
         .select('id, order_nsu')
         .single()
@@ -664,7 +684,9 @@ Deno.serve(async (req) => {
         webhook_url: webhookUrl,
         items: [
           {
-            quantity: nomesOrdered.length,
+            // price = valor unitário em centavos; quantity multiplica.
+            // Enviamos 1 item com o total para não multiplicar quantidade × total.
+            quantity: 1,
             price: valorCentavos,
             description: descricao.slice(0, 120),
           },
