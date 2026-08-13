@@ -145,8 +145,9 @@ export function ContaBancariaModal({
               {editing ? 'Editar conta bancária' : 'Cadastrar banco'}
             </h3>
             <p className="muted">
-              Dados da conta e credenciais PIX. Sem ramo = mensalidades do
-              grupo; com ramo = atividades.
+              Informe os dados da conta e, nas abas, as integrações Sicredi e
+              InfinitePay. Sem ramo = mensalidades do grupo; com ramo =
+              atividades.
             </p>
           </div>
           <button type="button" className="btn btn-soft" onClick={onClose}>
@@ -198,6 +199,7 @@ export function ContaBancariaModal({
           </div>
 
           <ContaBancariaFieldsForm
+            key={editing?.id ?? 'nova-conta'}
             idPrefix="conta-banco-modal"
             value={fields}
             onChange={setFields}

@@ -90,8 +90,8 @@ button {
 }
 
 .brand-logo {
-  width: 78px;
-  height: 78px;
+  width: 96px;
+  height: 96px;
   object-fit: contain;
   display: block;
   margin: 0 auto 0.65rem;
@@ -720,9 +720,14 @@ button {
 }
 
 .conta-bancaria-dialog {
-  width: min(640px, 100%);
+  width: min(720px, 100%);
   max-height: min(90vh, 820px);
   overflow: auto;
+}
+
+.conta-bancaria-fields .tabs {
+  margin-top: 1.15rem;
+  margin-bottom: 1rem;
 }
 
 .associado-mensalidade-resumo {
@@ -2434,18 +2439,19 @@ button {
 table.data {
   width: 100%;
   border-collapse: collapse;
+  font-size: 0.82rem;
 }
 
 table.data th,
 table.data td {
   text-align: left;
-  padding: 0.8rem 0.65rem;
+  padding: 0.5rem 0.45rem;
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
 
 table.data th {
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ink-muted);
@@ -2457,6 +2463,16 @@ table.data tbody tr {
 
 table.data tbody tr:hover {
   background: rgba(47, 125, 98, 0.05);
+}
+
+table.data .btn {
+  font-size: 0.75rem;
+  padding: 0.28rem 0.55rem;
+  min-height: 0;
+}
+
+table.data .badge {
+  font-size: 0.68rem;
 }
 
 .badge {
@@ -2628,16 +2644,54 @@ table.data tbody tr:hover {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 1.25rem;
-  padding: clamp(1.25rem, 3vw, 2.5rem);
-  overflow: hidden;
+  justify-content: flex-start;
+  gap: 1rem;
+  padding: clamp(0.85rem, 2.2vw, 1.5rem) clamp(1.25rem, 3vw, 2.5rem)
+    clamp(1.25rem, 3vw, 2.5rem);
+  overflow-x: hidden;
+  overflow-y: auto;
   background:
     radial-gradient(ellipse 70% 55% at 12% 18%, rgba(70, 140, 230, 0.28), transparent 58%),
     radial-gradient(ellipse 55% 45% at 88% 12%, rgba(126, 182, 255, 0.18), transparent 52%),
     radial-gradient(ellipse 50% 40% at 70% 88%, rgba(18, 80, 160, 0.35), transparent 55%),
     linear-gradient(155deg, #06101f 0%, #0a2248 46%, #123f8a 100%);
   color: var(--login-ink);
+}
+
+.login-topbar {
+  position: relative;
+  z-index: 2;
+  width: min(1120px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  animation: rise 480ms ease both;
+}
+
+.login-topbar-brand {
+  margin: 0;
+  font-family: 'Outfit', var(--font-display);
+  font-size: clamp(1.15rem, 2.4vw, 1.45rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #fff;
+}
+
+.login-topbar-enter {
+  min-width: 7.5rem;
+  min-height: 42px;
+}
+
+.login-topbar-enter.btn-soft {
+  background: rgba(247, 249, 252, 0.12);
+  border-color: rgba(210, 230, 255, 0.35);
+  color: #f2f7ff;
+}
+
+.login-topbar-enter.btn-soft:hover {
+  background: rgba(247, 249, 252, 0.2);
+  color: #fff;
 }
 
 .login-atmosphere {
@@ -2700,11 +2754,15 @@ table.data tbody tr:hover {
   align-items: stretch;
 }
 
+.login-pair-solo {
+  grid-template-columns: 1fr;
+}
+
 .login-intro {
   min-width: 0;
   display: grid;
-  grid-template-columns: 1fr;
-  gap: clamp(0.75rem, 1.8vw, 1.15rem);
+  grid-template-columns: minmax(9rem, 16rem) minmax(0, 1fr);
+  gap: clamp(1rem, 2.5vw, 1.75rem);
   align-items: start;
   justify-items: stretch;
 }
@@ -2712,38 +2770,34 @@ table.data tbody tr:hover {
 .login-logo-wrap {
   position: relative;
   width: 100%;
+  max-width: 16rem;
   height: auto;
   min-height: 0;
-  aspect-ratio: 16 / 9;
-  justify-self: stretch;
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  justify-self: start;
+  align-self: start;
+  border-radius: 0;
+  overflow: visible;
+  box-shadow: none;
+  background: transparent;
 }
 
 .login-logo {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
   display: block;
-  object-fit: cover;
-  object-position: center;
-  filter: none;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  object-position: left center;
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.35));
   animation: none;
-}
-
-.login-logo.login-hero {
-  object-fit: cover;
 }
 
 .login-brand-copy {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.55rem;
   justify-items: start;
   text-align: left;
   max-width: 36rem;
-  align-content: start;
+  align-content: center;
 }
 
 .login-kicker {
@@ -2758,19 +2812,33 @@ table.data tbody tr:hover {
 .login-brand-title {
   margin: 0;
   font-family: 'Outfit', var(--font-display);
-  font-size: clamp(2.2rem, 4.6vw, 3.25rem);
+  font-size: clamp(1.35rem, 2.6vw, 1.85rem);
   font-weight: 700;
-  line-height: 1.05;
-  letter-spacing: -0.04em;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
   color: #fff;
   text-wrap: balance;
 }
 
 .login-intro-lead {
   margin: 0;
-  font-size: clamp(0.98rem, 1.5vw, 1.1rem);
-  line-height: 1.5;
+  font-size: clamp(0.92rem, 1.35vw, 1.02rem);
+  line-height: 1.55;
   color: var(--login-muted);
+  text-wrap: pretty;
+}
+
+.login-intro-lead strong,
+.login-intro-tagline strong {
+  color: #f3f7ff;
+  font-weight: 650;
+}
+
+.login-intro-tagline {
+  margin: 0.25rem 0 0;
+  font-size: clamp(0.95rem, 1.4vw, 1.05rem);
+  line-height: 1.45;
+  color: rgba(210, 230, 255, 0.95);
   text-wrap: pretty;
 }
 
@@ -2809,13 +2877,11 @@ table.data tbody tr:hover {
 .login-access {
   min-width: 0;
   display: flex;
-  animation: rise 640ms ease both;
-  animation-delay: 90ms;
+  animation: rise 400ms ease both;
 }
 
 .login-card {
   width: 100%;
-  height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -2869,13 +2935,13 @@ table.data tbody tr:hover {
   }
 
   .login-intro {
-    grid-template-columns: 1fr;
-    align-items: start;
+    grid-template-columns: minmax(7.5rem, 12rem) minmax(0, 1fr);
+    align-items: center;
   }
 
   .login-logo-wrap {
-    min-height: 0;
-    aspect-ratio: 16 / 9;
+    width: 100%;
+    justify-self: start;
   }
 
   .login-features {
@@ -2885,29 +2951,29 @@ table.data tbody tr:hover {
 
 @media (max-width: 560px) {
   .login-intro {
-    grid-template-columns: 1fr;
-    justify-items: stretch;
-    text-align: left;
+    grid-template-columns: minmax(6.5rem, 9rem) minmax(0, 1fr);
+    gap: 0.85rem;
+    align-items: center;
   }
 
   .login-logo-wrap {
-    position: relative;
     width: 100%;
-    min-height: 0;
-    height: auto;
-    aspect-ratio: 16 / 9;
+    justify-self: start;
   }
 
   .login-logo {
-    position: absolute;
+    position: static;
     width: 100%;
-    height: 100%;
-    object-position: center;
+    height: auto;
   }
 
   .login-brand-copy {
     justify-items: start;
     text-align: left;
+  }
+
+  .login-intro-lead {
+    font-size: 0.92rem;
   }
 
   .login-features {
@@ -2916,7 +2982,7 @@ table.data tbody tr:hover {
   }
 
   .login-brand-title {
-    font-size: clamp(1.9rem, 8vw, 2.4rem);
+    font-size: clamp(1.15rem, 4.5vw, 1.4rem);
   }
 }
 
@@ -3030,44 +3096,40 @@ table.data tbody tr:hover {
   font-size: 0.9rem;
 }
 
-.login-whatsapp {
-  display: flex;
-  flex-wrap: wrap;
+.login-whatsapp-fab {
+  position: fixed;
+  z-index: 40;
+  right: max(1rem, env(safe-area-inset-right, 0px));
+  bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  width: 3.5rem;
+  height: 3.5rem;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem 1rem;
-  margin-top: 1.5rem;
-  padding: 1rem 1.15rem;
-  border: 1px solid rgba(210, 230, 255, 0.14);
-  border-radius: 14px;
-  background: rgba(10, 28, 52, 0.35);
-  text-align: center;
-  animation: rise 700ms ease both;
-  animation-delay: 120ms;
-}
-
-.login-whatsapp p {
-  margin: 0;
-  color: var(--login-muted);
-  font-size: 0.92rem;
-}
-
-.login-whatsapp-btn {
-  background: #1f8f4e;
-  color: #f4fff8;
-  border: 1px solid rgba(180, 255, 210, 0.22);
-  text-decoration: none;
-}
-
-.login-whatsapp-btn:hover {
-  background: #187a42;
+  border-radius: 999px;
+  background: #25d366;
   color: #fff;
+  box-shadow: 0 10px 28px rgba(8, 40, 20, 0.45);
+  text-decoration: none;
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.login-whatsapp-fab:hover {
+  background: #1ebe57;
+  color: #fff;
+  transform: translateY(-2px) scale(1.04);
+}
+
+.login-whatsapp-fab:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
 }
 
 .login-footer {
   position: relative;
   z-index: 1;
   margin: 1.75rem 0 0;
+  padding-bottom: 4.5rem;
   color: rgba(232, 240, 255, 0.62);
   font-size: 0.8rem;
   letter-spacing: 0.02em;
@@ -4453,12 +4515,12 @@ table.data tbody tr:hover {
 
   .data {
     min-width: 640px;
-    font-size: 0.86rem;
+    font-size: 0.8rem;
   }
 
   .data th,
   .data td {
-    padding: 0.55rem 0.55rem;
+    padding: 0.45rem 0.4rem;
   }
 
   .btn {

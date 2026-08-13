@@ -540,7 +540,8 @@ export function PortalTransparenciaPage() {
                 </article>
               </div>
 
-              {saldoLocais.length > 0 ? (
+              {/* Oculto temporariamente: "Onde está o valor" */}
+              {false && saldoLocais.length > 0 ? (
                 <div className="portal-locais">
                   <div className="portal-locais-toolbar">
                     <div>
