@@ -37,6 +37,7 @@ import { UsuarioFormPage } from '@/pages/UsuarioFormPage'
 import { FornecedoresPage } from '@/pages/FornecedoresPage'
 import { FornecedorFormPage } from '@/pages/FornecedorFormPage'
 import { CalendarioGrupoPage } from '@/pages/CalendarioGrupoPage'
+import { HomeRedirectPage } from '@/pages/HomeRedirectPage'
 import { TipoMensalidadePage } from '@/pages/TipoMensalidadePage'
 import { TipoMensalidadeFormPage } from '@/pages/TipoMensalidadeFormPage'
 import { TipoPagamentoPage } from '@/pages/TipoPagamentoPage'
@@ -91,8 +92,9 @@ export default function App() {
               </ProtectedRoute>
             }
           >
+            <Route index element={<HomeRedirectPage />} />
             <Route
-              index
+              path="dashboard"
               element={
                 <RequirePermission permission="dashboard.view">
                   <DashboardPage />

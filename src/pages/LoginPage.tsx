@@ -97,7 +97,7 @@ export function LoginPage() {
   }
 
   if (!loading && session) {
-    return <Navigate to="/calendario" replace />
+    return <Navigate to="/" replace />
   }
 
   async function onSubmit(event: FormEvent) {

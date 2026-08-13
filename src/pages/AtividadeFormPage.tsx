@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
@@ -40,6 +40,7 @@ function unidadeLabel(ramoId: number | null): string {
 
 export function AtividadeFormPage() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
   const isNew = !id || id === 'novo'
   const navigate = useNavigate()
   const { empresa, profile, hasPermission } = useAuth()
@@ -50,6 +51,7 @@ export function AtividadeFormPage() {
   const associadoLogin = isAssociadoLogin(profile)
   const ramoScoped = useMemo(() => staffRamoScope(profile), [profile])
   const toast = useToast()
+  const dataFromQuery = (searchParams.get('data') || '').slice(0, 10)
 
   useEffect(() => {
     if (!associadoLogin || !id || id === 'novo') return
@@ -62,7 +64,10 @@ export function AtividadeFormPage() {
     }
   }, [associadoLogin, isNew, navigate])
 
-  const [form, setForm] = useState(emptyForm)
+  const [form, setForm] = useState(() => ({
+    ...emptyForm,
+    data_atividade: dataFromQuery,
+  }))
   const [ramos, setRamos] = useState<Ramo[]>([])
   const [secoes, setSecoes] = useState<Secao[]>([])
   const [patrulhas, setPatrulhas] = useState<Patrulha[]>([])
@@ -92,6 +97,13 @@ export function AtividadeFormPage() {
     if (ramoScoped == null || !isNew) return
     setForm((prev) => ({ ...prev, ramo: String(ramoScoped) }))
   }, [ramoScoped, isNew])
+
+  useEffect(() => {
+    if (!isNew || !dataFromQuery) return
+    setForm((prev) =>
+      prev.data_atividade ? prev : { ...prev, data_atividade: dataFromQuery },
+    )
+  }, [isNew, dataFromQuery])
 
   useEffect(() => {
     if (!empresaId) return

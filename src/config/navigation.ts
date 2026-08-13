@@ -1,9 +1,5 @@
 import type { Permission } from '@/lib/roles'
-import {
-  isAssociadoLogin,
-  isGrupoAdmin,
-  isRamoFinanceiroScoped,
-} from '@/lib/roles'
+import { isAssociadoLogin, isRamoFinanceiroScoped } from '@/lib/roles'
 import type { Profile } from '@/types/database'
 
 export type NavLinkItem = {
@@ -34,9 +30,8 @@ export type NavItem = NavLinkItem | NavGroupItem
 export const NAV_ITEMS: NavItem[] = [
   {
     type: 'link',
-    to: '/',
+    to: '/dashboard',
     label: 'Dashboard',
-    end: true,
     permission: 'dashboard.view',
   },
   {
@@ -85,28 +80,24 @@ export const NAV_ITEMS: NavItem[] = [
         to: '/cadastros/tipo-pagamento',
         label: 'Tipo de Pagamento',
         permission: 'financeiro.view',
-        grupoAdminOnly: true,
       },
       {
         type: 'link',
         to: '/secoes',
         label: 'Seção',
         permission: 'estrutura.view',
-        grupoAdminOnly: true,
       },
       {
         type: 'link',
         to: '/patrulhas',
         label: 'Matilhas / Patrulhas / Clã',
         permission: 'estrutura.view',
-        grupoAdminOnly: true,
       },
       {
         type: 'link',
         to: '/cadastros/tipo-mensalidade',
         label: 'Tipo de Mensalidade',
         permission: 'financeiro.view',
-        grupoAdminOnly: true,
       },
       {
         type: 'link',
@@ -265,7 +256,7 @@ export function navItemsForProfile(
     const associadoMenus: NavItem[] = [
       {
         type: 'link',
-        to: '/',
+        to: '/dashboard',
         label: 'Dashboard',
         end: true,
         permission: 'dashboard.view',
@@ -321,7 +312,7 @@ export function navItemsForProfile(
       // Projetos e Eventos/convites: sempre visíveis para associado.
       // Ação entre amigos: só aparece se tiver faixa (filtrado no AppLayout).
       for (const alwaysTo of [
-        '/',
+        '/dashboard',
         '/calendario',
         '/projetos',
         '/vendas/eventos',
@@ -342,14 +333,13 @@ export function navItemsForProfile(
     return associadoMenus
   }
 
-  const admin = isGrupoAdmin(profile?.role)
-
   const items = NAV_ITEMS.map((item) => {
     if (item.type !== 'group') return item
+    // Login por e-mail: itens de cadastro seguem só a permissão do papel.
     return {
       ...item,
       children: item.children.filter(
-        (child) => admin || !child.grupoAdminOnly,
+        (child) => !child.grupoAdminOnly || !isAssociadoLogin(profile),
       ),
     }
   }).filter((item) => {

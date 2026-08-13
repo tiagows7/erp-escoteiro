@@ -4933,6 +4933,219 @@ form.panel .muted,
   font-size: 0.95rem;
 }
 
+.calendario-toolbar .btn.is-active {
+  background: var(--accent-soft);
+  color: var(--forest);
+  border-color: var(--accent);
+}
+
+.calendario-meses-stack {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.calendario-mes-bloco {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.calendario-mes-bloco-titulo {
+  margin: 0;
+  font-size: 1.05rem;
+  text-transform: capitalize;
+  color: var(--forest);
+}
+
+.calendario-matriz-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.calendario-matriz {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 720px;
+}
+
+.calendario-matriz th,
+.calendario-matriz td {
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  vertical-align: top;
+  padding: 0.65rem 0.7rem;
+}
+
+.calendario-matriz th:last-child,
+.calendario-matriz td:last-child {
+  border-right: none;
+}
+
+.calendario-matriz thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f3f7f5;
+  font-size: 0.82rem;
+  text-transform: capitalize;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.calendario-matriz thead th.calendario-matriz-col--grupo {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.calendario-matriz-col--lobinho {
+  background: #fff4b8;
+}
+
+.calendario-matriz-col--escoteiro {
+  background: #d7f0df;
+}
+
+.calendario-matriz-col--senior {
+  background: #f0d4da;
+}
+
+.calendario-matriz-col--pioneiro {
+  background: #f8d0d0;
+}
+
+.calendario-matriz-col--grupo {
+  background: #d7e8fb;
+}
+
+.calendario-matriz thead .calendario-matriz-col--lobinho {
+  background: #f2d35b;
+  color: #3d3208;
+}
+
+.calendario-matriz thead .calendario-matriz-col--escoteiro {
+  background: #3f9d6a;
+  color: #fff;
+}
+
+.calendario-matriz thead .calendario-matriz-col--senior {
+  background: #7a1f3d;
+  color: #fff;
+}
+
+.calendario-matriz thead .calendario-matriz-col--pioneiro {
+  background: #c62828;
+  color: #fff;
+}
+
+.calendario-matriz thead .calendario-matriz-col--grupo {
+  background: #1e6bb8;
+  color: #fff;
+}
+
+.calendario-matriz-col--lobinho .calendario-matriz-item {
+  background: #fffbeb;
+  border-color: #e6c84a;
+}
+
+.calendario-matriz-col--escoteiro .calendario-matriz-item {
+  background: #effaf3;
+  border-color: #6bb58a;
+}
+
+.calendario-matriz-col--senior .calendario-matriz-item {
+  background: #faf0f3;
+  border-color: #b86b84;
+}
+
+.calendario-matriz-col--pioneiro .calendario-matriz-item {
+  background: #fff1f1;
+  border-color: #e08a8a;
+}
+
+.calendario-matriz-col--grupo .calendario-matriz-item {
+  background: #f0f7ff;
+  border-color: #7aa8d9;
+}
+
+.calendario-matriz-data-col {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 7.5rem;
+  min-width: 7.5rem;
+  background: #f8faf9;
+  text-align: left;
+}
+
+.calendario-matriz thead .calendario-matriz-data-col {
+  z-index: 3;
+  text-align: left;
+}
+
+.calendario-matriz tbody th.calendario-matriz-data-col {
+  display: grid;
+  gap: 0.1rem;
+  font-weight: 650;
+}
+
+.calendario-matriz-dia {
+  font-size: 0.9rem;
+  color: var(--ink);
+  text-transform: capitalize;
+}
+
+.calendario-matriz-semana {
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+  text-transform: capitalize;
+  font-weight: 500;
+}
+
+.calendario-matriz-vazio {
+  color: var(--ink-muted);
+  opacity: 0.45;
+  font-size: 0.85rem;
+}
+
+.calendario-matriz-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.calendario-matriz-item {
+  width: 100%;
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fafbfa;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.calendario-matriz-item:disabled {
+  cursor: default;
+}
+
+.calendario-matriz-item strong {
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.calendario-matriz-item span {
+  font-size: 0.72rem;
+  color: var(--ink-muted);
+}
+
 .calendario-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(240px, 0.9fr);

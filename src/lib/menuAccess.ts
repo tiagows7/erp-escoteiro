@@ -17,7 +17,8 @@ export type MenuAccessOption = {
 
 /** Menus padrão do portal do associado (login por registro / importação Excel). */
 export const ASSOCIADO_PORTAL_MENU_KEYS = [
-  '/',
+  '/dashboard',
+  '/calendario',
   '/portal-transparencia',
   '/conquistas',
   '/atividades',
