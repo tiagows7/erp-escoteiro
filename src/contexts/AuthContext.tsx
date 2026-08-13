@@ -11,8 +11,11 @@ import { supabase } from '@/lib/supabase'
 import {
   canForProfile,
   canAnyForProfile,
+  clearLoginVia,
+  inferLoginViaFromAuthEmail,
   normalizeRole,
   ROLE_LABELS,
+  setLoginVia,
   type AppRole,
   type Permission,
 } from '@/lib/roles'
@@ -117,9 +120,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
 
+      // Garante modo equipe vs associado mesmo após F5 (sem novo signIn).
+      inferLoginViaFromAuthEmail(next.user.email)
+
       const loaded = await loadProfile(next.user.id)
       if (!mounted) return
-      setProfile(loaded.profile)
+      // profiles.email às vezes vem vazio; usa o e-mail do Auth.
+      const authEmail = next.user.email?.trim() || null
+      const profile = loaded.profile
+        ? {
+            ...loaded.profile,
+            email: loaded.profile.email?.trim() || authEmail,
+          }
+        : null
+      setProfile(profile)
       setEmpresa(loaded.empresa)
     }
 
@@ -157,8 +171,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: 'Informe o e-mail ou o número de registro.' }
     }
 
+    const viaEmail = trimmed.includes('@')
     let email = trimmed
-    if (!trimmed.includes('@')) {
+    if (!viaEmail) {
       const { data, error: lookupError } = await supabase.rpc(
         'resolve_login_email',
         { p_login: trimmed },
@@ -179,10 +194,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: email.toLowerCase(),
       password,
     })
+    if (!error) {
+      setLoginVia(viaEmail ? 'email' : 'registro')
+    }
     return { error: error?.message ?? null }
   }
 
   async function signOut() {
+    clearLoginVia()
     await supabase.auth.signOut()
     setProfile(null)
     setEmpresa(null)

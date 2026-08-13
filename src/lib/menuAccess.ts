@@ -113,11 +113,22 @@ export function pathMatchesMenuKey(pathname: string, menuKey: string): boolean {
   return pathname === menuKey || pathname.startsWith(`${menuKey}/`)
 }
 
+/** Menus sempre liberados mesmo com menu_keys restrito. */
+export const ALWAYS_VISIBLE_MENU_KEYS = [
+  '/calendario',
+  '/vendas/eventos',
+] as const
+
 export function pathAllowedByMenuKeys(
   pathname: string,
   menuKeys: string[] | null | undefined,
 ): boolean {
   if (menuKeys == null) return true
+  if (
+    ALWAYS_VISIBLE_MENU_KEYS.some((key) => pathMatchesMenuKey(pathname, key))
+  ) {
+    return true
+  }
   return menuKeys.some((key) => pathMatchesMenuKey(pathname, key))
 }
 
@@ -127,9 +138,6 @@ export function firstAllowedMenuPath(
   if (!menuKeys?.length) return '/'
   return menuKeys[0] ?? '/'
 }
-
-/** Menus sempre liberados mesmo com menu_keys restrito. */
-export const ALWAYS_VISIBLE_MENU_KEYS = ['/vendas/eventos'] as const
 
 export function filterNavItemsByMenuKeys(
   items: NavItem[],

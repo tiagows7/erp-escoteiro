@@ -88,6 +88,7 @@ const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
     'financeiro.write',
     'portal.view',
     'atividades.view',
+    'atividades.write',
     'vendas.view',
     'vendas.write',
   ],
@@ -180,11 +181,65 @@ export function canAny(
   return permissions.some((permission) => can(role, permission))
 }
 
-/** Login de associado (importação / nº de registro): acesso limitado. */
+const LOGIN_VIA_KEY = 'erp-escoteiro:login-via'
+
+/** Grava se o acesso foi por e-mail (equipe) ou por nº de registro (associado). */
+export function setLoginVia(via: 'email' | 'registro') {
+  try {
+    sessionStorage.setItem(LOGIN_VIA_KEY, via)
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+export function clearLoginVia() {
+  try {
+    sessionStorage.removeItem(LOGIN_VIA_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Portal do associado (menu limitado, sem Cadastros / sem editar atividade).
+ * Equipe (admin, chefe, escotista, etc.) NUNCA entra nesse modo — mesmo com
+ * nº de registro no perfil. Login por e-mail também força modo equipe.
+ */
 export function isAssociadoLogin(profile: {
   registro?: string | null
+  email?: string | null
+  role?: AppRole | string | null
 } | null | undefined): boolean {
-  return !!(profile?.registro && String(profile.registro).trim())
+  if (!profile?.registro || !String(profile.registro).trim()) return false
+
+  // Papéis de equipe: UI completa (Cadastros, nova/editar atividade).
+  if (profile.role && profile.role !== 'leitura') return false
+
+  try {
+    const via = sessionStorage.getItem(LOGIN_VIA_KEY)
+    if (via === 'email') return false
+    if (via === 'registro') return true
+  } catch {
+    /* ignore */
+  }
+
+  const email = (profile.email ?? '').trim().toLowerCase()
+  // E-mail real (não sintético da importação) = acesso de equipe.
+  if (email.includes('@') && !email.endsWith('@usuarios.local')) {
+    return false
+  }
+
+  // Somente leitura + registro (portal do associado / e-mail @usuarios.local).
+  return true
+}
+
+/** Infere modo de login a partir do e-mail do Auth (restauração de sessão). */
+export function inferLoginViaFromAuthEmail(
+  authEmail: string | null | undefined,
+): void {
+  const email = (authEmail ?? '').trim().toLowerCase()
+  if (!email.includes('@')) return
+  setLoginVia(email.endsWith('@usuarios.local') ? 'registro' : 'email')
 }
 
 /** Administrador do grupo (ou da plataforma). */
@@ -244,6 +299,8 @@ export function canForProfile(
   role: AppRole | null | undefined,
   profile: {
     registro?: string | null
+    email?: string | null
+    role?: AppRole | string | null
     codigo_ramo?: number | null
   } | null | undefined,
   permission: Permission,
@@ -264,6 +321,8 @@ export function canAnyForProfile(
   role: AppRole | null | undefined,
   profile: {
     registro?: string | null
+    email?: string | null
+    role?: AppRole | string | null
     codigo_ramo?: number | null
   } | null | undefined,
   permissions: Permission[],

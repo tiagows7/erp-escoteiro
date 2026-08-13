@@ -50,7 +50,27 @@ export function AppLayout() {
     const base = navItemsForProfile(profile)
     // Associado: navItemsForProfile já aplica menu_keys (+ Projetos).
     if (isAssociadoLogin(profile) || !profileUsesMenuKeys(profile)) return base
-    return filterNavItemsByMenuKeys(base, profile?.menu_keys)
+
+    const filtered = filterNavItemsByMenuKeys(base, profile?.menu_keys)
+    // Equipe (e-mail): Cadastros fica disponível conforme o papel, mesmo se
+    // menu_keys omitir esses itens.
+    const cadastros = base.find(
+      (item) => item.type === 'group' && item.id === 'cadastros',
+    )
+    if (!cadastros || cadastros.type !== 'group') return filtered
+    const idx = filtered.findIndex(
+      (item) => item.type === 'group' && item.id === 'cadastros',
+    )
+    if (idx >= 0) {
+      return filtered.map((item, i) =>
+        i === idx ? { ...cadastros, children: cadastros.children } : item,
+      )
+    }
+    const after = filtered.findIndex(
+      (item) => item.type === 'link' && item.to === '/conquistas',
+    )
+    const pos = after >= 0 ? after + 1 : filtered.length
+    return [...filtered.slice(0, pos), cadastros, ...filtered.slice(pos)]
   }, [profile])
 
   const items = useMemo(() => {
