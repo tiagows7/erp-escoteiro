@@ -101,7 +101,7 @@ button {
 .brand p {
   margin: 0;
   color: rgba(238, 244, 251, 0.72);
-  font-size: 0.84rem;
+  font-size: 0.78rem;
   line-height: 1.35;
 }
 
@@ -111,8 +111,8 @@ button {
 }
 
 .nav-label {
-  padding: 0.75rem 0.75rem 0.25rem;
-  font-size: 0.72rem;
+  padding: 0.55rem 0.65rem 0.2rem;
+  font-size: 0.66rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(238, 244, 251, 0.45);
@@ -120,8 +120,9 @@ button {
 
 .nav-link {
   display: block;
-  padding: 0.7rem 0.85rem;
-  border-radius: 10px;
+  padding: 0.48rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
   color: rgba(238, 244, 251, 0.86);
   transition: background 160ms ease, color 160ms ease, transform 160ms ease;
 }
@@ -148,12 +149,13 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.7rem 0.85rem;
+  padding: 0.48rem 0.7rem;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent;
   color: rgba(238, 244, 251, 0.86);
   font: inherit;
+  font-size: 0.82rem;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
@@ -180,28 +182,33 @@ button {
 }
 
 .nav-sublink {
-  padding: 0.55rem 0.75rem;
-  font-size: 0.92rem;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.78rem;
   color: rgba(238, 244, 251, 0.78);
 }
 
 .sidebar-footer {
   margin-top: auto;
-  padding: 0.85rem;
+  padding: 0.7rem;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.05);
 }
 
 .sidebar-footer strong {
   display: block;
-  font-size: 0.95rem;
+  font-size: 0.84rem;
 }
 
 .sidebar-footer span {
   display: block;
   margin-top: 0.2rem;
-  font-size: 0.8rem;
+  font-size: 0.74rem;
   color: rgba(238, 244, 251, 0.65);
+}
+
+.sidebar-footer .btn {
+  font-size: 0.78rem;
+  padding: 0.38rem 0.65rem;
 }
 
 .main {
@@ -234,8 +241,9 @@ button {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  min-height: 2.75rem;
-  padding: 0.65rem 0.85rem;
+  min-height: 2.15rem;
+  padding: 0.42rem 0.75rem;
+  font-size: 0.82rem;
   line-height: 1.2;
   border-style: solid;
   border-width: 1.5px;
@@ -2361,13 +2369,15 @@ button {
 }
 
 .input,
-.select {
+.select,
+textarea.input {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--line);
   background: #fff;
   border-radius: 10px;
-  padding: 0.7rem 0.85rem;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.84rem;
   color: var(--ink);
 }
 
@@ -2379,9 +2389,12 @@ button {
 
 .btn {
   border: none;
-  border-radius: 10px;
-  padding: 0.7rem 1rem;
+  border-radius: 8px;
+  padding: 0.42rem 0.75rem;
+  font-size: 0.82rem;
   font-weight: 600;
+  line-height: 1.25;
+  min-height: 0;
   transition: transform 140ms ease, opacity 140ms ease, background 140ms ease;
 }
 
@@ -2679,8 +2692,8 @@ table.data .badge {
 }
 
 .login-topbar-enter {
-  min-width: 7.5rem;
-  min-height: 42px;
+  min-width: 6.5rem;
+  min-height: 2.15rem;
 }
 
 .login-topbar-enter.btn-soft {
@@ -2915,7 +2928,7 @@ table.data .badge {
 .login-submit {
   width: 100%;
   margin-top: 0.35rem;
-  min-height: 46px;
+  min-height: 2.35rem;
 }
 
 @keyframes loginDrift {
@@ -3271,12 +3284,12 @@ table.data .badge {
 
 .field {
   display: grid;
-  gap: 0.35rem;
-  margin-bottom: 0.9rem;
+  gap: 0.25rem;
+  margin-bottom: 0.7rem;
 }
 
 .field label {
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   font-weight: 600;
 }
 
@@ -3814,7 +3827,8 @@ table.data .badge {
   background: transparent;
   color: var(--ink-muted);
   border-radius: 999px;
-  padding: 0.45rem 0.9rem;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.82rem;
   font-weight: 600;
   font-size: 0.88rem;
 }
@@ -4285,6 +4299,18 @@ table.data .badge {
   border-top: 1px solid var(--line);
 }
 
+form.panel,
+.panel form,
+.form-grid,
+.form-grid-2 {
+  font-size: 0.86rem;
+}
+
+form.panel .muted,
+.panel form .muted {
+  font-size: 0.78rem;
+}
+
 .empty,
 .loading {
   padding: 2rem 1rem;
@@ -4450,13 +4476,14 @@ table.data .badge {
 
   .brand p {
     margin: 0;
-    font-size: 0.8rem;
+    font-size: 0.76rem;
   }
 
   .nav-link,
   .nav-group-toggle {
-    min-height: 2.65rem;
-    padding: 0.7rem 0.85rem;
+    min-height: 2.15rem;
+    padding: 0.48rem 0.7rem;
+    font-size: 0.82rem;
   }
 
   .main {
@@ -4524,7 +4551,7 @@ table.data .badge {
   }
 
   .btn {
-    min-height: 2.6rem;
+    min-height: 2.15rem;
   }
 
   .passagem-dialog {
