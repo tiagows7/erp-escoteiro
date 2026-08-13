@@ -187,7 +187,24 @@ export type Atividade = {
   descricao: string
   local: string | null
   valor: number
+  data_atividade: string | null
   created_at: string | null
+}
+
+export type CalendarioGrupoEvento = {
+  id: number
+  empresa_id: number
+  ramo: number | null
+  secao: number | null
+  titulo: string
+  descricao: string | null
+  local: string | null
+  data_inicio: string
+  data_fim: string | null
+  hora_inicio: string | null
+  hora_fim: string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 export type Projeto = {

@@ -87,13 +87,10 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Só super_admin pode excluir outro super_admin.
-    if (
-      target.role === 'super_admin' &&
-      callerProfile.role !== 'super_admin'
-    ) {
+    // Super admin da plataforma nunca pode ser excluído.
+    if (target.role === 'super_admin') {
       return json(
-        { error: 'Somente super admin pode excluir outro super admin.' },
+        { error: 'O usuário super admin não pode ser excluído.' },
         403,
       )
     }

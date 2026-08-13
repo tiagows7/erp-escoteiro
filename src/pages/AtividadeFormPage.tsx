@@ -23,6 +23,7 @@ const emptyForm = {
   patrulha_matilha: '',
   descricao: '',
   local: '',
+  data_atividade: '',
   valor: '0,00',
 }
 
@@ -124,7 +125,7 @@ export function AtividadeFormPage() {
       const { data, error: loadError } = await supabase
         .from('atividades')
         .select(
-          'atividade_id, ramo, secao, patrulha_matilha, descricao, local, valor',
+          'atividade_id, ramo, secao, patrulha_matilha, descricao, local, valor, data_atividade',
         )
         .eq('atividade_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -149,6 +150,9 @@ export function AtividadeFormPage() {
         patrulha_matilha: data.patrulha_matilha?.toString() ?? '',
         descricao: data.descricao ?? '',
         local: data.local ?? '',
+        data_atividade: data.data_atividade
+          ? String(data.data_atividade).slice(0, 10)
+          : '',
         valor: formatMoney(Number(data.valor ?? 0))
           .replace('R$', '')
           .trim(),
@@ -213,6 +217,7 @@ export function AtividadeFormPage() {
         : null,
       descricao: form.descricao.trim(),
       local: form.local.trim() || null,
+      data_atividade: form.data_atividade || null,
       valor: parseMoneyInput(form.valor),
     }
 
@@ -421,6 +426,21 @@ export function AtividadeFormPage() {
                 maxLength={200}
                 required
               />
+            </div>
+
+            <div className="field">
+              <label htmlFor="data_atividade">Data da atividade</label>
+              <input
+                id="data_atividade"
+                className="input"
+                type="date"
+                value={form.data_atividade}
+                onChange={(e) => update('data_atividade', e.target.value)}
+                disabled={!canWrite}
+              />
+              <span className="field-hint">
+                Aparece no calendário do grupo nesta data.
+              </span>
             </div>
 
             <div className="field">

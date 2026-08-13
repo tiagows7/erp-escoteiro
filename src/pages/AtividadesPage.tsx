@@ -83,7 +83,7 @@ export function AtividadesPage() {
         let query = supabase
           .from('atividades')
           .select(
-            'atividade_id, empresa_id, ramo, secao, patrulha_matilha, descricao, local, valor, created_at',
+            'atividade_id, empresa_id, ramo, secao, patrulha_matilha, descricao, local, valor, data_atividade, created_at',
           )
           .eq('empresa_id', empresaId)
           .order('created_at', { ascending: false })
@@ -188,7 +188,7 @@ export function AtividadesPage() {
               : ''}
           </p>
         </div>
-        {canWrite && !associadoLogin ? (
+        {canWrite ? (
           <div className="page-header-actions">
             <Link className="btn btn-primary" to="/atividades/novo">
               <AddIcon /> Nova atividade
@@ -246,6 +246,7 @@ export function AtividadesPage() {
               <thead>
                 <tr>
                   <th></th>
+                  <th>Data</th>
                   <th>Descrição</th>
                   <th>Ramo</th>
                   <th>Seção</th>
@@ -259,12 +260,12 @@ export function AtividadesPage() {
                   <tr key={row.atividade_id}>
                     <td>
                       <div className="atividades-row-actions">
-                        {!associadoLogin ? (
+                        {canWrite ? (
                           <Link
                             className="btn btn-soft"
                             to={`/atividades/${row.atividade_id}`}
                           >
-                            Abrir
+                            Editar
                           </Link>
                         ) : null}
                         <Link
@@ -274,6 +275,13 @@ export function AtividadesPage() {
                           Contas
                         </Link>
                       </div>
+                    </td>
+                    <td>
+                      {row.data_atividade
+                        ? new Date(
+                            `${row.data_atividade.slice(0, 10)}T12:00:00`,
+                          ).toLocaleDateString('pt-BR')
+                        : '—'}
                     </td>
                     <td>{row.descricao}</td>
                     <td>

@@ -287,6 +287,10 @@ export function UsuarioFormPage() {
 
   async function onInativar() {
     if (!canWrite || !empresaId || isNew) return
+    if (form.role === 'super_admin') {
+      setError('O usuário super admin não pode ser inativado.')
+      return
+    }
     if (user?.id === id) {
       setError('Você não pode inativar o próprio usuário.')
       return
@@ -322,6 +326,10 @@ export function UsuarioFormPage() {
 
   async function onExcluir() {
     if (!canWrite || !empresaId || isNew || !id) return
+    if (form.role === 'super_admin') {
+      setError('O usuário super admin não pode ser excluído.')
+      return
+    }
     if (user?.id === id) {
       setError('Você não pode excluir o próprio usuário.')
       return
@@ -722,7 +730,9 @@ export function UsuarioFormPage() {
               <button className="btn btn-primary" type="submit" disabled={saving}>
                 {saving ? 'Salvando…' : 'Salvar'}
               </button>
-              {!isNew && form.ativo !== false ? (
+              {!isNew &&
+              form.ativo !== false &&
+              form.role !== 'super_admin' ? (
                 <button
                   type="button"
                   className="btn btn-soft"
@@ -732,7 +742,7 @@ export function UsuarioFormPage() {
                   Inativar
                 </button>
               ) : null}
-              {!isNew ? (
+              {!isNew && form.role !== 'super_admin' ? (
                 <button
                   type="button"
                   className="btn btn-danger"

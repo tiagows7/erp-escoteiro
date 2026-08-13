@@ -41,6 +41,12 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     type: 'link',
+    to: '/calendario',
+    label: 'Calendário',
+    permission: 'dashboard.view',
+  },
+  {
+    type: 'link',
     to: '/portal-transparencia',
     label: 'Portal da Transparência',
     permission: 'portal.view',
@@ -266,6 +272,12 @@ export function navItemsForProfile(
       },
       {
         type: 'link',
+        to: '/calendario',
+        label: 'Calendário',
+        permission: 'dashboard.view',
+      },
+      {
+        type: 'link',
         to: '/portal-transparencia',
         label: 'Portal da Transparência',
         permission: 'portal.view',
@@ -308,7 +320,12 @@ export function navItemsForProfile(
       )
       // Projetos e Eventos/convites: sempre visíveis para associado.
       // Ação entre amigos: só aparece se tiver faixa (filtrado no AppLayout).
-      for (const alwaysTo of ['/projetos', '/vendas/eventos'] as const) {
+      for (const alwaysTo of [
+        '/',
+        '/calendario',
+        '/projetos',
+        '/vendas/eventos',
+      ] as const) {
         if (
           !filtered.some(
             (item) => item.type === 'link' && item.to === alwaysTo,

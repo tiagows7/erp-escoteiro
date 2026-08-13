@@ -36,6 +36,7 @@ import { UsuariosPage } from '@/pages/UsuariosPage'
 import { UsuarioFormPage } from '@/pages/UsuarioFormPage'
 import { FornecedoresPage } from '@/pages/FornecedoresPage'
 import { FornecedorFormPage } from '@/pages/FornecedorFormPage'
+import { CalendarioGrupoPage } from '@/pages/CalendarioGrupoPage'
 import { TipoMensalidadePage } from '@/pages/TipoMensalidadePage'
 import { TipoMensalidadeFormPage } from '@/pages/TipoMensalidadeFormPage'
 import { TipoPagamentoPage } from '@/pages/TipoPagamentoPage'
@@ -95,6 +96,14 @@ export default function App() {
               element={
                 <RequirePermission permission="dashboard.view">
                   <DashboardPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="calendario"
+              element={
+                <RequirePermission permission="dashboard.view">
+                  <CalendarioGrupoPage />
                 </RequirePermission>
               }
             />
@@ -211,6 +220,10 @@ export default function App() {
                   <FornecedorFormPage />
                 </RequirePermission>
               }
+            />
+            <Route
+              path="cadastros/calendario"
+              element={<Navigate to="/calendario" replace />}
             />
 
             <Route
