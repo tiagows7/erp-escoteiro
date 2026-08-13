@@ -164,7 +164,8 @@ export function CalendarioGrupoPage() {
   const { empresa, profile } = useAuth()
   const toast = useToast()
   /** Login por e-mail (equipe): pode informar eventos. Associado só visualiza. */
-  const canWrite = !isAssociadoLogin(profile)
+  const associadoLogin = isAssociadoLogin(profile)
+  const canWrite = !associadoLogin
   const empresaId = empresa?.id
   const ramoScoped = staffRamoScope(profile)
 
@@ -176,6 +177,9 @@ export function CalendarioGrupoPage() {
     ramoScoped != null ? String(ramoScoped) : '',
   )
   const [filtroSecao, setFiltroSecao] = useState('')
+  /** Ramo do associado (login por registro); trava a visão só neste ramo. */
+  const [associadoRamo, setAssociadoRamo] = useState<number | null>(null)
+  const [scopeReady, setScopeReady] = useState(!associadoLogin)
 
   const [ramos, setRamos] = useState<Ramo[]>([])
   const [secoes, setSecoes] = useState<SecaoOpt[]>([])
@@ -186,6 +190,14 @@ export function CalendarioGrupoPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState<EventoForm>(emptyForm(toDateKey(today)))
   const overlayMouseDownRef = useRef(false)
+
+  const ramoFixo =
+    associadoLogin && associadoRamo != null
+      ? associadoRamo
+      : ramoScoped != null
+        ? ramoScoped
+        : null
+  const ramoTravado = ramoFixo != null
 
   function onOverlayMouseDown(e: ReactMouseEvent<HTMLDivElement>) {
     overlayMouseDownRef.current = e.target === e.currentTarget
@@ -206,6 +218,10 @@ export function CalendarioGrupoPage() {
     () => new Map(secoes.map((s) => [s.secao_id, s.nome])),
     [secoes],
   )
+  const associadoRamoNome = useMemo(() => {
+    if (associadoRamo == null) return null
+    return ramos.find((r) => r.ramo_id === associadoRamo)?.nome ?? null
+  }, [ramos, associadoRamo])
 
   const secoesDoFiltro = useMemo(() => {
     if (!filtroRamo) return secoes
@@ -244,9 +260,57 @@ export function CalendarioGrupoPage() {
   }, [empresaId])
 
   useEffect(() => {
-    if (!empresaId) {
-      setEventos([])
-      setLoading(false)
+    let mounted = true
+
+    void (async () => {
+      if (!associadoLogin) {
+        if (mounted) {
+          setAssociadoRamo(null)
+          setScopeReady(true)
+        }
+        return
+      }
+
+      let ramo: number | null =
+        profile?.codigo_ramo != null && profile.codigo_ramo > 0
+          ? profile.codigo_ramo
+          : null
+
+      if (empresaId && profile?.registro) {
+        const registroNum = Number(String(profile.registro).replace(/\D/g, ''))
+        if (Number.isFinite(registroNum) && registroNum > 0) {
+          const { data } = await supabase
+            .from('associados')
+            .select('ramo, secao')
+            .eq('empresa_id', empresaId)
+            .eq('registro', registroNum)
+            .maybeSingle()
+          if (data?.ramo != null && Number(data.ramo) > 0) {
+            ramo = Number(data.ramo)
+          }
+          if (mounted && data?.secao != null && Number(data.secao) > 0) {
+            setFiltroSecao(String(data.secao))
+          }
+        }
+      }
+
+      if (!mounted) return
+      setAssociadoRamo(ramo)
+      if (ramo != null) setFiltroRamo(String(ramo))
+      setScopeReady(true)
+    })()
+
+    return () => {
+      mounted = false
+    }
+  }, [associadoLogin, empresaId, profile?.codigo_ramo, profile?.registro])
+
+  useEffect(() => {
+    if (!empresaId || !scopeReady) {
+      if (!empresaId) {
+        setEventos([])
+        setLoading(false)
+      }
       return
     }
 
@@ -269,12 +333,15 @@ export function CalendarioGrupoPage() {
         .lte('data_inicio', to)
         .or(`data_fim.is.null,data_fim.gte.${from}`)
 
-      if (filtroRamo) {
+      // Associado com ramo: só eventos daquele ramo (sem coluna GRUPO).
+      if (associadoLogin && associadoRamo != null) {
+        qy = qy.eq('ramo', associadoRamo)
+      } else if (filtroRamo) {
         qy = qy.or(`ramo.is.null,ramo.eq.${Number(filtroRamo)}`)
       } else if (ramoScoped != null) {
         qy = qy.or(`ramo.is.null,ramo.eq.${ramoScoped}`)
       }
-      if (filtroSecao) {
+      if (filtroSecao && !(associadoLogin && associadoRamo != null)) {
         qy = qy.or(`secao.is.null,secao.eq.${Number(filtroSecao)}`)
       }
 
@@ -293,16 +360,29 @@ export function CalendarioGrupoPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, year, month, todosMeses, filtroRamo, filtroSecao, ramoScoped])
+  }, [
+    empresaId,
+    year,
+    month,
+    todosMeses,
+    filtroRamo,
+    filtroSecao,
+    ramoScoped,
+    scopeReady,
+    associadoLogin,
+    associadoRamo,
+  ])
 
   const colunasRamos = useMemo((): ColunaRamo[] => {
     const cols: ColunaRamo[] = []
     const scopedId =
-      filtroRamo !== ''
-        ? Number(filtroRamo)
-        : ramoScoped != null
-          ? ramoScoped
-          : null
+      associadoLogin && associadoRamo != null
+        ? associadoRamo
+        : filtroRamo !== ''
+          ? Number(filtroRamo)
+          : ramoScoped != null
+            ? ramoScoped
+            : null
 
     for (const r of ramos) {
       if (isDiretoriaRamo(r.nome, r.ramo_id)) continue
@@ -315,7 +395,7 @@ export function CalendarioGrupoPage() {
       })
     }
 
-    // Sempre mostra GRUPO (exceto quando o filtro força um ramo específico).
+    // GRUPO só na visão geral (sem ramo travado).
     if (scopedId == null) {
       cols.push({
         key: 'grupo',
@@ -326,7 +406,7 @@ export function CalendarioGrupoPage() {
     }
 
     return cols
-  }, [ramos, filtroRamo, ramoScoped])
+  }, [ramos, filtroRamo, ramoScoped, associadoLogin, associadoRamo])
 
   const mesesAgenda = useMemo((): MesAgenda[] => {
     if (todosMeses) {
@@ -350,7 +430,9 @@ export function CalendarioGrupoPage() {
   function openNew(dayKey = toDateKey(today)) {
     setForm({
       ...emptyForm(dayKey),
-      ramo: filtroRamo || (ramoScoped != null ? String(ramoScoped) : ''),
+      ramo:
+        filtroRamo ||
+        (ramoFixo != null ? String(ramoFixo) : ''),
       secao: filtroSecao,
     })
     setFormOpen(true)
@@ -498,41 +580,50 @@ export function CalendarioGrupoPage() {
           </AlertMessage>
         ) : null}
 
-        <div className="toolbar calendario-filtros">
-          <select
-            className="select"
-            value={filtroRamo}
-            disabled={ramoScoped != null}
-            onChange={(e) => {
-              setFiltroRamo(e.target.value)
-              setFiltroSecao('')
-            }}
-          >
-            <option value="">Todos os ramos (+ grupo)</option>
-            {ramos.map((r) => (
-              <option key={r.ramo_id} value={r.ramo_id}>
-                {r.nome}
+        {!associadoLogin || associadoRamo == null ? (
+          <div className="toolbar calendario-filtros">
+            <select
+              className="select"
+              value={filtroRamo}
+              disabled={ramoTravado}
+              onChange={(e) => {
+                setFiltroRamo(e.target.value)
+                setFiltroSecao('')
+              }}
+            >
+              <option value="">Todos os ramos (+ grupo)</option>
+              {ramos
+                .filter((r) => !isDiretoriaRamo(r.nome, r.ramo_id))
+                .map((r) => (
+                  <option key={r.ramo_id} value={r.ramo_id}>
+                    {r.nome}
+                  </option>
+                ))}
+            </select>
+            <select
+              className="select"
+              value={filtroSecao}
+              disabled={ramoTravado || !filtroRamo}
+              onChange={(e) => setFiltroSecao(e.target.value)}
+            >
+              <option value="">
+                {filtroRamo
+                  ? 'Todas as seções (+ ramo/grupo)'
+                  : 'Selecione um ramo'}
               </option>
-            ))}
-          </select>
-          <select
-            className="select"
-            value={filtroSecao}
-            disabled={!filtroRamo}
-            onChange={(e) => setFiltroSecao(e.target.value)}
-          >
-            <option value="">
-              {filtroRamo
-                ? 'Todas as seções (+ ramo/grupo)'
-                : 'Selecione um ramo'}
-            </option>
-            {secoesDoFiltro.map((s) => (
-              <option key={s.secao_id} value={s.secao_id}>
-                {s.nome}
-              </option>
-            ))}
-          </select>
-        </div>
+              {secoesDoFiltro.map((s) => (
+                <option key={s.secao_id} value={s.secao_id}>
+                  {s.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <p className="muted calendario-ramo-aviso">
+            Exibindo apenas o calendário do seu ramo
+            {associadoRamoNome ? `: ${associadoRamoNome}` : ''}.
+          </p>
+        )}
 
         <div className="calendario-toolbar">
           <button

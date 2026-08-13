@@ -157,7 +157,21 @@ export function AppLayout() {
       }
     }
 
-    return filtered
+    // Ordem fixa no topo: Dashboard → Calendário.
+    const ordemTopo = ['/dashboard', '/calendario'] as const
+    const topo = ordemTopo
+      .map((to) =>
+        filtered.find((item) => item.type === 'link' && item.to === to),
+      )
+      .filter((item): item is (typeof filtered)[number] => item != null)
+    const resto = filtered.filter(
+      (item) =>
+        !(
+          item.type === 'link' &&
+          (item.to === '/dashboard' || item.to === '/calendario')
+        ),
+    )
+    return [...topo, ...resto]
   }, [allItems, hasPermission, profile, acaoMenuLoading, temAcao])
 
   useEffect(() => {

@@ -4918,6 +4918,10 @@ form.panel .muted,
   margin-bottom: 1rem;
 }
 
+.calendario-ramo-aviso {
+  margin: 0 0 1rem;
+}
+
 .calendario-toolbar {
   display: flex;
   flex-wrap: wrap;

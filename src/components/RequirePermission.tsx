@@ -41,7 +41,7 @@ export function RequirePermission({
   }
 
   if (grupoAdmin && !isGrupoAdmin(role)) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/dashboard" replace />
   }
 
   const allowed = permission
@@ -51,12 +51,12 @@ export function RequirePermission({
       : true
 
   if (!allowed) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/dashboard" replace />
   }
 
   // Associado sem faixa: não acessa ação entre amigos.
   if (associadoLogin && isAcaoPath && !temAcao) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/dashboard" replace />
   }
 
   if (profileUsesMenuKeys(profile)) {
@@ -73,6 +73,7 @@ export function RequirePermission({
       pathMatchesMenuKey(location.pathname, '/secoes') ||
       pathMatchesMenuKey(location.pathname, '/patrulhas')
     const menuBypass =
+      pathMatchesMenuKey(location.pathname, '/dashboard') ||
       pathMatchesMenuKey(location.pathname, '/vendas/eventos') ||
       pathMatchesMenuKey(location.pathname, '/calendario') ||
       (!isAssociadoLogin(profile) && isCadastrosPath) ||
@@ -80,12 +81,12 @@ export function RequirePermission({
         (pathMatchesMenuKey(location.pathname, '/projetos') ||
           (isAcaoPath && temAcao)))
     if (!menuOk && !menuBypass) {
-      return (
-        <Navigate
-          to={firstAllowedMenuPath(profile?.menu_keys)}
-          replace
-        />
-      )
+      const fallback = firstAllowedMenuPath(profile?.menu_keys)
+      // Evita Navigate para a própria rota (loop).
+      if (pathMatchesMenuKey(location.pathname, fallback)) {
+        return children
+      }
+      return <Navigate to={fallback} replace />
     }
   }
 

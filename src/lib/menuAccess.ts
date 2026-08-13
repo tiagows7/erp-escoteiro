@@ -104,7 +104,10 @@ export function profileUsesMenuKeys(
 }
 
 export function pathMatchesMenuKey(pathname: string, menuKey: string): boolean {
-  if (menuKey === '/') return pathname === '/'
+  // Chaves antigas usavam "/" como home (= dashboard).
+  if (menuKey === '/' || menuKey === '/dashboard') {
+    return pathname === '/' || pathname === '/dashboard'
+  }
   if (menuKey === '/portal-transparencia') {
     return (
       pathname === '/portal-transparencia' ||
@@ -116,6 +119,7 @@ export function pathMatchesMenuKey(pathname: string, menuKey: string): boolean {
 
 /** Menus sempre liberados mesmo com menu_keys restrito. */
 export const ALWAYS_VISIBLE_MENU_KEYS = [
+  '/dashboard',
   '/calendario',
   '/vendas/eventos',
 ] as const
@@ -136,8 +140,11 @@ export function pathAllowedByMenuKeys(
 export function firstAllowedMenuPath(
   menuKeys: string[] | null | undefined,
 ): string {
-  if (!menuKeys?.length) return '/'
-  return menuKeys[0] ?? '/'
+  if (!menuKeys?.length) return '/dashboard'
+  const first = menuKeys[0] ?? '/dashboard'
+  // Evita loop: "/" redireciona para o dashboard.
+  if (first === '/') return '/dashboard'
+  return first
 }
 
 export function filterNavItemsByMenuKeys(

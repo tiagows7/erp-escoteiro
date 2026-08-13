@@ -217,6 +217,12 @@ export const NAV_ITEMS: NavItem[] = [
         label: 'Eventos',
         permission: 'vendas.view',
       },
+      {
+        type: 'link',
+        to: '/vendas/loja',
+        label: 'Loja',
+        permission: 'vendas.view',
+      },
     ],
   },
   {
@@ -306,8 +312,11 @@ export function navItemsForProfile(
     ]
     const keys = profile?.menu_keys
     if (Array.isArray(keys) && keys.length > 0) {
+      const keySet = new Set(
+        keys.map((k) => (k === '/' ? '/dashboard' : k)),
+      )
       const filtered = associadoMenus.filter(
-        (item) => item.type === 'link' && keys.includes(item.to),
+        (item) => item.type === 'link' && keySet.has(item.to),
       )
       // Projetos e Eventos/convites: sempre visíveis para associado.
       // Ação entre amigos: só aparece se tiver faixa (filtrado no AppLayout).
@@ -328,6 +337,21 @@ export function navItemsForProfile(
           if (item) filtered.push(item)
         }
       }
+      // Ordem fixa: Dashboard → Calendário → demais.
+      const ordemTopo = ['/dashboard', '/calendario'] as const
+      filtered.sort((a, b) => {
+        if (a.type !== 'link' || b.type !== 'link') return 0
+        const ia = ordemTopo.indexOf(
+          a.to as (typeof ordemTopo)[number],
+        )
+        const ib = ordemTopo.indexOf(
+          b.to as (typeof ordemTopo)[number],
+        )
+        if (ia === -1 && ib === -1) return 0
+        if (ia === -1) return 1
+        if (ib === -1) return -1
+        return ia - ib
+      })
       return filtered
     }
     return associadoMenus

@@ -32,6 +32,7 @@ import { VendaEventosPage } from '@/pages/VendaEventosPage'
 import { VendaEventoFormPage } from '@/pages/VendaEventoFormPage'
 import { VendaEventoVendaPage } from '@/pages/VendaEventoVendaPage'
 import { VendaEventoPublicPage } from '@/pages/VendaEventoPublicPage'
+import { LojaPage } from '@/pages/LojaPage'
 import { UsuariosPage } from '@/pages/UsuariosPage'
 import { UsuarioFormPage } from '@/pages/UsuarioFormPage'
 import { FornecedoresPage } from '@/pages/FornecedoresPage'
@@ -432,6 +433,14 @@ export default function App() {
               element={
                 <RequirePermission permission="vendas.view">
                   <VendaEventoFormPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="vendas/loja"
+              element={
+                <RequirePermission permission="vendas.view">
+                  <LojaPage />
                 </RequirePermission>
               }
             />
