@@ -70,6 +70,11 @@ export function ContaBancariaModal({
     }
     if (fields.api_pix_ativo) {
       const cert = fields.api_pix_cert.trim()
+      const needsNewCert = !editing?.has_api_pix_cert && !cert
+      if (needsNewCert) {
+        setError('Com PIX ativo, informe o certificado aprovado (.crt/.cer).')
+        return
+      }
       if (cert.includes('BEGIN CERTIFICATE REQUEST')) {
         setError(
           'No certificado você colou o CSR (pedido). Baixe no Portal Sicredi o .crt/.cer aprovado (BEGIN CERTIFICATE, sem REQUEST).',
@@ -93,7 +98,7 @@ export function ContaBancariaModal({
       empresa_id: empresaId,
       ramo_id: ramoNum,
       secao_id: secaoNum,
-      ...contaBancariaToDb(fields),
+      ...contaBancariaToDb(fields, { keepExistingSecrets: !!editing?.id }),
       updated_at: new Date().toISOString(),
     }
 
@@ -237,17 +242,19 @@ function normalizeRow(data: Record<string, unknown>): ContaBancariaRow {
     empresa_id: Number(data.empresa_id),
     ramo_id: data.ramo_id != null ? Number(data.ramo_id) : null,
     secao_id: data.secao_id != null ? Number(data.secao_id) : null,
-    descricao: (data.descricao as string | null) ?? '',
-    banco_nome: (data.banco_nome as string | null) ?? '',
-    agencia: (data.agencia as string | null) ?? '',
-    conta: (data.conta as string | null) ?? '',
-    api_client_id: (data.api_client_id as string | null) ?? '',
-    api_client_secret: (data.api_client_secret as string | null) ?? '',
-    api_pix_chave: (data.api_pix_chave as string | null) ?? '',
-    api_pix_ativo: data.api_pix_ativo === true,
-    api_pix_cert: (data.api_pix_cert as string | null) ?? '',
-    api_pix_key: (data.api_pix_key as string | null) ?? '',
-    api_pix_base_url: (data.api_pix_base_url as string | null) ?? '',
-    infinitepay_handle: (data.infinitepay_handle as string | null) ?? '',
+    ...contaBancariaFromRow({
+      descricao: (data.descricao as string | null) ?? '',
+      banco_nome: (data.banco_nome as string | null) ?? '',
+      agencia: (data.agencia as string | null) ?? '',
+      conta: (data.conta as string | null) ?? '',
+      api_client_id: (data.api_client_id as string | null) ?? '',
+      api_pix_chave: (data.api_pix_chave as string | null) ?? '',
+      api_pix_ativo: data.api_pix_ativo === true,
+      api_pix_base_url: (data.api_pix_base_url as string | null) ?? '',
+      infinitepay_handle: (data.infinitepay_handle as string | null) ?? '',
+      has_api_client_secret: data.has_api_client_secret === true,
+      has_api_pix_cert: data.has_api_pix_cert === true,
+      has_api_pix_key: data.has_api_pix_key === true,
+    }),
   }
 }

@@ -138,7 +138,11 @@ export function ContaBancariaFieldsForm({
               type="password"
               value={value.api_client_secret}
               onChange={(e) => setField('api_client_secret', e.target.value)}
-              placeholder="Client Secret da API do banco"
+              placeholder={
+                value.has_api_client_secret
+                  ? '•••• já cadastrado — deixe vazio para manter'
+                  : 'Client Secret da API do banco'
+              }
               autoComplete="new-password"
               disabled={disabled}
             />
@@ -182,12 +186,19 @@ export function ContaBancariaFieldsForm({
               rows={4}
               value={value.api_pix_cert}
               onChange={(e) => setField('api_pix_cert', e.target.value)}
-              placeholder="-----BEGIN CERTIFICATE-----"
+              placeholder={
+                value.has_api_pix_cert
+                  ? 'Já cadastrado — cole um novo apenas para substituir'
+                  : '-----BEGIN CERTIFICATE-----'
+              }
               disabled={disabled}
             />
             <span className="field-hint">
               Tem que começar com <code>BEGIN CERTIFICATE</code>. Não use o CSR (
               <code>BEGIN CERTIFICATE REQUEST</code>).
+              {value.has_api_pix_cert
+                ? ' O certificado atual não é exibido por segurança.'
+                : ''}
             </span>
           </div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
@@ -198,9 +209,18 @@ export function ContaBancariaFieldsForm({
               rows={4}
               value={value.api_pix_key}
               onChange={(e) => setField('api_pix_key', e.target.value)}
-              placeholder="-----BEGIN PRIVATE KEY-----"
+              placeholder={
+                value.has_api_pix_key
+                  ? 'Já cadastrada — cole uma nova apenas para substituir'
+                  : '-----BEGIN PRIVATE KEY-----'
+              }
               disabled={disabled}
             />
+            {value.has_api_pix_key ? (
+              <span className="field-hint">
+                A chave privada atual não é exibida por segurança.
+              </span>
+            ) : null}
           </div>
         </div>
       ) : null}

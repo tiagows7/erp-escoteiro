@@ -116,14 +116,17 @@ export type EmpresaContaBancaria = {
   agencia: string | null
   conta: string | null
   api_client_id: string | null
-  api_client_secret: string | null
+  api_client_secret?: string | null
   api_pix_chave: string | null
   api_pix_ativo: boolean
-  api_pix_cert: string | null
-  api_pix_key: string | null
+  api_pix_cert?: string | null
+  api_pix_key?: string | null
   api_pix_base_url: string | null
   /** InfiniteTag (sem $). Null = usa PIX Sicredi da conta. */
   infinitepay_handle: string | null
+  has_api_client_secret?: boolean
+  has_api_pix_cert?: boolean
+  has_api_pix_key?: boolean
 }
 
 export type Ramo = {

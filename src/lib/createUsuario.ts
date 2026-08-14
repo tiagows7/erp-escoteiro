@@ -175,6 +175,13 @@ async function createViaSignUpFallback(
     }
   }
 
+  if (input.role === 'super_admin') {
+    return {
+      ok: false,
+      error: 'Apenas a plataforma pode criar super admin.',
+    }
+  }
+
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .insert({
