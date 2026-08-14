@@ -16,27 +16,27 @@ const LOGIN_KEY = 'erp-escoteiro:last-login'
 const SISTEMA_DESTAQUES = [
   {
     titulo: 'Associados e estrutura',
-    texto: 'Cadastro, seções, ramos e visão clara do efetivo do grupo.',
+    texto: 'Cadastro, seções, ramos, calendário e visão clara do efetivo.',
   },
   {
     titulo: 'Financeiro e mensalidades',
     texto: 'Receitas, despesas, geração de mensalidades e PIX Sicredi.',
   },
   {
-    titulo: 'Convites de eventos',
-    texto: 'Link público de inscrição com InfinitePay ou PIX Sicredi.',
+    titulo: 'Estoque e produtos',
+    texto: 'Cadastro, saldo atual, acertos e ficha com histórico de movimentos.',
   },
   {
-    titulo: 'Caixa do evento',
-    texto: 'Despesas e receitas vinculadas, resumo financeiro e encerramento.',
+    titulo: 'Loja do grupo (PDV)',
+    texto: 'Venda rápida com baixa de estoque, caixa do dia e PIX na hora.',
   },
   {
-    titulo: 'Projetos e ação entre amigos',
-    texto: 'Campanhas com venda de números e encerramento ao final.',
+    titulo: 'Eventos e campanhas',
+    texto: 'Convites, ação entre amigos, InfinitePay/PIX e caixa vinculado.',
   },
   {
-    titulo: 'Portal da Transparência',
-    texto: 'Publicação dos números do caixa para a comunidade do grupo.',
+    titulo: 'Transparência e auditoria',
+    texto: 'Portal público do grupo e trilha de alterações para controle interno.',
   },
 ] as const
 
