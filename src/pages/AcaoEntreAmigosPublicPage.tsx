@@ -151,6 +151,14 @@ export function AcaoEntreAmigosPublicPage() {
         <p>
           Vendedor: <strong>{info.vendedor_nome}</strong> ·{' '}
           {formatMoney(valorUnitario)} por número
+          {info.data_limite_venda
+            ? ` · vendas até ${(() => {
+                const [y, m, d] = String(info.data_limite_venda)
+                  .slice(0, 10)
+                  .split('-')
+                return y && m && d ? `${d}/${m}/${y}` : info.data_limite_venda
+              })()}`
+            : ''}
           {info.data_sorteio
             ? ` · sorteio ${(() => {
                 const [y, m, d] = String(info.data_sorteio)
@@ -158,6 +166,9 @@ export function AcaoEntreAmigosPublicPage() {
                   .split('-')
                 return y && m && d ? `${d}/${m}/${y}` : info.data_sorteio
               })()}`
+            : ''}
+          {info.numero_sorteado != null
+            ? ` · ganhador nº ${info.numero_sorteado}`
             : ''}
         </p>
       </header>
@@ -167,8 +178,13 @@ export function AcaoEntreAmigosPublicPage() {
           {error}
         </AlertMessage>
       ) : null}
+      {info.numero_sorteado != null ? (
+        <AlertMessage tone="success" title="Sorteio realizado">
+          Número sorteado: <strong>{info.numero_sorteado}</strong>
+        </AlertMessage>
+      ) : null}
       {info.encerrado ? (
-        <AlertMessage tone="info" title="Ação encerrada">
+        <AlertMessage tone="info" title="Vendas encerradas">
           Este link não aceita mais compras.
         </AlertMessage>
       ) : null}

@@ -11,7 +11,10 @@ export type AcaoPublicInfo = {
   numeros_vendidos: number[]
   imagem_url: string | null
   data_sorteio: string | null
+  data_limite_venda: string | null
   encerrado: boolean
+  numero_sorteado: number | null
+  sorteado_em: string | null
 }
 
 export function linkPublicoAcaoEntreAmigos(token: string): string {
@@ -47,7 +50,15 @@ export async function fetchAcaoPublicInfo(
       data_sorteio: row.data_sorteio
         ? String(row.data_sorteio).slice(0, 10)
         : null,
+      data_limite_venda: row.data_limite_venda
+        ? String(row.data_limite_venda).slice(0, 10)
+        : null,
       encerrado: !!row.encerrado,
+      numero_sorteado:
+        row.numero_sorteado != null && Number.isFinite(Number(row.numero_sorteado))
+          ? Number(row.numero_sorteado)
+          : null,
+      sorteado_em: row.sorteado_em ? String(row.sorteado_em) : null,
     },
     error: null,
   }

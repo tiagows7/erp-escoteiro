@@ -1544,7 +1544,7 @@ Deno.serve(async (req) => {
         const { data: acao, error: acaoError } = await admin
           .from('acao_entre_amigos')
           .select(
-            'acao_id, empresa_id, nome, valor_numero, ramo, secao, encerrado_em',
+            'acao_id, empresa_id, nome, valor_numero, ramo, secao, encerrado_em, data_limite_venda, numero_sorteado',
           )
           .eq('acao_id', faixa.acao_id)
           .eq('empresa_id', faixa.empresa_id)
@@ -1553,11 +1553,24 @@ Deno.serve(async (req) => {
         if (acaoError || !acao) {
           return json({ error: 'Ação não encontrada.' }, 404)
         }
-        if (acao.encerrado_em) {
+        if (acao.encerrado_em || acao.numero_sorteado != null) {
           return json(
             { error: 'Esta ação entre amigos está encerrada.' },
             409,
           )
+        }
+        if (acao.data_limite_venda) {
+          const hoje = new Date()
+          const y = hoje.getFullYear()
+          const m = String(hoje.getMonth() + 1).padStart(2, '0')
+          const d = String(hoje.getDate()).padStart(2, '0')
+          const hojeIso = `${y}-${m}-${d}`
+          if (String(acao.data_limite_venda).slice(0, 10) < hojeIso) {
+            return json(
+              { error: 'O prazo de vendas desta ação já encerrou.' },
+              409,
+            )
+          }
         }
 
         const ini = Number(faixa.numero_inicial)

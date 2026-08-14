@@ -117,7 +117,7 @@ export function AcaoEntreAmigosPage() {
         const { data, error: listError } = await supabase
           .from('acao_entre_amigos')
           .select(
-            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, encerrado_em, created_at',
+            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, encerrado_em, numero_sorteado, created_at',
           )
           .eq('empresa_id', empresaId)
           .in('acao_id', acaoIds)
@@ -147,7 +147,7 @@ export function AcaoEntreAmigosPage() {
       let query = supabase
         .from('acao_entre_amigos')
         .select(
-          'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, encerrado_em, created_at',
+          'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, encerrado_em, numero_sorteado, created_at',
         )
         .eq('empresa_id', empresaId)
         .order('created_at', { ascending: false })
@@ -296,6 +296,7 @@ export function AcaoEntreAmigosPage() {
                     <th>Sua faixa</th>
                   )}
                   <th>Valor</th>
+                  <th>Limite vendas</th>
                   <th>Sorteio</th>
                   {!associadoLogin ? <th>Qtde</th> : null}
                 </tr>
@@ -313,6 +314,16 @@ export function AcaoEntreAmigosPage() {
                           .slice(0, 10)
                           .split('-')
                         return y && m && d ? `${d}/${m}/${y}` : row.data_sorteio
+                      })()
+                    : '—'
+                  const limite = row.data_limite_venda
+                    ? (() => {
+                        const [y, m, d] = String(row.data_limite_venda)
+                          .slice(0, 10)
+                          .split('-')
+                        return y && m && d
+                          ? `${d}/${m}/${y}`
+                          : row.data_limite_venda
                       })()
                     : '—'
                   return (
@@ -343,6 +354,9 @@ export function AcaoEntreAmigosPage() {
                         {encerrado ? (
                           <span className="badge badge-danger">Encerrado</span>
                         ) : null}
+                        {row.numero_sorteado != null ? (
+                          <span className="badge">Nº {row.numero_sorteado}</span>
+                        ) : null}
                       </td>
                       {!associadoLogin ? (
                         <>
@@ -371,6 +385,7 @@ export function AcaoEntreAmigosPage() {
                         </td>
                       )}
                       <td>{formatMoney(Number(row.valor_numero ?? 0))}</td>
+                      <td>{limite}</td>
                       <td>{sorteio}</td>
                       {!associadoLogin ? <td>{qtde}</td> : null}
                     </tr>

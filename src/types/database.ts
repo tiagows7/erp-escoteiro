@@ -232,8 +232,11 @@ export type AcaoEntreAmigos = {
   numero_final: number
   valor_numero: number
   data_sorteio: string | null
+  data_limite_venda: string | null
   imagem_url: string | null
   encerrado_em: string | null
+  numero_sorteado: number | null
+  sorteado_em: string | null
   created_at: string | null
 }
 

@@ -4,12 +4,19 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { AcaoSorteioModal } from '@/components/AcaoSorteioModal'
 import {
   AcaoNumerosImpressos,
   type NumeroImpressoItem,
 } from '@/components/AcaoNumerosImpressos'
 import { PixSicrediPublicCheckoutModal } from '@/components/PixSicrediPublicCheckoutModal'
-import { numerosDaFaixa } from '@/lib/acaoEntreAmigos'
+import {
+  executarSorteioAcao,
+  formatDateBR,
+  isAcaoVendasBloqueadas,
+  numerosDaFaixa,
+  podeSortearAcao,
+} from '@/lib/acaoEntreAmigos'
 import { linkPublicoAcaoEntreAmigos } from '@/lib/acaoEntreAmigosPublic'
 import { formatMoney } from '@/lib/despesas'
 import { isEncerrado } from '@/lib/encerrado'
@@ -84,6 +91,8 @@ export function AcaoEntreAmigosVendaPage() {
   const [pixInput, setPixInput] = useState<PixPublicAcaoInput | null>(null)
   const [saving, setSaving] = useState(false)
   const [numerosPagos, setNumerosPagos] = useState<NumeroImpressoItem[]>([])
+  const [sorteioOpen, setSorteioOpen] = useState(false)
+  const [sorteioRefazer, setSorteioRefazer] = useState(false)
 
   const vendidos = useMemo(
     () => new Map(vendas.map((v) => [v.numero, v])),
@@ -134,7 +143,7 @@ export function AcaoEntreAmigosVendaPage() {
         supabase
           .from('acao_entre_amigos')
           .select(
-            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, imagem_url, encerrado_em, created_at',
+            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, imagem_url, encerrado_em, numero_sorteado, sorteado_em, created_at',
           )
           .eq('acao_id', acaoId)
           .eq('empresa_id', empresaId)
@@ -360,8 +369,14 @@ export function AcaoEntreAmigosVendaPage() {
   async function onVender(event: FormEvent) {
     event.preventDefault()
     if (!empresaId || !acao || selectedNumeros.length === 0) return
-    if (isEncerrado(acao.encerrado_em)) {
-      setError('Esta ação está encerrada — não é possível vender.')
+    if (isAcaoVendasBloqueadas({
+      encerrado_em: acao.encerrado_em,
+      data_limite_venda: acao.data_limite_venda,
+      numero_inicial: acao.numero_inicial,
+      numero_final: acao.numero_final,
+      qtde_vendidos: vendas.length,
+    })) {
+      setError('As vendas desta ação estão encerradas ou o prazo já passou.')
       return
     }
     if (!compradorNome.trim()) {
@@ -507,30 +522,94 @@ export function AcaoEntreAmigosVendaPage() {
   const valorUnitario = Number(acao.valor_numero ?? 0)
   const totalSelecionado = selectedNumeros.length * valorUnitario
   const encerrado = isEncerrado(acao.encerrado_em)
+  const vendasBloqueadas = isAcaoVendasBloqueadas({
+    encerrado_em: acao.encerrado_em,
+    data_limite_venda: acao.data_limite_venda,
+    numero_inicial: acao.numero_inicial,
+    numero_final: acao.numero_final,
+    qtde_vendidos: vendas.length,
+  })
+  const podeSortear =
+    canStaffEdit &&
+    podeSortearAcao({
+      encerrado_em: acao.encerrado_em,
+      data_limite_venda: acao.data_limite_venda,
+      numero_inicial: acao.numero_inicial,
+      numero_final: acao.numero_final,
+      qtde_vendidos: vendas.length,
+      numero_sorteado: acao.numero_sorteado,
+    })
+
+  async function onEncerrarVendas() {
+    if (!canStaffEdit || !empresaId || encerrado) return
+    const ok = await toast.confirm({
+      title: 'Encerrar vendas?',
+      message:
+        'Depois de encerrada, não será possível vender mais números nesta ação.',
+      confirmLabel: 'Encerrar vendas',
+      danger: true,
+    })
+    if (!ok) return
+    const { error: upError, data } = await supabase
+      .from('acao_entre_amigos')
+      .update({ encerrado_em: new Date().toISOString() })
+      .eq('acao_id', acao.acao_id)
+      .eq('empresa_id', empresaId)
+      .select(
+        'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, imagem_url, encerrado_em, numero_sorteado, sorteado_em, created_at',
+      )
+      .single()
+    if (upError || !data) {
+      setError(upError?.message ?? 'Não foi possível encerrar as vendas.')
+      return
+    }
+    setAcao(data as AcaoEntreAmigos)
+    toast.success('Vendas encerradas')
+  }
+
+  async function onSortear() {
+    if (!podeSortear) return
+    const refazer = acao.numero_sorteado != null
+    const ok = await toast.confirm({
+      title: refazer ? 'Sortear novamente?' : 'Realizar sorteio?',
+      message: refazer
+        ? 'Um novo número será sorteado entre os vendidos e substitui o resultado anterior.'
+        : 'Será sorteado um número entre os já vendidos, com contagem de 10 segundos.',
+      confirmLabel: refazer ? 'Sortear novamente' : 'Sortear',
+      danger: refazer,
+    })
+    if (!ok) return
+    setError(null)
+    setSorteioRefazer(refazer)
+    setSorteioOpen(true)
+  }
 
   return (
     <>
       <header className="page-header">
         <div>
           <h2>
-            {encerrado
+            {vendasBloqueadas
               ? 'Vendas da ação'
               : associadoLogin
                 ? 'Vender números'
                 : 'Vendas da ação'}{' '}
             {encerrado ? (
               <span className="badge badge-danger">Encerrado</span>
+            ) : vendasBloqueadas ? (
+              <span className="badge badge-danger">Vendas bloqueadas</span>
             ) : null}
           </h2>
           <p>
             {acao.nome} · {formatMoney(Number(acao.valor_numero ?? 0))} cada
+            {acao.data_limite_venda
+              ? ` · vendas até ${formatDateBR(acao.data_limite_venda)}`
+              : null}
             {acao.data_sorteio
-              ? ` · sorteio ${(() => {
-                  const [y, m, d] = String(acao.data_sorteio)
-                    .slice(0, 10)
-                    .split('-')
-                  return y && m && d ? `${d}/${m}/${y}` : acao.data_sorteio
-                })()}`
+              ? ` · sorteio ${formatDateBR(acao.data_sorteio)}`
+              : null}
+            {acao.numero_sorteado != null
+              ? ` · ganhador nº ${acao.numero_sorteado}`
               : null}
             {faixa
               ? ` · sua faixa ${faixa.numero_inicial}–${faixa.numero_final}`
@@ -538,13 +617,31 @@ export function AcaoEntreAmigosVendaPage() {
           </p>
         </div>
         <div className="page-header-actions actions-pair">
-          {associadoLogin && faixa?.link_token && !encerrado ? (
+          {associadoLogin && faixa?.link_token && !vendasBloqueadas ? (
             <button
               type="button"
               className="btn btn-primary"
               onClick={() => void copiarLink(faixa.link_token)}
             >
               Copiar link de venda
+            </button>
+          ) : null}
+          {canStaffEdit && !encerrado ? (
+            <button
+              type="button"
+              className="btn btn-soft"
+              onClick={() => void onEncerrarVendas()}
+            >
+              Encerrar vendas
+            </button>
+          ) : null}
+          {podeSortear ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void onSortear()}
+            >
+              {acao.numero_sorteado != null ? 'Sortear novamente' : 'Sortear'}
             </button>
           ) : null}
           {canStaffEdit ? (
@@ -567,6 +664,22 @@ export function AcaoEntreAmigosVendaPage() {
         </AlertMessage>
       ) : null}
 
+      {acao.numero_sorteado != null ? (
+        <AlertMessage tone="success" title="Sorteio realizado">
+          Número sorteado: <strong>{acao.numero_sorteado}</strong>
+          {(() => {
+            const v = vendas.find((x) => x.numero === acao.numero_sorteado)
+            if (!v) return null
+            return (
+              <>
+                {' '}
+                · <strong>{v.comprador_nome}</strong> · {v.comprador_telefone}
+              </>
+            )
+          })()}
+        </AlertMessage>
+      ) : null}
+
       {numerosPagos.length > 0 && acao ? (
         <section className="panel">
           <AcaoNumerosImpressos
@@ -578,8 +691,8 @@ export function AcaoEntreAmigosVendaPage() {
           />
         </section>
       ) : null}
-      {encerrado ? (
-        <AlertMessage tone="info" title="Ação encerrada">
+      {vendasBloqueadas ? (
+        <AlertMessage tone="info" title="Vendas bloqueadas">
           Não é possível vender novos números — só consultar o que já foi
           vendido.
         </AlertMessage>
@@ -710,13 +823,12 @@ export function AcaoEntreAmigosVendaPage() {
                         className={`acao-numero-btn ${sold ? 'is-sold' : ''} ${
                           selected ? 'is-selected' : ''
                         }`}
-                        disabled={sold || saving || encerrado}
+                        disabled={sold || saving || vendasBloqueadas}
                         onClick={() => toggleNumero(numero)}
                         title={
                           sold
                             ? `${venda.comprador_nome} · ${venda.comprador_telefone}`
-                            : encerrado
-                              ? 'Ação encerrada'
+                             : vendasBloqueadas ? 'Ação encerrada'
                               : selected
                                 ? `Remover nº ${numero} da seleção`
                                 : `Selecionar nº ${numero}`
@@ -731,7 +843,7 @@ export function AcaoEntreAmigosVendaPage() {
             </div>
           </section>
 
-          {!encerrado && selectedNumeros.length > 0 ? (
+          {!vendasBloqueadas && selectedNumeros.length > 0 ? (
             <section className="panel">
               <h3 style={{ marginTop: 0 }}>
                 {selectedNumeros.length === 1
@@ -904,6 +1016,18 @@ export function AcaoEntreAmigosVendaPage() {
           </section>
         </>
       )}
+
+      <AcaoSorteioModal
+        open={sorteioOpen}
+        acaoNome={acao.nome}
+        runSorteio={() =>
+          executarSorteioAcao(acao.acao_id, sorteioRefazer)
+        }
+        onDone={() => {
+          void reload()
+        }}
+        onClose={() => setSorteioOpen(false)}
+      />
 
       <PixSicrediPublicCheckoutModal
         open={pixOpen}

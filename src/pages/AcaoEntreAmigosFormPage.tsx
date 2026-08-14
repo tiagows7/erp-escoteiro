@@ -10,16 +10,23 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { AcaoSorteioModal } from '@/components/AcaoSorteioModal'
+import { DocumentosLinks } from '@/components/DocumentosLinks'
 import {
   faixaConflitaComOutras,
   faixaDentroDaAcao,
+  formatDateBR,
+  executarSorteioAcao,
+  isAcaoPrazoVendasExpirado,
+  isAcaoTodosVendidos,
+  isAcaoVendasBloqueadas,
+  podeSortearAcao,
 } from '@/lib/acaoEntreAmigos'
 import {
   formatMoney,
   parseMoneyInput,
   situacaoDespesaLabel,
 } from '@/lib/despesas'
-import { DocumentosLinks } from '@/components/DocumentosLinks'
 import { isEncerrado } from '@/lib/encerrado'
 import { situacaoTituloLabel } from '@/lib/receitas'
 import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
@@ -86,6 +93,7 @@ const emptyForm = {
   numero_final: '100',
   valor_numero: '0,00',
   data_sorteio: '',
+  data_limite_venda: '',
 }
 
 function unidadeLabel(ramoId: number | null): string {
@@ -133,6 +141,14 @@ export function AcaoEntreAmigosFormPage() {
   const [imagemFile, setImagemFile] = useState<File | null>(null)
   const [imagemPreview, setImagemPreview] = useState<string | null>(null)
   const [encerradoEm, setEncerradoEm] = useState<string | null>(null)
+  const [dataLimiteVenda, setDataLimiteVenda] = useState<string | null>(null)
+  const [numeroSorteado, setNumeroSorteado] = useState<number | null>(null)
+  const [sorteadoEm, setSorteadoEm] = useState<string | null>(null)
+  const [qtdeVendidos, setQtdeVendidos] = useState(0)
+  const [sorteioOpen, setSorteioOpen] = useState(false)
+  const [sorteioRefazer, setSorteioRefazer] = useState(false)
+  const [ganhadorNome, setGanhadorNome] = useState<string | null>(null)
+  const [ganhadorTelefone, setGanhadorTelefone] = useState<string | null>(null)
   const imagemInputRef = useRef<HTMLInputElement>(null)
 
   const ramoId = form.ramo ? Number(form.ramo) : null
@@ -235,6 +251,7 @@ export function AcaoEntreAmigosFormPage() {
     const vendidosSet = new Set(
       (vendasRes.data ?? []).map((v) => Number(v.numero)),
     )
+    setQtdeVendidos(vendidosSet.size)
 
     setFaixas(
       ((faixasRes.data ?? []) as unknown as Array<
@@ -262,7 +279,7 @@ export function AcaoEntreAmigosFormPage() {
       const { data, error: loadError } = await supabase
         .from('acao_entre_amigos')
         .select(
-          'acao_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, imagem_url, encerrado_em',
+          'acao_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, imagem_url, encerrado_em, numero_sorteado, sorteado_em',
         )
         .eq('acao_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -296,11 +313,48 @@ export function AcaoEntreAmigosFormPage() {
         data_sorteio: data.data_sorteio
           ? String(data.data_sorteio).slice(0, 10)
           : '',
+        data_limite_venda: data.data_limite_venda
+          ? String(data.data_limite_venda).slice(0, 10)
+          : '',
       })
       setImagemUrl(data.imagem_url ?? null)
       setImagemPreview(data.imagem_url ?? null)
       setImagemFile(null)
       setEncerradoEm((data.encerrado_em as string | null) ?? null)
+      setDataLimiteVenda(
+        data.data_limite_venda
+          ? String(data.data_limite_venda).slice(0, 10)
+          : null,
+      )
+      setNumeroSorteado(
+        data.numero_sorteado != null
+          ? Number(data.numero_sorteado)
+          : null,
+      )
+      setSorteadoEm((data.sorteado_em as string | null) ?? null)
+      if (data.numero_sorteado != null) {
+        const { data: vendaGanhador } = await supabase
+          .from('acao_entre_amigos_venda')
+          .select('comprador_nome, comprador_telefone')
+          .eq('acao_id', Number(id))
+          .eq('empresa_id', empresaId)
+          .eq('numero', Number(data.numero_sorteado))
+          .maybeSingle()
+        if (!mounted) return
+        setGanhadorNome(
+          vendaGanhador?.comprador_nome
+            ? String(vendaGanhador.comprador_nome)
+            : null,
+        )
+        setGanhadorTelefone(
+          vendaGanhador?.comprador_telefone
+            ? String(vendaGanhador.comprador_telefone)
+            : null,
+        )
+      } else {
+        setGanhadorNome(null)
+        setGanhadorTelefone(null)
+      }
       await loadFaixas(Number(id))
 
       const [r, d] = await Promise.all([
@@ -390,10 +444,10 @@ export function AcaoEntreAmigosFormPage() {
   async function onEncerrar() {
     if (!canWrite || isNew || !empresaId || isEncerrado(encerradoEm)) return
     const ok = await toast.confirm({
-      title: 'Encerrar ação entre amigos?',
+      title: 'Encerrar vendas?',
       message:
-        'Depois de encerrada, não será possível vender números nem alterar o cadastro — só visualizar.',
-      confirmLabel: 'Encerrar',
+        'Depois de encerrada, não será possível vender números nem alterar o cadastro — só visualizar e sortear.',
+      confirmLabel: 'Encerrar vendas',
       danger: true,
     })
     if (!ok) return
@@ -411,7 +465,28 @@ export function AcaoEntreAmigosFormPage() {
       return
     }
     setEncerradoEm((data.encerrado_em as string | null) ?? null)
-    toast.success('Ação encerrada', 'Agora só é possível visualizar.')
+    toast.success('Vendas encerradas', 'Agora é possível realizar o sorteio.')
+  }
+
+  async function onSortear(refazer = false) {
+    if (!canWrite || isNew || !empresaId) return
+    if (numeroSorteado != null && !refazer) {
+      // botão "Sortear novamente"
+      refazer = true
+    }
+    const ok = await toast.confirm({
+      title: refazer && numeroSorteado != null ? 'Sortear novamente?' : 'Realizar sorteio?',
+      message:
+        refazer && numeroSorteado != null
+          ? 'Um novo número será sorteado entre os vendidos e substitui o resultado anterior.'
+          : 'O sistema sorteia um número entre os já vendidos, com contagem de 10 segundos.',
+      confirmLabel: refazer && numeroSorteado != null ? 'Sortear novamente' : 'Sortear',
+      danger: refazer && numeroSorteado != null,
+    })
+    if (!ok) return
+    setError(null)
+    setSorteioRefazer(refazer && numeroSorteado != null)
+    setSorteioOpen(true)
   }
 
   async function onSubmit(event: FormEvent) {
@@ -474,6 +549,7 @@ export function AcaoEntreAmigosFormPage() {
       numero_final: numeroFinal,
       valor_numero: parseMoneyInput(form.valor_numero),
       data_sorteio: form.data_sorteio || null,
+      data_limite_venda: form.data_limite_venda || null,
     }
 
     const result = isNew
@@ -675,12 +751,44 @@ export function AcaoEntreAmigosFormPage() {
   }
 
   const encerrado = isEncerrado(encerradoEm)
+  const numeroInicial = Number(String(form.numero_inicial).replace(/\D/g, ''))
+  const numeroFinal = Number(String(form.numero_final).replace(/\D/g, ''))
+  const todosVendidos = isAcaoTodosVendidos(
+    numeroInicial,
+    numeroFinal,
+    qtdeVendidos,
+  )
+  const prazoExpirado = isAcaoPrazoVendasExpirado(
+    form.data_limite_venda || dataLimiteVenda,
+  )
+  const vendasBloqueadas = isAcaoVendasBloqueadas({
+    encerrado_em: encerradoEm,
+    data_limite_venda: form.data_limite_venda || dataLimiteVenda,
+    numero_inicial: numeroInicial,
+    numero_final: numeroFinal,
+    qtde_vendidos: qtdeVendidos,
+  })
+  const podeSortear =
+    canWrite &&
+    !isNew &&
+    podeSortearAcao({
+      encerrado_em: encerradoEm,
+      data_limite_venda: form.data_limite_venda || dataLimiteVenda,
+      numero_inicial: numeroInicial,
+      numero_final: numeroFinal,
+      qtde_vendidos: qtdeVendidos,
+      numero_sorteado: numeroSorteado,
+    })
   const disabled = saving || !canWrite || encerrado
   const qtdePreview = (() => {
-    const a = Number(String(form.numero_inicial).replace(/\D/g, ''))
-    const b = Number(String(form.numero_final).replace(/\D/g, ''))
-    if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return null
-    return b - a + 1
+    if (
+      !Number.isFinite(numeroInicial) ||
+      !Number.isFinite(numeroFinal) ||
+      numeroFinal < numeroInicial
+    ) {
+      return null
+    }
+    return numeroFinal - numeroInicial + 1
   })()
 
   return (
@@ -695,12 +803,16 @@ export function AcaoEntreAmigosFormPage() {
                 : 'Editar ação entre amigos'}{' '}
             {encerrado ? (
               <span className="badge badge-danger">Encerrado</span>
+            ) : prazoExpirado ? (
+              <span className="badge badge-danger">Prazo encerrado</span>
+            ) : todosVendidos ? (
+              <span className="badge">Todos vendidos</span>
             ) : null}
           </h2>
           <p>
             {encerrado
               ? 'Somente visualização — vendas e alterações bloqueadas.'
-              : 'Nome, valor do número, faixa geral e atribuição aos jovens'}
+              : 'Nome, valor do número, faixa geral, prazo de vendas e atribuição aos jovens'}
           </p>
         </div>
         <div className="page-header-actions">
@@ -734,7 +846,16 @@ export function AcaoEntreAmigosFormPage() {
               className="btn btn-soft"
               onClick={() => void onEncerrar()}
             >
-              Encerrar
+              Encerrar vendas
+            </button>
+          ) : null}
+          {podeSortear ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void onSortear(numeroSorteado != null)}
+            >
+              {numeroSorteado != null ? 'Sortear novamente' : 'Sortear'}
             </button>
           ) : null}
           <Link className="btn btn-soft" to="/vendas/acao-entre-amigos">
@@ -749,9 +870,36 @@ export function AcaoEntreAmigosFormPage() {
             {error}
           </AlertMessage>
         ) : null}
+        {numeroSorteado != null ? (
+          <AlertMessage tone="success" title="Sorteio realizado">
+            Número sorteado: <strong>{numeroSorteado}</strong>
+            {ganhadorNome ? (
+              <>
+                {' '}
+                · <strong>{ganhadorNome}</strong>
+              </>
+            ) : null}
+            {ganhadorTelefone ? <> · {ganhadorTelefone}</> : null}
+            {sorteadoEm
+              ? ` · ${new Date(sorteadoEm).toLocaleString('pt-BR')}`
+              : null}
+          </AlertMessage>
+        ) : null}
         {encerrado ? (
-          <AlertMessage tone="info" title="Ação encerrada">
+          <AlertMessage tone="info" title="Vendas encerradas">
             Não é possível alterar o cadastro, faixas ou vender novos números.
+            {numeroSorteado == null && qtdeVendidos > 0
+              ? ' Use o botão Sortear para escolher o ganhador entre os números vendidos.'
+              : null}
+          </AlertMessage>
+        ) : vendasBloqueadas ? (
+          <AlertMessage tone="info" title="Vendas bloqueadas">
+            {todosVendidos
+              ? 'Todos os números foram vendidos.'
+              : prazoExpirado
+                ? `O prazo de vendas encerrou em ${formatDateBR(form.data_limite_venda || dataLimiteVenda)}.`
+                : 'As vendas desta ação estão bloqueadas.'}{' '}
+            Encerre formalmente e realize o sorteio quando estiver pronto.
           </AlertMessage>
         ) : null}
 
@@ -845,6 +993,21 @@ export function AcaoEntreAmigosFormPage() {
               onChange={(e) => update('valor_numero', e.target.value)}
               disabled={disabled}
             />
+          </div>
+
+          <div className="field">
+            <label htmlFor="data_limite_venda">Data limite das vendas</label>
+            <input
+              id="data_limite_venda"
+              type="date"
+              className="input"
+              value={form.data_limite_venda}
+              onChange={(e) => update('data_limite_venda', e.target.value)}
+              disabled={disabled}
+            />
+            <span className="field-hint">
+              Depois deste dia, as vendas ficam bloqueadas automaticamente.
+            </span>
           </div>
 
           <div className="field">
@@ -1249,6 +1412,22 @@ export function AcaoEntreAmigosFormPage() {
           </section>
         </>
       ) : null}
+
+      <AcaoSorteioModal
+        open={sorteioOpen}
+        acaoNome={form.nome}
+        runSorteio={() =>
+          executarSorteioAcao(Number(id), sorteioRefazer)
+        }
+        onDone={(g) => {
+          setNumeroSorteado(g.numero)
+          setGanhadorNome(g.nome || null)
+          setGanhadorTelefone(g.telefone || null)
+          setSorteadoEm(new Date().toISOString())
+          if (!encerradoEm) setEncerradoEm(new Date().toISOString())
+        }}
+        onClose={() => setSorteioOpen(false)}
+      />
     </>
   )
 }

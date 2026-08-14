@@ -3592,6 +3592,71 @@ table.data .badge {
   font-variant-numeric: tabular-nums;
 }
 
+.acao-sorteio-overlay {
+  z-index: 110;
+  background: rgba(6, 14, 28, 0.72);
+}
+
+.acao-sorteio-dialog {
+  width: min(26rem, 100%);
+  padding: 1.75rem 1.5rem 1.5rem;
+}
+
+.acao-sorteio-countdown {
+  font-family: 'Outfit', var(--font-display);
+  font-size: clamp(3.4rem, 12vw, 4.6rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--forest);
+  margin-bottom: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  animation: acaoSorteioPulse 1s ease infinite;
+}
+
+@keyframes acaoSorteioPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.88;
+  }
+}
+
+.acao-sorteio-eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.acao-sorteio-numero {
+  font-family: 'Outfit', var(--font-display);
+  font-size: clamp(3rem, 10vw, 4rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--forest);
+  margin: 0.2rem 0 0.75rem;
+}
+
+.acao-sorteio-nome {
+  font-size: 1.2rem;
+  color: var(--ink);
+}
+
+.acao-sorteio-fone {
+  margin: 0.35rem 0 0;
+  font-size: 1.02rem;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .confirm-overlay {
   position: fixed;
   inset: 0;
