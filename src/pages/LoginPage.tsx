@@ -160,6 +160,7 @@ export function LoginPage() {
               />
             </div>
             <div className="login-brand-copy">
+              <p className="login-kicker">Sistema para grupos escoteiros</p>
               <h2 className="login-brand-title">
                 O Escotismo evolui. A gestão também.
               </h2>
