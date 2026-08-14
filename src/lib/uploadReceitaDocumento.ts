@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase'
 import {
   parseDocumentUrls,
   serializeDocumentUrls,
+  toStorageRef,
 } from '@/lib/documentUrls'
 
 const BUCKET = 'receita-comprovantes'
@@ -58,8 +59,7 @@ async function uploadOneFile(
     return { error: `${file.name}: ${uploadError.message}` }
   }
 
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
-  return { url: data.publicUrl }
+  return { url: toStorageRef(BUCKET, path) }
 }
 
 /** Upload de um ou mais arquivos; anexa aos documentos já existentes. */

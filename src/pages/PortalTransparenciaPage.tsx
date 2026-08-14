@@ -22,7 +22,7 @@ import {
   type PortalSaldoLocal,
   type PortalSecao,
 } from '@/lib/portal'
-import { documentLabel, parseDocumentUrls } from '@/lib/documentUrls'
+import { DocumentosLinks } from '@/components/DocumentosLinks'
 
 type Tab = 'despesas' | 'receitas'
 
@@ -258,27 +258,10 @@ export function PortalTransparenciaPage() {
                 <td>{formatMoney(row.despesa_saldo)}</td>
                 <td>{situacaoTituloLabel(row.despesa_situacao)}</td>
                 <td>
-                  {(() => {
-                    const docs = parseDocumentUrls(row.despesa_documento)
-                    if (docs.length === 0) return '—'
-                    return (
-                      <div className="portal-doc-links">
-                        {docs.map((url, index) => (
-                          <a
-                            key={url}
-                            className="btn btn-soft"
-                            href={url}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {docs.length === 1
-                              ? 'Abrir'
-                              : documentLabel(url, index)}
-                          </a>
-                        ))}
-                      </div>
-                    )
-                  })()}
+                  <DocumentosLinks
+                    value={row.despesa_documento}
+                    hideLinks
+                  />
                 </td>
               </tr>
             ))}
@@ -317,27 +300,10 @@ export function PortalTransparenciaPage() {
                 <td>{formatMoney(row.receita_saldo)}</td>
                 <td>{situacaoTituloLabel(row.receita_situacao)}</td>
                 <td>
-                  {(() => {
-                    const docs = parseDocumentUrls(row.receita_documento)
-                    if (docs.length === 0) return '—'
-                    return (
-                      <div className="portal-doc-links">
-                        {docs.map((url, index) => (
-                          <a
-                            key={url}
-                            className="btn btn-soft"
-                            href={url}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {docs.length === 1
-                              ? 'Abrir'
-                              : documentLabel(url, index)}
-                          </a>
-                        ))}
-                      </div>
-                    )
-                  })()}
+                  <DocumentosLinks
+                    value={row.receita_documento}
+                    hideLinks
+                  />
                 </td>
               </tr>
             ))}

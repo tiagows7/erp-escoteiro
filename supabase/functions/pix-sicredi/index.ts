@@ -1439,6 +1439,18 @@ Deno.serve(async (req) => {
     // Webhook público do Sicredi (sem JWT do app)
     const url = new URL(req.url)
     if (req.method === 'POST' && url.searchParams.get('webhook') === '1') {
+      const expectedSecret = Deno.env.get('PIX_SICREDI_WEBHOOK_SECRET')?.trim()
+      if (expectedSecret) {
+        const got =
+          req.headers.get('x-webhook-secret')?.trim() ||
+          req.headers.get('x-pix-webhook-secret')?.trim() ||
+          url.searchParams.get('secret')?.trim() ||
+          ''
+        if (got !== expectedSecret) {
+          return json({ error: 'Webhook não autorizado.' }, 401)
+        }
+      }
+
       const payload = await req.json().catch(() => ({}))
       const pixList = Array.isArray(payload?.pix) ? payload.pix : []
       // Fallback: alguns PSP enviam txid no root
@@ -1455,7 +1467,37 @@ Deno.serve(async (req) => {
           .eq('txid', txid)
           .maybeSingle()
         if (!cob || cob.baixado_em) continue
-        await concluirEBaixar(admin, cob as Record<string, unknown>, payload)
+
+        // Reconfirma no Sicredi antes de baixar (webhook sozinho não é prova)
+        const resolved = await resolveSicrediConfig(admin, {
+          empresaId: cob.empresa_id as number,
+          tipo: String(cob.tipo),
+          ramoId: (cob.ramo_id as number | null) ?? null,
+        })
+        if (!resolved.cfg) {
+          console.error('pix webhook: sem config Sicredi', txid, resolved.hint)
+          continue
+        }
+        try {
+          const remote = await getCob(resolved.cfg, String(cob.txid))
+          const remoteStatus = String(remote.status ?? '')
+          await admin
+            .from('pix_cobrancas')
+            .update({
+              status: remoteStatus || cob.status,
+              raw_status: remote,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', cob.id)
+          if (remoteStatus !== 'CONCLUIDA') continue
+          await concluirEBaixar(
+            admin,
+            cob as Record<string, unknown>,
+            remote,
+          )
+        } catch (e) {
+          console.error('pix webhook reconfirm/baixa', txid, e)
+        }
       }
 
       return json({ ok: true })

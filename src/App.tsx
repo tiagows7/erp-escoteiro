@@ -177,7 +177,7 @@ export default function App() {
             <Route
               path="cadastros/usuarios/:id"
               element={
-                <RequirePermission permission="usuarios.view">
+                <RequirePermission permission="usuarios.write">
                   <UsuarioFormPage />
                 </RequirePermission>
               }
@@ -193,7 +193,7 @@ export default function App() {
             <Route
               path="cadastros/tipo-pagamento/:id"
               element={
-                <RequirePermission permission="financeiro.view" grupoAdmin>
+                <RequirePermission permission="financeiro.write" grupoAdmin>
                   <TipoPagamentoFormPage />
                 </RequirePermission>
               }
@@ -209,7 +209,7 @@ export default function App() {
             <Route
               path="cadastros/tipo-mensalidade/:id"
               element={
-                <RequirePermission permission="financeiro.view" grupoAdmin>
+                <RequirePermission permission="financeiro.write" grupoAdmin>
                   <TipoMensalidadeFormPage />
                 </RequirePermission>
               }
@@ -225,7 +225,7 @@ export default function App() {
             <Route
               path="cadastros/fornecedores/:id"
               element={
-                <RequirePermission permission="financeiro.view">
+                <RequirePermission permission="financeiro.write">
                   <FornecedorFormPage />
                 </RequirePermission>
               }
@@ -250,7 +250,7 @@ export default function App() {
             <Route
               path="estoque/grupos-produtos/:id"
               element={
-                <RequirePermission permission="estoque.view">
+                <RequirePermission permission="estoque.write">
                   <GrupoProdutoFormPage />
                 </RequirePermission>
               }
@@ -274,7 +274,7 @@ export default function App() {
             <Route
               path="estoque/produtos/:id"
               element={
-                <RequirePermission permission="estoque.view">
+                <RequirePermission permission="estoque.write">
                   <ProdutoFormPage />
                 </RequirePermission>
               }
@@ -311,7 +311,7 @@ export default function App() {
             <Route
               path="despesas/inclusao/:id"
               element={
-                <RequirePermission permission="financeiro.view">
+                <RequirePermission anyOf={['financeiro.view', 'financeiro.write']}>
                   <DespesaFormPage />
                 </RequirePermission>
               }
@@ -327,7 +327,7 @@ export default function App() {
             <Route
               path="despesas/pagamento/:id"
               element={
-                <RequirePermission permission="financeiro.view">
+                <RequirePermission permission="financeiro.write">
                   <DespesaPagamentoFormPage />
                 </RequirePermission>
               }
@@ -352,7 +352,7 @@ export default function App() {
             <Route
               path="receitas/inclusao/:id"
               element={
-                <RequirePermission permission="financeiro.view">
+                <RequirePermission anyOf={['financeiro.view', 'financeiro.write']}>
                   <ReceitaFormPage />
                 </RequirePermission>
               }
@@ -360,7 +360,7 @@ export default function App() {
             <Route
               path="receitas/gera-mensalidade"
               element={
-                <RequirePermission permission="financeiro.view">
+                <RequirePermission permission="financeiro.write">
                   <GeraMensalidadePage />
                 </RequirePermission>
               }
@@ -384,7 +384,7 @@ export default function App() {
             <Route
               path="receitas/recebimento/:id"
               element={
-                <RequirePermission permission="financeiro.view">
+                <RequirePermission permission="financeiro.write">
                   <ReceitaRecebimentoFormPage />
                 </RequirePermission>
               }
@@ -409,7 +409,7 @@ export default function App() {
             <Route
               path="atividades/:id"
               element={
-                <RequirePermission permission="atividades.view">
+                <RequirePermission anyOf={['atividades.view', 'atividades.write']}>
                   <AtividadeFormPage />
                 </RequirePermission>
               }
@@ -441,7 +441,7 @@ export default function App() {
             <Route
               path="vendas/acao-entre-amigos/:id/vender"
               element={
-                <RequirePermission permission="vendas.view">
+                <RequirePermission permission="vendas.write">
                   <AcaoEntreAmigosVendaPage />
                 </RequirePermission>
               }
@@ -449,7 +449,7 @@ export default function App() {
             <Route
               path="vendas/acao-entre-amigos/:id"
               element={
-                <RequirePermission permission="vendas.view">
+                <RequirePermission anyOf={['vendas.view', 'vendas.write']}>
                   <AcaoEntreAmigosFormPage />
                 </RequirePermission>
               }
@@ -465,7 +465,7 @@ export default function App() {
             <Route
               path="vendas/eventos/:id/vender"
               element={
-                <RequirePermission permission="vendas.view">
+                <RequirePermission permission="vendas.write">
                   <VendaEventoVendaPage />
                 </RequirePermission>
               }
@@ -473,7 +473,7 @@ export default function App() {
             <Route
               path="vendas/eventos/:id"
               element={
-                <RequirePermission permission="vendas.view">
+                <RequirePermission anyOf={['vendas.view', 'vendas.write']}>
                   <VendaEventoFormPage />
                 </RequirePermission>
               }
@@ -481,7 +481,7 @@ export default function App() {
             <Route
               path="vendas/loja"
               element={
-                <RequirePermission permission="vendas.view">
+                <RequirePermission permission="vendas.write">
                   <LojaPage />
                 </RequirePermission>
               }
@@ -505,7 +505,7 @@ export default function App() {
             <Route
               path="projetos/:id"
               element={
-                <RequirePermission permission="projetos.view">
+                <RequirePermission anyOf={['projetos.view', 'projetos.write']}>
                   <ProjetoFormPage />
                 </RequirePermission>
               }

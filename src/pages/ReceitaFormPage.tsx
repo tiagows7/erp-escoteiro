@@ -20,6 +20,7 @@ import {
   parseDocumentUrls,
   serializeDocumentUrls,
 } from '@/lib/documentUrls'
+import { useSignedDocumentUrls } from '@/hooks/useSignedDocumentUrls'
 import {
   matchesFinanceiroScope,
   resolveFinanceiroScope,
@@ -118,6 +119,7 @@ export function ReceitaFormPage() {
   const [loading, setLoading] = useState(!isNew)
   const [documentoUrls, setDocumentoUrls] = useState<string[]>([])
   const [docFiles, setDocFiles] = useState<File[]>([])
+  const documentoHrefs = useSignedDocumentUrls(documentoUrls)
 
   useEffect(() => {
     if (!scope || !isNew || lockedByVinculo) return
@@ -1053,21 +1055,24 @@ export function ReceitaFormPage() {
               ) : null}
               {documentoUrls.length > 0 ? (
                 <ul className="doc-file-list">
-                  {documentoUrls.map((url, index) => (
+                  {documentoUrls.map((url, index) => {
+                    const href = documentoHrefs[index] ?? url
+                    return (
                     <li key={url}>
                       {isReceitaDocumentoImage(url) ? (
-                        <img src={url} alt={documentLabel(url, index)} />
+                        <img src={href} alt={documentLabel(url, index)} />
                       ) : null}
                       <a
                         className="btn btn-soft"
-                        href={url}
+                        href={href}
                         target="_blank"
                         rel="noreferrer"
                       >
                         {documentLabel(url, index)}
                       </a>
                     </li>
-                  ))}
+                    )
+                  })}
                 </ul>
               ) : docFiles.length === 0 ? (
                 <p className="muted" style={{ margin: 0 }}>

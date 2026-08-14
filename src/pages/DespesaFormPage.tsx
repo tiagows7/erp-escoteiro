@@ -16,6 +16,7 @@ import {
   parseDocumentUrls,
   serializeDocumentUrls,
 } from '@/lib/documentUrls'
+import { useSignedDocumentUrls } from '@/hooks/useSignedDocumentUrls'
 import {
   matchesFinanceiroScope,
   resolveFinanceiroScope,
@@ -112,6 +113,7 @@ export function DespesaFormPage() {
   const [eventos, setEventos] = useState<EventoLookup[]>([])
   const [acoes, setAcoes] = useState<AcaoLookup[]>([])
   const [documentoUrls, setDocumentoUrls] = useState<string[]>([])
+  const documentoHrefs = useSignedDocumentUrls(documentoUrls)
   const [notaFiles, setNotaFiles] = useState<File[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -1091,21 +1093,24 @@ export function DespesaFormPage() {
               ) : null}
               {documentoUrls.length > 0 ? (
                 <ul className="doc-file-list">
-                  {documentoUrls.map((url, index) => (
+                  {documentoUrls.map((url, index) => {
+                    const href = documentoHrefs[index] ?? url
+                    return (
                     <li key={url}>
                       {isNotaImage(url) ? (
-                        <img src={url} alt={documentLabel(url, index)} />
+                        <img src={href} alt={documentLabel(url, index)} />
                       ) : null}
                       <a
                         className="btn btn-soft"
-                        href={url}
+                        href={href}
                         target="_blank"
                         rel="noreferrer"
                       >
                         {documentLabel(url, index)}
                       </a>
                     </li>
-                  ))}
+                    )
+                  })}
                 </ul>
               ) : notaFiles.length === 0 ? (
                 <p className="muted" style={{ margin: 0 }}>

@@ -27,9 +27,66 @@ export function serializeDocumentUrls(urls: string[]): string | null {
   return JSON.stringify(clean)
 }
 
+const PRIVATE_DOC_BUCKETS = new Set([
+  'receita-comprovantes',
+  'despesa-notas',
+])
+
+/** Extrai bucket + path de URL pública/assinada ou ref `bucket:path`. */
+export function parseStorageRef(
+  ref: string,
+): { bucket: string; path: string } | null {
+  const trimmed = ref.trim()
+  if (!trimmed) return null
+
+  const prefixed = trimmed.match(/^([a-z0-9-]+):(.+)$/i)
+  if (
+    prefixed &&
+    PRIVATE_DOC_BUCKETS.has(prefixed[1]) &&
+    !prefixed[2].includes('://')
+  ) {
+    return { bucket: prefixed[1], path: prefixed[2].replace(/^\/+/, '') }
+  }
+
+  try {
+    const u = new URL(trimmed)
+    const marker = '/storage/v1/object/'
+    const idx = u.pathname.indexOf(marker)
+    if (idx < 0) return null
+    const rest = u.pathname.slice(idx + marker.length)
+    // public/BUCKET/path | sign/BUCKET/path
+    const parts = rest.split('/')
+    if (parts.length < 3) return null
+    const bucket = parts[1]
+    const path = decodeURIComponent(parts.slice(2).join('/'))
+    if (!PRIVATE_DOC_BUCKETS.has(bucket)) return null
+    return { bucket, path }
+  } catch {
+    return null
+  }
+}
+
+export function storagePathFromRef(ref: string): string | null {
+  return parseStorageRef(ref)?.path ?? null
+}
+
+export function toStorageRef(bucket: string, path: string): string {
+  return `${bucket}:${path.replace(/^\/+/, '')}`
+}
+
+function pathForLabel(ref: string): string {
+  const fromStorage = storagePathFromRef(ref)
+  if (fromStorage) return fromStorage
+  try {
+    return new URL(ref).pathname
+  } catch {
+    return ref
+  }
+}
+
 export function isDocumentImage(url: string | null | undefined): boolean {
   if (!url) return false
-  const lower = url.toLowerCase().split('?')[0]
+  const lower = pathForLabel(url).toLowerCase().split('?')[0]
   return (
     lower.endsWith('.png') ||
     lower.endsWith('.jpg') ||
@@ -40,7 +97,7 @@ export function isDocumentImage(url: string | null | undefined): boolean {
 
 export function documentLabel(url: string, index: number): string {
   try {
-    const path = new URL(url).pathname
+    const path = pathForLabel(url)
     const name = decodeURIComponent(path.split('/').pop() || '')
     if (name) return name.length > 48 ? `${name.slice(0, 45)}…` : name
   } catch {

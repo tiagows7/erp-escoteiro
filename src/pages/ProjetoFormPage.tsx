@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { formatMoney, parseMoneyInput, situacaoDespesaLabel } from '@/lib/despesas'
-import { documentLabel, parseDocumentUrls } from '@/lib/documentUrls'
+import { DocumentosLinks } from '@/components/DocumentosLinks'
 import { isEncerrado } from '@/lib/encerrado'
 import { situacaoTituloLabel } from '@/lib/receitas'
 import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
@@ -35,26 +35,6 @@ type DespesaRow = {
   despesa_situacao: number | null
   despesa_documento: string | null
   fornecedor_despesa: { fordespesa_nome: string | null } | null
-}
-
-function DocumentosLinks({ value }: { value: string | null | undefined }) {
-  const docs = parseDocumentUrls(value)
-  if (docs.length === 0) return <span className="muted">—</span>
-  return (
-    <div className="portal-doc-links">
-      {docs.map((url, index) => (
-        <a
-          key={url}
-          className="btn btn-soft"
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-        >
-          {docs.length === 1 ? 'Ver documento' : documentLabel(url, index)}
-        </a>
-      ))}
-    </div>
-  )
 }
 
 const emptyForm = {

@@ -434,6 +434,18 @@ Deno.serve(async (req) => {
         !body?.link_token)
 
     if (isWebhook && body?.order_nsu) {
+      const expectedSecret = Deno.env.get('INFINITEPAY_WEBHOOK_SECRET')?.trim()
+      if (expectedSecret) {
+        const got =
+          req.headers.get('x-webhook-secret')?.trim() ||
+          req.headers.get('x-infinitepay-webhook-secret')?.trim() ||
+          url.searchParams.get('secret')?.trim() ||
+          ''
+        if (got !== expectedSecret) {
+          return json({ error: 'Webhook não autorizado.' }, 401)
+        }
+      }
+
       const orderNsu = String(body.order_nsu)
       const { data: pedido, error } = await admin
         .from('infinitepay_pedidos')
@@ -445,11 +457,41 @@ Deno.serve(async (req) => {
         return json({ error: 'Pedido não encontrado.' }, 404)
       }
 
+      const slug = String(
+        body.invoice_slug ?? body.slug ?? pedido.invoice_slug ?? '',
+      ).trim()
+      const transactionNsu = String(
+        body.transaction_nsu ?? pedido.transaction_nsu ?? '',
+      ).trim()
+
+      if (!slug || !transactionNsu) {
+        return json({ error: 'Webhook incompleto para confirmação.' }, 400)
+      }
+
+      // Confirma no PSP antes de baixar (webhook sozinho não é prova)
+      const checkRes = await fetch(INFINITEPAY_CHECK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          handle: pedido.handle,
+          order_nsu: orderNsu,
+          transaction_nsu: transactionNsu,
+          slug,
+        }),
+      })
+      const checkBody = (await checkRes.json().catch(() => ({}))) as Record<
+        string,
+        unknown
+      >
+      if (!(checkBody?.paid || checkBody?.success === true)) {
+        return json({ error: 'Pagamento não confirmado na InfinitePay.' }, 400)
+      }
+
       try {
         await baixarPedidoEvento(
           admin,
           pedido as Record<string, unknown>,
-          body,
+          { ...body, ...checkBody, invoice_slug: slug, transaction_nsu: transactionNsu },
         )
         return json({ ok: true }, 200)
       } catch (e) {
