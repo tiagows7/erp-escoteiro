@@ -67,6 +67,10 @@ button {
   min-height: 100dvh;
 }
 
+.app-shell--hide-nav {
+  grid-template-columns: 1fr;
+}
+
 .mobile-topbar,
 .sidebar-backdrop {
   display: none;
@@ -5316,6 +5320,174 @@ form.panel .muted,
   }
 
   .calendario-filtros {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ——— Loja PDV ——— */
+.loja-pdv {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.9fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.loja-pdv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.loja-pdv-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  text-align: left;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.loja-pdv-card:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: var(--shadow);
+}
+
+.loja-pdv-card:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.loja-pdv-card strong {
+  font-size: 0.92rem;
+  line-height: 1.25;
+}
+
+.loja-pdv-card-meta,
+.loja-pdv-card-stock {
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+
+.loja-pdv-card-price {
+  margin-top: 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.loja-pdv-carrinho h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+
+.loja-pdv-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 1rem 0 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  font-size: 1rem;
+}
+
+.loja-pdv-total strong {
+  font-size: 1.35rem;
+  color: var(--forest);
+}
+
+@media (max-width: 900px) {
+  .loja-pdv {
+    grid-template-columns: 1fr;
+  }
+}
+
+.loja-caixa-resumo {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.loja-caixa-resumo > div {
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(8, 22, 40, 0.03);
+}
+
+.loja-caixa-resumo span {
+  display: block;
+  font-size: 0.78rem;
+  margin-bottom: 0.2rem;
+}
+
+.loja-caixa-resumo strong {
+  font-size: 1.05rem;
+}
+
+.loja-caixa-total {
+  color: var(--forest);
+  font-size: 1.25rem !important;
+}
+
+.loja-caixa-tipos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.loja-caixa-tipo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.loja-caixa-itens {
+  margin: 0;
+  background: rgba(8, 22, 40, 0.02);
+}
+
+@media (max-width: 700px) {
+  .loja-caixa-resumo {
+    grid-template-columns: 1fr;
+  }
+}
+
+.auditoria-detail {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  padding: 0.75rem 0.25rem 0.35rem;
+}
+
+.auditoria-detail pre {
+  margin: 0.35rem 0 0;
+  padding: 0.75rem;
+  max-height: 280px;
+  overflow: auto;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(8, 22, 40, 0.04);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 900px) {
+  .auditoria-detail {
     grid-template-columns: 1fr;
   }
 }

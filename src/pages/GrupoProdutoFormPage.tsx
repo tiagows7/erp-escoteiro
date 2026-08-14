@@ -6,17 +6,15 @@ import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 
 const emptyForm = {
-  nome: '',
-  quita: false,
-  comunica_banco: false,
+  descricao: '',
 }
 
-export function TipoPagamentoFormPage() {
+export function GrupoProdutoFormPage() {
   const { id } = useParams()
   const isNew = !id || id === 'novo'
   const navigate = useNavigate()
   const { empresa, hasPermission } = useAuth()
-  const canWrite = hasPermission('financeiro.write')
+  const canWrite = hasPermission('estoque.write')
   const empresaId = empresa?.id
   const toast = useToast()
 
@@ -31,23 +29,21 @@ export function TipoPagamentoFormPage() {
 
     void (async () => {
       const { data, error: loadError } = await supabase
-        .from('tipo_pagamento')
-        .select('tipopagto_id, nome, quita, comunica_banco')
-        .eq('tipopagto_id', Number(id))
+        .from('grupo_produto')
+        .select('grupoproduto_id, nome')
+        .eq('grupoproduto_id', Number(id))
         .eq('empresa_id', empresaId)
         .maybeSingle()
 
       if (!mounted) return
       if (loadError || !data) {
-        setError(loadError?.message ?? 'Tipo de pagamento não encontrado')
+        setError(loadError?.message ?? 'Grupo de produto não encontrado')
         setLoading(false)
         return
       }
 
       setForm({
-        nome: data.nome ?? '',
-        quita: data.quita === true,
-        comunica_banco: data.comunica_banco === true,
+        descricao: data.nome ?? '',
       })
       setLoading(false)
     })()
@@ -60,15 +56,15 @@ export function TipoPagamentoFormPage() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     if (!canWrite) {
-      setError('Sem permissão para alterar tipos de pagamento.')
+      setError('Sem permissão para alterar grupos de produto.')
       return
     }
     if (!empresaId) {
       setError('Grupo escoteiro não carregado.')
       return
     }
-    if (!form.nome.trim()) {
-      setError('Informe o nome.')
+    if (!form.descricao.trim()) {
+      setError('Informe a descrição.')
       return
     }
 
@@ -77,23 +73,21 @@ export function TipoPagamentoFormPage() {
 
     const payload = {
       empresa_id: empresaId,
-      nome: form.nome.trim().toUpperCase(),
-      quita: form.quita,
-      comunica_banco: form.comunica_banco,
+      nome: form.descricao.trim().toUpperCase().slice(0, 50),
     }
 
     const result = isNew
       ? await supabase
-          .from('tipo_pagamento')
+          .from('grupo_produto')
           .insert(payload)
-          .select('tipopagto_id')
+          .select('grupoproduto_id')
           .single()
       : await supabase
-          .from('tipo_pagamento')
+          .from('grupo_produto')
           .update(payload)
-          .eq('tipopagto_id', Number(id))
+          .eq('grupoproduto_id', Number(id))
           .eq('empresa_id', empresaId)
-          .select('tipopagto_id')
+          .select('grupoproduto_id')
           .single()
 
     setSaving(false)
@@ -103,7 +97,7 @@ export function TipoPagamentoFormPage() {
       return
     }
 
-    navigate('/cadastros/tipo-pagamento', {
+    navigate('/estoque/grupos-produtos', {
       state: { flashSuccess: 'Salvo com sucesso!' },
     })
   }
@@ -111,8 +105,8 @@ export function TipoPagamentoFormPage() {
   async function onDelete() {
     if (!canWrite || !empresaId || isNew) return
     const ok = await toast.confirm({
-      title: 'Excluir tipo de pagamento?',
-      message: `Tem certeza que deseja excluir "${form.nome}"?`,
+      title: 'Excluir grupo de produto?',
+      message: `Tem certeza que deseja excluir "${form.descricao}"?`,
       confirmLabel: 'Sim, excluir',
       cancelLabel: 'Não',
       danger: true,
@@ -123,9 +117,9 @@ export function TipoPagamentoFormPage() {
     setError(null)
 
     const { error: delError } = await supabase
-      .from('tipo_pagamento')
+      .from('grupo_produto')
       .delete()
-      .eq('tipopagto_id', Number(id))
+      .eq('grupoproduto_id', Number(id))
       .eq('empresa_id', empresaId)
 
     setSaving(false)
@@ -134,8 +128,8 @@ export function TipoPagamentoFormPage() {
       return
     }
 
-    navigate('/cadastros/tipo-pagamento', {
-      state: { flashSuccess: 'Tipo de pagamento excluído com sucesso!' },
+    navigate('/estoque/grupos-produtos', {
+      state: { flashSuccess: 'Grupo de produto excluído com sucesso!' },
     })
   }
 
@@ -160,13 +154,13 @@ export function TipoPagamentoFormPage() {
       <header className="page-header">
         <div>
           <h2>
-            {isNew ? 'Novo tipo de pagamento' : 'Editar tipo de pagamento'}
+            {isNew ? 'Novo grupo de produto' : 'Editar grupo de produto'}
           </h2>
           <p>
             Grupo <strong>{empresa?.nome}</strong>
           </p>
         </div>
-        <Link className="btn btn-soft" to="/cadastros/tipo-pagamento">
+        <Link className="btn btn-soft" to="/estoque/grupos-produtos">
           Voltar
         </Link>
       </header>
@@ -180,57 +174,30 @@ export function TipoPagamentoFormPage() {
 
         <div className="form-grid">
           <div className="field field-span-2">
-            <label htmlFor="nome">Nome</label>
+            <label htmlFor="descricao">Descrição</label>
             <input
-              id="nome"
+              id="descricao"
               className="input"
-              value={form.nome}
+              value={form.descricao}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, nome: e.target.value }))
+                setForm((prev) => ({ ...prev, descricao: e.target.value }))
               }
               disabled={disabled}
               required
+              maxLength={50}
             />
-          </div>
-          <div className="field field-checks">
-            <label>
-              <input
-                type="checkbox"
-                checked={form.quita}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, quita: e.target.checked }))
-                }
-                disabled={disabled}
-              />
-              Quita (baixa automática)
-            </label>
-          </div>
-          <div className="field field-checks field-span-2">
-            <label>
-              <input
-                type="checkbox"
-                checked={form.comunica_banco}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    comunica_banco: e.target.checked,
-                  }))
-                }
-                disabled={disabled}
-              />
-              Comunica com o banco (PIX)
-            </label>
-            <span className="field-hint">
-              Na Loja, se houver PIX Sicredi configurado na conta bancária, a
-              venda só é concluída após a confirmação do pagamento.
-            </span>
+            <span className="field-hint">Até 50 caracteres.</span>
           </div>
         </div>
 
         <div className="form-actions">
           {canWrite ? (
             <>
-              <button className="btn btn-primary" type="submit" disabled={saving}>
+              <button
+                className="btn btn-primary"
+                type="submit"
+                disabled={saving}
+              >
                 {saving ? 'Salvando…' : 'Salvar'}
               </button>
               {!isNew ? (
@@ -247,7 +214,7 @@ export function TipoPagamentoFormPage() {
           ) : (
             <p className="muted">Modo leitura — sem permissão para salvar.</p>
           )}
-          <Link className="btn btn-soft" to="/cadastros/tipo-pagamento">
+          <Link className="btn btn-soft" to="/estoque/grupos-produtos">
             Cancelar
           </Link>
         </div>

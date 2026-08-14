@@ -47,6 +47,7 @@ const emptyForm = {
 
 function roleToTipo(role: AppRole): string {
   switch (role) {
+    case 'super_admin':
     case 'admin':
       return 'A'
     case 'tesoureiro':
@@ -166,19 +167,29 @@ export function UsuarioFormPage() {
       setError('Informe o nome.')
       return
     }
-    if (!GROUP_ROLES.includes(form.role)) {
+    const roleOk =
+      GROUP_ROLES.includes(form.role) ||
+      (!isNew && form.role === 'super_admin')
+    if (!roleOk) {
       setError('Papel inválido.')
       return
     }
 
     const registroDigits = form.registro.replace(/\D/g, '')
     const isAssociado = !!registroDigits
-    const menuKeysToSave = isAssociado
-      ? associadoPortalMenuKeys()
-      : form.menu_keys.length > 0
-        ? form.menu_keys
-        : null
-    if (!isAssociado && (!menuKeysToSave || menuKeysToSave.length === 0)) {
+    const menuKeysToSave =
+      form.role === 'super_admin'
+        ? null
+        : isAssociado
+          ? associadoPortalMenuKeys()
+          : form.menu_keys.length > 0
+            ? form.menu_keys
+            : null
+    if (
+      form.role !== 'super_admin' &&
+      !isAssociado &&
+      (!menuKeysToSave || menuKeysToSave.length === 0)
+    ) {
       setError('Marque pelo menos um menu de acesso para o usuário.')
       return
     }
@@ -568,8 +579,13 @@ export function UsuarioFormPage() {
                   menu_keys: defaultMenuKeysForRole(role),
                 }))
               }}
-              disabled={disabled}
+              disabled={disabled || form.role === 'super_admin'}
             >
+              {form.role === 'super_admin' ? (
+                <option value="super_admin">
+                  {ROLE_LABELS.super_admin}
+                </option>
+              ) : null}
               {GROUP_ROLES.map((role) => (
                 <option key={role} value={role}>
                   {ROLE_LABELS[role]}
@@ -577,8 +593,9 @@ export function UsuarioFormPage() {
               ))}
             </select>
             <span className="field-hint">
-              Define o nível padrão de permissões; os menus abaixo podem restringir
-              o que aparece para o usuário.
+              {form.role === 'super_admin'
+                ? 'Papel da plataforma — não pode ser alterado por este formulário.'
+                : 'Define o nível padrão de permissões; os menus abaixo podem restringir o que aparece para o usuário.'}
             </span>
           </div>
 

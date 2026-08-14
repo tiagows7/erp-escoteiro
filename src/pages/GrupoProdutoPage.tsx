@@ -6,21 +6,19 @@ import { AddIcon } from '@/components/AddIcon'
 import { AlertMessage } from '@/components/AlertMessage'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 
-type TipoPagamento = {
-  tipopagto_id: number
+type GrupoProduto = {
+  grupoproduto_id: number
   empresa_id: number
   nome: string
-  quita: boolean | null
-  comunica_banco: boolean | null
 }
 
-export function TipoPagamentoPage() {
+export function GrupoProdutoPage() {
   const { empresa, hasPermission } = useAuth()
-  const canWrite = hasPermission('financeiro.write')
+  const canWrite = hasPermission('estoque.write')
   const empresaId = empresa?.id
   const flashTick = useFlashSuccess()
 
-  const [rows, setRows] = useState<TipoPagamento[]>([])
+  const [rows, setRows] = useState<GrupoProduto[]>([])
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -36,8 +34,8 @@ export function TipoPagamentoPage() {
     void (async () => {
       setLoading(true)
       const { data, error: queryError } = await supabase
-        .from('tipo_pagamento')
-        .select('tipopagto_id, empresa_id, nome, quita, comunica_banco')
+        .from('grupo_produto')
+        .select('grupoproduto_id, empresa_id, nome')
         .eq('empresa_id', empresaId)
         .order('nome')
 
@@ -47,7 +45,7 @@ export function TipoPagamentoPage() {
         setRows([])
       } else {
         setError(null)
-        setRows((data as TipoPagamento[]) ?? [])
+        setRows((data as GrupoProduto[]) ?? [])
       }
       setLoading(false)
     })()
@@ -77,18 +75,19 @@ export function TipoPagamentoPage() {
     <>
       <header className="page-header">
         <div>
-          <h2>Tipo de Pagamento</h2>
+          <h2>Grupo de produto</h2>
           <p>
-            Formas de pagamento do grupo <strong>{empresa?.nome}</strong>
+            Categorias de produtos do estoque —{' '}
+            <strong>{empresa?.nome}</strong>
           </p>
         </div>
         {canWrite ? (
           <Link
             className="btn btn-primary btn-with-icon"
-            to="/cadastros/tipo-pagamento/novo"
+            to="/estoque/grupos-produtos/novo"
           >
             <AddIcon />
-            Novo tipo
+            Novo grupo
           </Link>
         ) : null}
       </header>
@@ -98,7 +97,7 @@ export function TipoPagamentoPage() {
           <input
             className="input"
             style={{ maxWidth: 360 }}
-            placeholder="Buscar por nome…"
+            placeholder="Buscar por descrição…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -113,38 +112,34 @@ export function TipoPagamentoPage() {
         <p className="field-hint" style={{ marginBottom: '0.75rem' }}>
           {loading
             ? 'Carregando…'
-            : `${filtered.length} tipo(s) encontrado(s)`}
+            : `${filtered.length} grupo(s) encontrado(s)`}
         </p>
 
         {loading ? (
-          <div className="loading">Carregando tipos de pagamento…</div>
+          <div className="loading">Carregando grupos de produto…</div>
         ) : filtered.length === 0 ? (
-          <div className="empty">Nenhum tipo de pagamento neste grupo.</div>
+          <div className="empty">Nenhum grupo de produto neste grupo.</div>
         ) : (
           <div className="table-wrap">
             <table className="data">
               <thead>
                 <tr>
                   <th></th>
-                  <th>Nome</th>
-                  <th>Quita</th>
-                  <th>Comunica banco</th>
+                  <th>Descrição</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((row) => (
-                  <tr key={row.tipopagto_id}>
+                  <tr key={row.grupoproduto_id}>
                     <td>
                       <Link
                         className="btn btn-soft"
-                        to={`/cadastros/tipo-pagamento/${row.tipopagto_id}`}
+                        to={`/estoque/grupos-produtos/${row.grupoproduto_id}`}
                       >
                         Abrir
                       </Link>
                     </td>
                     <td>{row.nome}</td>
-                    <td>{row.quita ? 'Sim' : 'Não'}</td>
-                    <td>{row.comunica_banco ? 'Sim' : 'Não'}</td>
                   </tr>
                 ))}
               </tbody>

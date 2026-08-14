@@ -4,6 +4,7 @@ export type PixCobrancaTipo =
   | 'mensalidade'
   | 'mensalidade_lote'
   | 'atividade'
+  | 'loja'
 
 function chavePixInformada(
   chave: string | null | undefined,
@@ -115,6 +116,13 @@ export type PixCobrancaResumo = {
   created_at?: string
 }
 
+export type PixLojaItem = {
+  produto_id: number
+  nome: string
+  unitario: number
+  quantidade: number
+}
+
 export type PixCreateInput = {
   empresaId: number
   tipo: PixCobrancaTipo
@@ -123,6 +131,8 @@ export type PixCreateInput = {
   associadoId?: number | null
   receitaIds?: number[]
   atividadeId?: number | null
+  tipopagtoId?: number | null
+  lojaItens?: PixLojaItem[]
 }
 
 async function readFunctionsError(error: unknown): Promise<string | null> {
@@ -190,6 +200,8 @@ export async function createPixSicrediCobranca(
       associado_id: input.associadoId ?? null,
       receita_ids: input.receitaIds ?? [],
       atividade_id: input.atividadeId ?? null,
+      tipopagto_id: input.tipopagtoId ?? null,
+      loja_itens: input.lojaItens ?? null,
     },
   })
 

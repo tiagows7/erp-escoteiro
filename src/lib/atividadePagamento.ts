@@ -37,6 +37,7 @@ export async function ensureTipoPagamentoPix(
       empresa_id: empresaId,
       nome: 'PIX',
       quita: true,
+      comunica_banco: true,
     })
     .select('tipopagto_id')
     .single()

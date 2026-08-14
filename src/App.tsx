@@ -17,11 +17,15 @@ import { SecaoFormPage } from '@/pages/SecaoFormPage'
 import { PatrulhasPage } from '@/pages/PatrulhasPage'
 import { PatrulhaFormPage } from '@/pages/PatrulhaFormPage'
 import {
-  GrupoProdutosPage,
-  ProdutosPage,
-  EntradaEstoquePage,
   EventosPage,
 } from '@/pages/placeholders'
+import { GrupoProdutoPage } from '@/pages/GrupoProdutoPage'
+import { GrupoProdutoFormPage } from '@/pages/GrupoProdutoFormPage'
+import { ProdutoPage } from '@/pages/ProdutoPage'
+import { ProdutoFormPage } from '@/pages/ProdutoFormPage'
+import { ProdutoFichaPage } from '@/pages/ProdutoFichaPage'
+import { AcertoEstoquePage } from '@/pages/AcertoEstoquePage'
+import { AcertoEstoqueFormPage } from '@/pages/AcertoEstoqueFormPage'
 import { ProjetosPage } from '@/pages/ProjetosPage'
 import { ProjetoFormPage } from '@/pages/ProjetoFormPage'
 import { AcaoEntreAmigosPage } from '@/pages/AcaoEntreAmigosPage'
@@ -33,6 +37,7 @@ import { VendaEventoFormPage } from '@/pages/VendaEventoFormPage'
 import { VendaEventoVendaPage } from '@/pages/VendaEventoVendaPage'
 import { VendaEventoPublicPage } from '@/pages/VendaEventoPublicPage'
 import { LojaPage } from '@/pages/LojaPage'
+import { LojaCaixaPage } from '@/pages/LojaCaixaPage'
 import { UsuariosPage } from '@/pages/UsuariosPage'
 import { UsuarioFormPage } from '@/pages/UsuarioFormPage'
 import { FornecedoresPage } from '@/pages/FornecedoresPage'
@@ -50,6 +55,7 @@ import { DespesaPagamentoFormPage } from '@/pages/DespesaPagamentoFormPage'
 import { DespesasRelatorioPage } from '@/pages/DespesasRelatorioPage'
 import { GrupoMeuRedirectPage } from '@/pages/GrupoMeuRedirectPage'
 import { BackupPage } from '@/pages/BackupPage'
+import { AuditoriaPage } from '@/pages/AuditoriaPage'
 import { ConquistasPage } from '@/pages/ConquistasPage'
 import { ReceitasInclusaoPage } from '@/pages/ReceitasInclusaoPage'
 import { ReceitaFormPage } from '@/pages/ReceitaFormPage'
@@ -237,7 +243,15 @@ export default function App() {
               path="estoque/grupos-produtos"
               element={
                 <RequirePermission permission="estoque.view">
-                  <GrupoProdutosPage />
+                  <GrupoProdutoPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="estoque/grupos-produtos/:id"
+              element={
+                <RequirePermission permission="estoque.view">
+                  <GrupoProdutoFormPage />
                 </RequirePermission>
               }
             />
@@ -245,17 +259,45 @@ export default function App() {
               path="estoque/produtos"
               element={
                 <RequirePermission permission="estoque.view">
-                  <ProdutosPage />
+                  <ProdutoPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="estoque/produtos/:id/ficha"
+              element={
+                <RequirePermission permission="estoque.view">
+                  <ProdutoFichaPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="estoque/produtos/:id"
+              element={
+                <RequirePermission permission="estoque.view">
+                  <ProdutoFormPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="estoque/acerto"
+              element={
+                <RequirePermission permission="estoque.view">
+                  <AcertoEstoquePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="estoque/acerto/novo"
+              element={
+                <RequirePermission permission="estoque.write">
+                  <AcertoEstoqueFormPage />
                 </RequirePermission>
               }
             />
             <Route
               path="estoque/entrada"
-              element={
-                <RequirePermission permission="estoque.view">
-                  <EntradaEstoquePage />
-                </RequirePermission>
-              }
+              element={<Navigate to="/estoque/acerto" replace />}
             />
 
             <Route
@@ -445,6 +487,14 @@ export default function App() {
               }
             />
             <Route
+              path="vendas/loja/caixa"
+              element={
+                <RequirePermission permission="vendas.view">
+                  <LojaCaixaPage />
+                </RequirePermission>
+              }
+            />
+            <Route
               path="projetos"
               element={
                 <RequirePermission permission="projetos.view">
@@ -482,6 +532,15 @@ export default function App() {
               element={
                 <RequirePermission anyOf={['grupos.write', 'grupos.view']}>
                   <GrupoFormPage />
+                </RequirePermission>
+              }
+            />
+
+            <Route
+              path="auditoria"
+              element={
+                <RequirePermission permission="auditoria.view">
+                  <AuditoriaPage />
                 </RequirePermission>
               }
             />

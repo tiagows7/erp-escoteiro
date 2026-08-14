@@ -216,146 +216,155 @@ export function AppLayout() {
     ? 'Plataforma · todos os grupos'
     : (empresa?.nome ?? 'Grupo Escoteiro')
 
+  const hideNav = location.pathname.startsWith('/vendas/loja')
+
   return (
-    <div className={`app-shell${menuOpen ? ' menu-open' : ''}`}>
-      <header className="mobile-topbar">
-        <button
-          type="button"
-          className="mobile-menu-btn"
-          aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen((open) => !open)}
-        >
-          <span className="mobile-menu-icon" aria-hidden="true">
-            {menuOpen ? '✕' : '☰'}
-          </span>
-        </button>
-        <img
-          className="mobile-topbar-logo"
-          src={empresa?.logo_url || '/logo-erp.png'}
-          alt=""
-          width={36}
-          height={36}
-        />
-        <div className="mobile-topbar-text">
-          <strong>ERP Escoteiro</strong>
-          <span>{grupoLabel}</span>
-        </div>
-      </header>
+    <div
+      className={`app-shell${menuOpen ? ' menu-open' : ''}${hideNav ? ' app-shell--hide-nav' : ''}`}
+    >
+      {!hideNav ? (
+        <>
+          <header className="mobile-topbar">
+            <button
+              type="button"
+              className="mobile-menu-btn"
+              aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              <span className="mobile-menu-icon" aria-hidden="true">
+                {menuOpen ? '✕' : '☰'}
+              </span>
+            </button>
+            <img
+              className="mobile-topbar-logo"
+              src={empresa?.logo_url || '/logo-erp.png'}
+              alt=""
+              width={36}
+              height={36}
+            />
+            <div className="mobile-topbar-text">
+              <strong>ERP Escoteiro</strong>
+              <span>{grupoLabel}</span>
+            </div>
+          </header>
 
-      {menuOpen ? (
-        <button
-          type="button"
-          className="sidebar-backdrop"
-          aria-label="Fechar menu"
-          onClick={() => setMenuOpen(false)}
-        />
-      ) : null}
+          {menuOpen ? (
+            <button
+              type="button"
+              className="sidebar-backdrop"
+              aria-label="Fechar menu"
+              onClick={() => setMenuOpen(false)}
+            />
+          ) : null}
 
-      <aside className="sidebar" id="app-sidebar">
-        <div className="brand">
-          <img
-            className="brand-logo"
-            src={empresa?.logo_url || '/logo-erp.png'}
-            alt={empresa?.nome ?? 'ERP Escoteiro'}
-            width={72}
-            height={72}
-          />
-          <p>{grupoLabel}</p>
-        </div>
+          <aside className="sidebar" id="app-sidebar">
+            <div className="brand">
+              <img
+                className="brand-logo"
+                src={empresa?.logo_url || '/logo-erp.png'}
+                alt={empresa?.nome ?? 'ERP Escoteiro'}
+                width={72}
+                height={72}
+              />
+              <p>{grupoLabel}</p>
+            </div>
 
-        <nav className="nav-group" aria-label="Principal">
-          <div className="nav-label">Menu</div>
-          {items.map((item) => {
-            if (item.type === 'link') {
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className={() =>
-                    `nav-link${
-                      navLinkActive(
-                        location.pathname,
-                        location.search,
-                        item.to,
-                      )
-                        ? ' active'
-                        : ''
-                    }`
-                  }
-                >
-                  {item.label}
-                </NavLink>
-              )
-            }
+            <nav className="nav-group" aria-label="Principal">
+              <div className="nav-label">Menu</div>
+              {items.map((item) => {
+                if (item.type === 'link') {
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.end}
+                      className={() =>
+                        `nav-link${
+                          navLinkActive(
+                            location.pathname,
+                            location.search,
+                            item.to,
+                          )
+                            ? ' active'
+                            : ''
+                        }`
+                      }
+                    >
+                      {item.label}
+                    </NavLink>
+                  )
+                }
 
-            const open = !!openGroups[item.id]
-            const childActive = item.children.some((child) =>
-              navLinkActive(location.pathname, location.search, child.to),
-            )
-            const visibleChildren = item.children.filter(
-              (child) => !child.permission || hasPermission(child.permission),
-            )
+                const open = !!openGroups[item.id]
+                const childActive = item.children.some((child) =>
+                  navLinkActive(location.pathname, location.search, child.to),
+                )
+                const visibleChildren = item.children.filter(
+                  (child) =>
+                    !child.permission || hasPermission(child.permission),
+                )
 
-            return (
-              <div
-                key={item.id}
-                className={`nav-submenu${open ? ' open' : ''}${childActive ? ' has-active' : ''}`}
-              >
-                <button
-                  type="button"
-                  className={`nav-group-toggle${childActive ? ' active' : ''}`}
-                  aria-expanded={open}
-                  onClick={() => toggleGroup(item.id)}
-                >
-                  <span>{item.label}</span>
-                  <span className="nav-caret" aria-hidden="true">
-                    {open ? '▾' : '▸'}
-                  </span>
-                </button>
-                {open ? (
-                  <div className="nav-submenu-items">
-                    {visibleChildren.map((child) => (
-                      <NavLink
-                        key={child.to}
-                        to={child.to}
-                        end={child.end}
-                        className={() =>
-                          `nav-link nav-sublink${
-                            navLinkActive(
-                              location.pathname,
-                              location.search,
-                              child.to,
-                            )
-                              ? ' active'
-                              : ''
-                          }`
-                        }
-                      >
-                        {child.label}
-                      </NavLink>
-                    ))}
+                return (
+                  <div
+                    key={item.id}
+                    className={`nav-submenu${open ? ' open' : ''}${childActive ? ' has-active' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      className={`nav-group-toggle${childActive ? ' active' : ''}`}
+                      aria-expanded={open}
+                      onClick={() => toggleGroup(item.id)}
+                    >
+                      <span>{item.label}</span>
+                      <span className="nav-caret" aria-hidden="true">
+                        {open ? '▾' : '▸'}
+                      </span>
+                    </button>
+                    {open ? (
+                      <div className="nav-submenu-items">
+                        {visibleChildren.map((child) => (
+                          <NavLink
+                            key={child.to}
+                            to={child.to}
+                            end={child.end}
+                            className={() =>
+                              `nav-link nav-sublink${
+                                navLinkActive(
+                                  location.pathname,
+                                  location.search,
+                                  child.to,
+                                )
+                                  ? ' active'
+                                  : ''
+                              }`
+                            }
+                          >
+                            {child.label}
+                          </NavLink>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
-            )
-          })}
-        </nav>
+                )
+              })}
+            </nav>
 
-        <div className="sidebar-footer">
-          <strong>{profile?.nome ?? 'Usuário'}</strong>
-          <span>{roleLabel ?? profile?.username ?? '—'}</span>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            style={{ marginTop: '0.75rem', width: '100%' }}
-            onClick={() => void signOut()}
-          >
-            Sair
-          </button>
-        </div>
-      </aside>
+            <div className="sidebar-footer">
+              <strong>{profile?.nome ?? 'Usuário'}</strong>
+              <span>{roleLabel ?? profile?.username ?? '—'}</span>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ marginTop: '0.75rem', width: '100%' }}
+                onClick={() => void signOut()}
+              >
+                Sair
+              </button>
+            </div>
+          </aside>
+        </>
+      ) : null}
 
       <main className="main">
         <Outlet />

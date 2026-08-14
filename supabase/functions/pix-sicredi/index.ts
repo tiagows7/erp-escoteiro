@@ -10,12 +10,20 @@ const corsHeaders = {
 type CreateBody = {
   action: 'create'
   empresa_id: number
-  tipo: 'mensalidade' | 'atividade' | 'mensalidade_lote' | 'acao_entre_amigos'
+  tipo:
+    | 'mensalidade'
+    | 'atividade'
+    | 'mensalidade_lote'
+    | 'acao_entre_amigos'
+    | 'loja'
   valor: number
   descricao?: string
   associado_id?: number | null
   receita_ids?: number[]
   atividade_id?: number | null
+  tipopagto_id?: number | null
+  loja_itens?: unknown
+  observacao?: string | null
 }
 
 type StatusBody = {
@@ -26,7 +34,12 @@ type StatusBody = {
 type ConfigBody = {
   action: 'config'
   empresa_id?: number
-  tipo?: 'mensalidade' | 'atividade' | 'mensalidade_lote' | 'acao_entre_amigos'
+  tipo?:
+    | 'mensalidade'
+    | 'atividade'
+    | 'mensalidade_lote'
+    | 'acao_entre_amigos'
+    | 'loja'
   atividade_id?: number | null
   ramo_id?: number | null
 }
@@ -819,7 +832,12 @@ async function ensureTipoPagamentoPix(
 
   const { data: created, error } = await admin
     .from('tipo_pagamento')
-    .insert({ empresa_id: empresaId, nome: 'PIX', quita: true })
+    .insert({
+      empresa_id: empresaId,
+      nome: 'PIX',
+      quita: true,
+      comunica_banco: true,
+    })
     .select('tipopagto_id')
     .single()
 
@@ -968,6 +986,163 @@ async function baixarAtividade(
   }
 }
 
+type LojaItemCob = {
+  produto_id: number
+  nome: string
+  unitario: number
+  quantidade: number
+}
+
+function parseLojaItens(raw: unknown): LojaItemCob[] {
+  if (!Array.isArray(raw)) return []
+  const out: LojaItemCob[] = []
+  for (const row of raw) {
+    if (!row || typeof row !== 'object') continue
+    const r = row as Record<string, unknown>
+    const produto_id = Number(r.produto_id)
+    const unitario = Number(r.unitario)
+    const quantidade = Number(r.quantidade)
+    const nome = String(r.nome ?? '').trim() || `Produto ${produto_id}`
+    if (
+      !Number.isFinite(produto_id) ||
+      produto_id <= 0 ||
+      !Number.isFinite(quantidade) ||
+      quantidade <= 0 ||
+      !Number.isFinite(unitario) ||
+      unitario < 0
+    ) {
+      continue
+    }
+    out.push({ produto_id, nome, unitario, quantidade })
+  }
+  return out
+}
+
+async function baixarLoja(
+  admin: ReturnType<typeof createClient>,
+  opts: {
+    empresaId: number
+    valor: number
+    tipopagtoId: number
+    tipopagtoNome?: string | null
+    txid: string
+    descricao: string | null
+    observacao: string | null
+    itens: LojaItemCob[]
+  },
+) {
+  if (!opts.itens.length) {
+    throw new Error('Cobrança da loja sem itens.')
+  }
+
+  const total = Number(
+    opts.itens
+      .reduce((acc, item) => acc + item.unitario * item.quantidade, 0)
+      .toFixed(2),
+  )
+  const valor = Number(opts.valor || total)
+  if (!(valor > 0)) throw new Error('Valor da venda inválido.')
+
+  const nomes = opts.itens.map((i) => i.nome).join(', ')
+  const descricao = truncate(
+    opts.descricao || `Venda loja — ${nomes}`,
+    120,
+  )
+  const tipoNome = (opts.tipopagtoNome ?? '').trim()
+  const obsUser = (opts.observacao ?? '').trim()
+  const observacaoReceita = truncate(
+    [
+      `Venda loja · ${opts.itens.length} item(ns)`,
+      'Pagamento: PIX Sicredi',
+      tipoNome ? `Tipo: ${tipoNome}` : null,
+      `txid ${opts.txid}`,
+      obsUser || null,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    200,
+  )
+
+  const { data: receita, error: recError } = await admin
+    .from('receitas')
+    .insert({
+      empresa_id: opts.empresaId,
+      receita_origem: 'A',
+      receita_descricao: descricao,
+      receita_emissao: todayISO(),
+      receita_vencimento: todayISO(),
+      receita_valor: valor,
+      receita_saldo: 0,
+      receita_situacao: 3,
+      receita_observacao: observacaoReceita,
+      receita_ramo: null,
+      receita_secao: null,
+    })
+    .select('receita_id')
+    .single()
+
+  if (recError || !receita?.receita_id) {
+    throw new Error(recError?.message ?? 'Falha ao criar receita da loja.')
+  }
+
+  const receitaId = receita.receita_id as number
+
+  const { error: pagError } = await admin.from('receita_pagamento').insert({
+    empresa_id: opts.empresaId,
+    receita_id: receitaId,
+    tipopagto_id: opts.tipopagtoId,
+    data_pagamento: todayISO(),
+    valor,
+    observacao: truncate(`Recebimento PIX Sicredi — loja txid ${opts.txid}`, 200),
+  })
+
+  if (pagError) {
+    await admin.from('receitas').delete().eq('receita_id', receitaId)
+    throw new Error(pagError.message)
+  }
+
+  const { data: maxRow } = await admin
+    .from('movimento_estoque')
+    .select('movimentoest_numero')
+    .eq('empresa_id', opts.empresaId)
+    .order('movimentoest_numero', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  let proximoNumero = Number(maxRow?.movimentoest_numero ?? 0) + 1
+  const stockPayload = opts.itens.map((item) => {
+    const row = {
+      empresa_id: opts.empresaId,
+      movimentoest_numero: proximoNumero,
+      movimentoest_operacao: 10,
+      movimentoest_emissao: todayISO(),
+      movimentoest_sinal: '-',
+      movimentoest_produto: item.produto_id,
+      movimentoest_quantidade: item.quantidade,
+      movimentoest_unitario: item.unitario,
+      movimentoest_total: Number((item.quantidade * item.unitario).toFixed(2)),
+      movimentoest_origem: 'loja',
+      movimentoest_obs: truncate(
+        [`Receita #${receitaId}`, `PIX ${opts.txid}`, obsUser || null]
+          .filter(Boolean)
+          .join(' · '),
+        200,
+      ),
+    }
+    proximoNumero += 1
+    return row
+  })
+
+  const { error: stockError } = await admin
+    .from('movimento_estoque')
+    .insert(stockPayload)
+
+  if (stockError) {
+    await admin.from('receitas').delete().eq('receita_id', receitaId)
+    throw new Error(stockError.message)
+  }
+}
+
 async function concluirEBaixar(
   admin: ReturnType<typeof createClient>,
   cob: Record<string, unknown>,
@@ -977,10 +1152,11 @@ async function concluirEBaixar(
     return { paid: true, baixado: true }
   }
 
-  const tipopagtoId = await ensureTipoPagamentoPix(
-    admin,
-    cob.empresa_id as number,
-  )
+  const tipopagtoIdCob = Number(cob.tipopagto_id ?? 0)
+  const tipopagtoId =
+    Number.isFinite(tipopagtoIdCob) && tipopagtoIdCob > 0
+      ? tipopagtoIdCob
+      : await ensureTipoPagamentoPix(admin, cob.empresa_id as number)
   const tipo = String(cob.tipo)
   const receitaIds = (cob.receita_ids as number[]) ?? []
 
@@ -1008,6 +1184,27 @@ async function concluirEBaixar(
     await baixarAcaoEntreAmigos(admin, cob)
   } else if (tipo === 'venda_evento') {
     await baixarVendaEvento(admin, cob)
+  } else if (tipo === 'loja') {
+    const itens = parseLojaItens(cob.loja_itens)
+    let tipopagtoNome: string | null = null
+    if (tipopagtoId) {
+      const { data: tp } = await admin
+        .from('tipo_pagamento')
+        .select('nome')
+        .eq('tipopagto_id', tipopagtoId)
+        .maybeSingle()
+      tipopagtoNome = (tp?.nome as string | null) ?? null
+    }
+    await baixarLoja(admin, {
+      empresaId: cob.empresa_id as number,
+      valor: Number(cob.valor),
+      tipopagtoId,
+      tipopagtoNome,
+      txid: String(cob.txid),
+      descricao: (cob.descricao as string | null) ?? null,
+      observacao: null,
+      itens,
+    })
   }
 
   const { error } = await admin
@@ -1777,6 +1974,15 @@ Deno.serve(async (req) => {
         return json({ error: 'Informe atividade e associado.' }, 400)
       }
 
+      const lojaItens =
+        tipo === 'loja' ? parseLojaItens(body.loja_itens) : []
+      if (tipo === 'loja' && lojaItens.length === 0) {
+        return json({ error: 'Informe os itens da venda da loja.' }, 400)
+      }
+      const tipopagtoIdBody = body.tipopagto_id
+        ? Number(body.tipopagto_id)
+        : null
+
       let ramoId: number | null = null
       if (tipo === 'atividade' && atividadeId) {
         const { data: ativ } = await admin
@@ -1811,7 +2017,11 @@ Deno.serve(async (req) => {
       const txid = generateTxid()
       const descricao =
         body.descricao?.trim() ||
-        (tipo === 'atividade' ? 'Pagamento de atividade' : 'Pagamento de mensalidade')
+        (tipo === 'atividade'
+          ? 'Pagamento de atividade'
+          : tipo === 'loja'
+            ? 'Venda loja'
+            : 'Pagamento de mensalidade')
 
       const cobRes = await createCob(cfg, { valor, descricao, txid })
       const status = String(cobRes.status ?? 'ATIVA')
@@ -1833,6 +2043,11 @@ Deno.serve(async (req) => {
           location: cobRes.location ?? null,
           descricao,
           raw_create: cobRes,
+          loja_itens: tipo === 'loja' ? lojaItens : null,
+          tipopagto_id:
+            Number.isFinite(tipopagtoIdBody) && (tipopagtoIdBody as number) > 0
+              ? tipopagtoIdBody
+              : null,
         })
         .select(
           'id, txid, status, valor, pix_copia_e_cola, location, descricao, created_at',

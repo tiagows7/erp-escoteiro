@@ -47,6 +47,7 @@ export const PERMISSIONS = [
   'projetos.write',
   'grupos.view',
   'grupos.write',
+  'auditoria.view',
 ] as const
 
 export type Permission = (typeof PERMISSIONS)[number]
@@ -77,6 +78,7 @@ const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
     'projetos.view',
     'projetos.write',
     'grupos.view',
+    'auditoria.view',
   ],
   tesoureiro: [
     'dashboard.view',
@@ -91,6 +93,7 @@ const ROLE_PERMISSIONS: Record<AppRole, Permission[]> = {
     'atividades.write',
     'vendas.view',
     'vendas.write',
+    'auditoria.view',
   ],
   chefe: [
     'dashboard.view',

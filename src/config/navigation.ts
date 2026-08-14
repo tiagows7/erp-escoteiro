@@ -107,33 +107,6 @@ export const NAV_ITEMS: NavItem[] = [
       },
     ],
   },
-  // Estoque oculto por enquanto
-  // {
-  //   type: 'group',
-  //   id: 'estoque',
-  //   label: 'Estoque',
-  //   anyOf: ['estoque.view'],
-  //   children: [
-  //     {
-  //       type: 'link',
-  //       to: '/estoque/grupos-produtos',
-  //       label: 'Grupo de Produtos',
-  //       permission: 'estoque.view',
-  //     },
-  //     {
-  //       type: 'link',
-  //       to: '/estoque/produtos',
-  //       label: 'Produtos',
-  //       permission: 'estoque.view',
-  //     },
-  //     {
-  //       type: 'link',
-  //       to: '/estoque/entrada',
-  //       label: 'Entrada de Estoque',
-  //       permission: 'estoque.view',
-  //     },
-  //   ],
-  // },
   {
     type: 'group',
     id: 'despesas',
@@ -183,6 +156,32 @@ export const NAV_ITEMS: NavItem[] = [
         to: '/receitas/relatorio',
         label: 'Relatório',
         permission: 'financeiro.view',
+      },
+    ],
+  },
+  {
+    type: 'group',
+    id: 'estoque',
+    label: 'Estoque',
+    anyOf: ['estoque.view'],
+    children: [
+      {
+        type: 'link',
+        to: '/estoque/produtos',
+        label: 'Produtos',
+        permission: 'estoque.view',
+      },
+      {
+        type: 'link',
+        to: '/estoque/grupos-produtos',
+        label: 'Grupo de produto',
+        permission: 'estoque.view',
+      },
+      {
+        type: 'link',
+        to: '/estoque/acerto',
+        label: 'Acerto de estoque',
+        permission: 'estoque.view',
       },
     ],
   },
@@ -242,6 +241,12 @@ export const NAV_ITEMS: NavItem[] = [
     to: '/grupos/meu',
     label: 'Grupo escoteiro',
     permission: 'grupos.view',
+  },
+  {
+    type: 'link',
+    to: '/auditoria',
+    label: 'Auditoria',
+    permission: 'auditoria.view',
   },
   {
     type: 'link',

@@ -97,9 +97,11 @@ export function normalizeMenuKeys(
 }
 
 export function profileUsesMenuKeys(
-  profile: Pick<Profile, 'registro' | 'menu_keys'> | null | undefined,
+  profile: Pick<Profile, 'registro' | 'menu_keys' | 'role'> | null | undefined,
 ): boolean {
   if (!profile) return false
+  // Super admin da plataforma: menu completo (grupos, backup, etc.).
+  if (profile.role === 'super_admin') return false
   return Array.isArray(profile.menu_keys) && profile.menu_keys.length > 0
 }
 
@@ -124,6 +126,9 @@ export const ALWAYS_VISIBLE_MENU_KEYS = [
   '/vendas/eventos',
 ] as const
 
+/** Itens só de plataforma — nunca filtrar por menu_keys. */
+export const PLATFORM_MENU_KEYS = ['/grupos', '/backup'] as const
+
 export function pathAllowedByMenuKeys(
   pathname: string,
   menuKeys: string[] | null | undefined,
@@ -131,6 +136,11 @@ export function pathAllowedByMenuKeys(
   if (menuKeys == null) return true
   if (
     ALWAYS_VISIBLE_MENU_KEYS.some((key) => pathMatchesMenuKey(pathname, key))
+  ) {
+    return true
+  }
+  if (
+    PLATFORM_MENU_KEYS.some((key) => pathMatchesMenuKey(pathname, key))
   ) {
     return true
   }
@@ -159,6 +169,9 @@ export function filterNavItemsByMenuKeys(
         return menuKeys.includes(item.to) ||
           ALWAYS_VISIBLE_MENU_KEYS.includes(
             item.to as (typeof ALWAYS_VISIBLE_MENU_KEYS)[number],
+          ) ||
+          PLATFORM_MENU_KEYS.includes(
+            item.to as (typeof PLATFORM_MENU_KEYS)[number],
           )
           ? item
           : null
