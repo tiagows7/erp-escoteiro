@@ -108,7 +108,7 @@ export function LojaCaixaPage() {
         setVendas([])
       } else {
         setError(null)
-        setVendas((data as VendaCaixa[]) ?? [])
+        setVendas((data as unknown as VendaCaixa[]) ?? [])
       }
       setLoading(false)
     })()
@@ -166,7 +166,7 @@ export function LojaCaixaPage() {
     }
     setItensMap((prev) => ({
       ...prev,
-      [receitaId]: (data as ItemMov[]) ?? [],
+      [receitaId]: (data as unknown as ItemMov[]) ?? [],
     }))
   }
 

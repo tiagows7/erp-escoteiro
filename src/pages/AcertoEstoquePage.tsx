@@ -111,7 +111,7 @@ export function AcertoEstoquePage() {
         setRows([])
       } else {
         setError(null)
-        let list = (data as MovimentoRow[]) ?? []
+        let list = (data as unknown as MovimentoRow[]) ?? []
         if (filtroGrupo) {
           const gid = Number(filtroGrupo)
           list = list.filter((row) => row.produto?.grupo === gid)
