@@ -541,7 +541,7 @@ export function AcaoEntreAmigosVendaPage() {
     })
 
   async function onEncerrarVendas() {
-    if (!canStaffEdit || !empresaId || encerrado) return
+    if (!canStaffEdit || !empresaId || !acao || encerrado) return
     const ok = await toast.confirm({
       title: 'Encerrar vendas?',
       message:
@@ -568,7 +568,7 @@ export function AcaoEntreAmigosVendaPage() {
   }
 
   async function onSortear() {
-    if (!podeSortear) return
+    if (!podeSortear || !acao) return
     const refazer = acao.numero_sorteado != null
     const ok = await toast.confirm({
       title: refazer ? 'Sortear novamente?' : 'Realizar sorteio?',
