@@ -16,6 +16,7 @@ import {
   isAcaoVendasBloqueadas,
   numerosDaFaixa,
   podeSortearAcao,
+  venderAcaoEntreAmigos,
 } from '@/lib/acaoEntreAmigos'
 import { linkPublicoAcaoEntreAmigos } from '@/lib/acaoEntreAmigosPublic'
 import { formatMoney } from '@/lib/despesas'
@@ -63,7 +64,7 @@ type StaffFaixaRow = AcaoEntreAmigosFaixa & {
 export function AcaoEntreAmigosVendaPage() {
   const { id } = useParams()
   const acaoId = Number(id)
-  const { empresa, profile, user, hasPermission } = useAuth()
+  const { empresa, profile, hasPermission } = useAuth()
   const empresaId = empresa?.id
   const associadoLogin = isAssociadoLogin(profile)
   const canStaffEdit = !associadoLogin && hasPermission('vendas.write')
@@ -366,6 +367,12 @@ export function AcaoEntreAmigosVendaPage() {
     }
   }
 
+  function falhaVenda(msg: string) {
+    setError(msg)
+    toast.error('Atenção', msg)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   async function onVender(event: FormEvent) {
     event.preventDefault()
     if (!empresaId || !acao || selectedNumeros.length === 0) return
@@ -376,31 +383,31 @@ export function AcaoEntreAmigosVendaPage() {
       numero_final: acao.numero_final,
       qtde_vendidos: vendas.length,
     })) {
-      setError('As vendas desta ação estão encerradas ou o prazo já passou.')
+      falhaVenda('As vendas desta ação estão encerradas ou o prazo já passou.')
       return
     }
     if (!compradorNome.trim()) {
-      setError('Informe o nome do comprador.')
+      falhaVenda('Informe o nome do comprador.')
       return
     }
     if (!compradorTelefone.trim()) {
-      setError('Informe o telefone do comprador.')
+      falhaVenda('Informe o telefone do comprador.')
       return
     }
     if (!formaPagamento) {
-      setError(
+      falhaVenda(
         'Selecione a forma de pagamento: Dinheiro, PIX online ou PIX direto.',
       )
       return
     }
     if (associadoLogin && associadoId == null) {
-      setError('Não foi possível identificar o vendedor (associado).')
+      falhaVenda('Não foi possível identificar o vendedor (associado).')
       return
     }
 
     const disponiveis = selectedNumeros.filter((n) => !vendidos.has(n))
     if (disponiveis.length === 0) {
-      setError('Nenhum dos números selecionados está disponível.')
+      falhaVenda('Nenhum dos números selecionados está disponível.')
       return
     }
 
@@ -410,18 +417,18 @@ export function AcaoEntreAmigosVendaPage() {
 
     if (formaPagamento === 'pix') {
       if (!pixOnlineDisponivel) {
-        setError(
+        falhaVenda(
           'PIX online indisponível. Cadastre o PIX Sicredi do grupo ou da seção desta ação.',
         )
         return
       }
       if (!Number.isFinite(valorUnitario) || valorUnitario <= 0) {
-        setError('Esta ação ainda não tem valor de número configurado.')
+        falhaVenda('Esta ação ainda não tem valor de número configurado.')
         return
       }
       const linkToken = linkTokenParaNumeros(disponiveis)
       if (!linkToken) {
-        setError(
+        falhaVenda(
           associadoLogin
             ? 'Link de pagamento desta faixa ainda não está disponível.'
             : 'Selecione números de uma mesma faixa de jovem para pagar com PIX online (ou use o link público).',
@@ -447,46 +454,31 @@ export function AcaoEntreAmigosVendaPage() {
     setSaving(true)
     setError(null)
 
-    const rows = disponiveis.map((numero) => ({
-      empresa_id: empresaId,
-      acao_id: acao.acao_id,
-      numero,
-      comprador_nome: nome,
-      comprador_telefone: telefone,
-      valor: valorUnitario,
-      forma_pagamento: formaPagamento,
-      associado_vendedor_id: associadoLogin ? associadoId : null,
-      vendido_por: user?.id ?? null,
-    }))
-
-    const { error: insertError } = await supabase
-      .from('acao_entre_amigos_venda')
-      .insert(rows)
+    const result = await venderAcaoEntreAmigos({
+      acaoId: acao.acao_id,
+      numeros: disponiveis,
+      compradorNome: nome,
+      compradorTelefone: telefone,
+      formaPagamento,
+    })
 
     setSaving(false)
 
-    if (insertError) {
-      setError(
-        insertError.message.includes('duplicate') ||
-          insertError.message.includes('unique')
-          ? 'Um ou mais números já foram vendidos. Atualize e tente de novo.'
-          : insertError.message,
-      )
+    if (!result.ok) {
+      falhaVenda(result.mensagem)
       await reload()
       return
     }
 
-    const label =
-      disponiveis.length === 1
-        ? `Número ${disponiveis[0]} vendido.`
-        : `${disponiveis.length} números vendidos (${disponiveis.join(', ')}).`
+    const salvos =
+      result.numerosSalvos.length > 0 ? result.numerosSalvos : disponiveis
     setNumerosPagos(
-      disponiveis.map((numero) => ({
+      salvos.map((numero) => ({
         numero,
         nome,
       })),
     )
-    toast.success('Venda registrada!', label)
+    toast.success('Venda registrada!', result.mensagem)
     limparSelecao()
     await reload()
   }

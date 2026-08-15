@@ -138,3 +138,31 @@ export async function executarSorteioAcao(
     telefone: String(row.comprador_telefone ?? ''),
   }
 }
+
+/** Dinheiro / PIX direto — RPC (associado não tem INSERT direto após RLS 071). */
+export async function venderAcaoEntreAmigos(input: {
+  acaoId: number
+  numeros: number[]
+  compradorNome: string
+  compradorTelefone: string
+  formaPagamento: 'dinheiro' | 'pix_direto'
+}): Promise<{ ok: boolean; mensagem: string; numerosSalvos: number[] }> {
+  const { data, error } = await supabase.rpc('acao_amigos_vender', {
+    p_acao_id: input.acaoId,
+    p_numeros: input.numeros,
+    p_comprador_nome: input.compradorNome,
+    p_comprador_telefone: input.compradorTelefone,
+    p_forma_pagamento: input.formaPagamento,
+  })
+  if (error) {
+    return { ok: false, mensagem: error.message, numerosSalvos: [] }
+  }
+  const row = Array.isArray(data) ? data[0] : data
+  return {
+    ok: !!row?.ok,
+    mensagem: String(row?.mensagem ?? 'Não foi possível registrar a venda.'),
+    numerosSalvos: Array.isArray(row?.numeros_salvos)
+      ? row.numeros_salvos.map((n: unknown) => Number(n))
+      : [],
+  }
+}
