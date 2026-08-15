@@ -616,7 +616,7 @@ export function AcaoEntreAmigosVendaPage() {
               : null}
           </p>
         </div>
-        <div className="page-header-actions actions-pair">
+        <div className="page-header-actions">
           {associadoLogin && faixa?.link_token && !vendasBloqueadas ? (
             <button
               type="button"
@@ -666,17 +666,38 @@ export function AcaoEntreAmigosVendaPage() {
 
       {acao.numero_sorteado != null ? (
         <AlertMessage tone="success" title="Sorteio realizado">
-          Número sorteado: <strong>{acao.numero_sorteado}</strong>
-          {(() => {
-            const v = vendas.find((x) => x.numero === acao.numero_sorteado)
-            if (!v) return null
-            return (
-              <>
-                {' '}
-                · <strong>{v.comprador_nome}</strong> · {v.comprador_telefone}
-              </>
-            )
-          })()}
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <span>
+              Número sorteado: <strong>{acao.numero_sorteado}</strong>
+              {(() => {
+                const v = vendas.find((x) => x.numero === acao.numero_sorteado)
+                if (!v) return null
+                return (
+                  <>
+                    {' '}
+                    · <strong>{v.comprador_nome}</strong> · {v.comprador_telefone}
+                  </>
+                )
+              })()}
+            </span>
+            {canStaffEdit ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void onSortear()}
+              >
+                Sortear novamente
+              </button>
+            ) : null}
+          </div>
         </AlertMessage>
       ) : null}
 

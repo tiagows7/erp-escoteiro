@@ -98,7 +98,7 @@ export function isAcaoVendasBloqueadas(input: {
   return false
 }
 
-/** Pode sortear (ou refazer) quando vendas estão bloqueadas e há vendidos. */
+/** Pode sortear (primeira vez) ou refazer (já há ganhador). */
 export function podeSortearAcao(input: {
   encerrado_em?: string | null
   data_limite_venda?: string | null
@@ -107,6 +107,8 @@ export function podeSortearAcao(input: {
   qtde_vendidos?: number
   numero_sorteado?: number | null
 }): boolean {
+  // Já sorteou: sempre permite refazer (o RPC valida os vendidos no servidor)
+  if (input.numero_sorteado != null) return true
   if ((input.qtde_vendidos ?? 0) < 1) return false
   return isAcaoVendasBloqueadas(input)
 }

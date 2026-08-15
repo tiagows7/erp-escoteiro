@@ -17,6 +17,45 @@ type Patrulha = { secaonome_id: number; nome: string }
 type AcaoRow = AcaoEntreAmigos & {
   faixa_ini?: number | null
   faixa_fim?: number | null
+  vencedor_nome?: string | null
+  vencedor_telefone?: string | null
+}
+
+async function enrichComVencedores(
+  empresaId: number,
+  list: AcaoRow[],
+): Promise<AcaoRow[]> {
+  const comSorteio = list.filter((r) => r.numero_sorteado != null)
+  if (comSorteio.length === 0) return list
+
+  const { data: vendas } = await supabase
+    .from('acao_entre_amigos_venda')
+    .select('acao_id, numero, comprador_nome, comprador_telefone')
+    .eq('empresa_id', empresaId)
+    .in(
+      'acao_id',
+      comSorteio.map((r) => r.acao_id),
+    )
+
+  const byKey = new Map(
+    (vendas ?? []).map((v) => [
+      `${v.acao_id}:${v.numero}`,
+      {
+        nome: (v.comprador_nome as string | null) ?? null,
+        telefone: (v.comprador_telefone as string | null) ?? null,
+      },
+    ]),
+  )
+
+  return list.map((row) => {
+    if (row.numero_sorteado == null) return row
+    const hit = byKey.get(`${row.acao_id}:${row.numero_sorteado}`)
+    return {
+      ...row,
+      vencedor_nome: hit?.nome ?? null,
+      vencedor_telefone: hit?.telefone ?? null,
+    }
+  })
 }
 
 export function AcaoEntreAmigosPage() {
@@ -129,16 +168,17 @@ export function AcaoEntreAmigosPage() {
           setRows([])
         } else {
           setError(null)
-          setRows(
-            ((data ?? []) as AcaoEntreAmigos[]).map((row) => {
-              const f = faixaByAcao.get(row.acao_id)
-              return {
-                ...row,
-                faixa_ini: f?.ini ?? null,
-                faixa_fim: f?.fim ?? null,
-              }
-            }),
-          )
+          const mapped = ((data ?? []) as AcaoEntreAmigos[]).map((row) => {
+            const f = faixaByAcao.get(row.acao_id)
+            return {
+              ...row,
+              faixa_ini: f?.ini ?? null,
+              faixa_fim: f?.fim ?? null,
+            }
+          })
+          const enriched = await enrichComVencedores(empresaId, mapped)
+          if (!mounted) return
+          setRows(enriched)
         }
         setLoading(false)
         return
@@ -184,7 +224,12 @@ export function AcaoEntreAmigosPage() {
         setRows([])
       } else {
         setError(null)
-        setRows((listRes.data as AcaoEntreAmigos[]) ?? [])
+        const enriched = await enrichComVencedores(
+          empresaId,
+          (listRes.data as AcaoEntreAmigos[]) ?? [],
+        )
+        if (!mounted) return
+        setRows(enriched)
       }
       setLoading(false)
     })()
@@ -207,6 +252,10 @@ export function AcaoEntreAmigosPage() {
         ramoNome.toLowerCase().includes(term) ||
         secaoNome.toLowerCase().includes(term) ||
         patrulhaNome.toLowerCase().includes(term) ||
+        (row.vencedor_nome ?? '').toLowerCase().includes(term) ||
+        (row.vencedor_telefone ?? '').includes(term) ||
+        (row.numero_sorteado != null &&
+          String(row.numero_sorteado).includes(term)) ||
         String(row.numero_inicial).includes(term) ||
         String(row.numero_final).includes(term)
       )
@@ -298,6 +347,7 @@ export function AcaoEntreAmigosPage() {
                   <th>Valor</th>
                   <th>Limite vendas</th>
                   <th>Sorteio</th>
+                  <th>Vencedor</th>
                   {!associadoLogin ? <th>Qtde</th> : null}
                 </tr>
               </thead>
@@ -354,9 +404,6 @@ export function AcaoEntreAmigosPage() {
                         {encerrado ? (
                           <span className="badge badge-danger">Encerrado</span>
                         ) : null}
-                        {row.numero_sorteado != null ? (
-                          <span className="badge">Nº {row.numero_sorteado}</span>
-                        ) : null}
                       </td>
                       {!associadoLogin ? (
                         <>
@@ -387,6 +434,19 @@ export function AcaoEntreAmigosPage() {
                       <td>{formatMoney(Number(row.valor_numero ?? 0))}</td>
                       <td>{limite}</td>
                       <td>{sorteio}</td>
+                      <td>
+                        {row.numero_sorteado != null ? (
+                          <div className="acao-grid-vencedor">
+                            <strong>Nº {row.numero_sorteado}</strong>
+                            <span>{row.vencedor_nome || '—'}</span>
+                            <span className="muted">
+                              {row.vencedor_telefone || '—'}
+                            </span>
+                          </div>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                       {!associadoLogin ? <td>{qtde}</td> : null}
                     </tr>
                   )

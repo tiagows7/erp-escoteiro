@@ -245,13 +245,16 @@ export function AcaoEntreAmigosFormPage() {
     if (faixasRes.error) {
       setFaixaError(faixasRes.error.message)
       setFaixas([])
-      return
+    } else {
+      setFaixaError(null)
     }
 
     const vendidosSet = new Set(
       (vendasRes.data ?? []).map((v) => Number(v.numero)),
     )
     setQtdeVendidos(vendidosSet.size)
+
+    if (faixasRes.error) return
 
     setFaixas(
       ((faixasRes.data ?? []) as unknown as Array<
@@ -872,17 +875,38 @@ export function AcaoEntreAmigosFormPage() {
         ) : null}
         {numeroSorteado != null ? (
           <AlertMessage tone="success" title="Sorteio realizado">
-            Número sorteado: <strong>{numeroSorteado}</strong>
-            {ganhadorNome ? (
-              <>
-                {' '}
-                · <strong>{ganhadorNome}</strong>
-              </>
-            ) : null}
-            {ganhadorTelefone ? <> · {ganhadorTelefone}</> : null}
-            {sorteadoEm
-              ? ` · ${new Date(sorteadoEm).toLocaleString('pt-BR')}`
-              : null}
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.75rem',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <span>
+                Número sorteado: <strong>{numeroSorteado}</strong>
+                {ganhadorNome ? (
+                  <>
+                    {' '}
+                    · <strong>{ganhadorNome}</strong>
+                  </>
+                ) : null}
+                {ganhadorTelefone ? <> · {ganhadorTelefone}</> : null}
+                {sorteadoEm
+                  ? ` · ${new Date(sorteadoEm).toLocaleString('pt-BR')}`
+                  : null}
+              </span>
+              {canWrite ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => void onSortear(true)}
+                >
+                  Sortear novamente
+                </button>
+              ) : null}
+            </div>
           </AlertMessage>
         ) : null}
         {encerrado ? (

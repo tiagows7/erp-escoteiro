@@ -3657,6 +3657,21 @@ table.data .badge {
   font-variant-numeric: tabular-nums;
 }
 
+.acao-grid-vencedor {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 9rem;
+  line-height: 1.25;
+}
+
+.acao-grid-vencedor strong {
+  color: var(--forest);
+}
+
+.acao-grid-vencedor span {
+  font-size: 0.86rem;
+}
+
 .confirm-overlay {
   position: fixed;
   inset: 0;
