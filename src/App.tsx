@@ -68,12 +68,14 @@ import { PortalRedirectPage } from '@/pages/PortalRedirectPage'
 import { AtividadesPage } from '@/pages/AtividadesPage'
 import { AtividadeFormPage } from '@/pages/AtividadeFormPage'
 import { AtividadeContasPage } from '@/pages/AtividadeContasPage'
+import { PwaInstallBanner } from '@/components/PwaInstallBanner'
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <ToastProvider>
+        <PwaInstallBanner />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/termos-de-uso" element={<TermosUsoPage />} />

@@ -5693,3 +5693,58 @@ form.panel .muted,
     grid-template-columns: 1fr;
   }
 }
+
+/* ——— PWA install banner ——— */
+.pwa-install-banner {
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, #0e2a24, #164038);
+  color: #f7faf8;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 24px rgba(14, 42, 36, 0.25);
+}
+
+.pwa-install-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: min(100%, 220px);
+}
+
+.pwa-install-banner-text strong {
+  font-size: 0.95rem;
+}
+
+.pwa-install-banner-text span {
+  font-size: 0.82rem;
+  opacity: 0.9;
+}
+
+.pwa-install-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pwa-install-banner .btn-soft {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f7faf8;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.pwa-install-banner .btn-soft:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+@media (display-mode: standalone) {
+  .pwa-install-banner {
+    display: none;
+  }
+}
