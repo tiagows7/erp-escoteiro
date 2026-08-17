@@ -9,6 +9,8 @@ import {
   formatPortalDate,
   groupBySecao,
   origemReceitaLabel,
+  parsePortalCaixaId,
+  PORTAL_CAIXA_GERAL,
   PORTAL_MESES,
   portalCaixasVisiveis,
   portalPeriodoLabel,
@@ -39,9 +41,7 @@ export function PortalTransparenciaPage() {
   const [ano, setAno] = useState(currentPortalYear())
   const [mes, setMes] = useState<number | null>(() => new Date().getMonth() + 1)
   const [caixa, setCaixa] = useState<PortalCaixaId>(() => {
-    const raw = Number(searchParams.get('caixa'))
-    if (raw === 0 || (raw >= 1 && raw <= 4)) return raw as PortalCaixaId
-    return 0
+    return parsePortalCaixaId(searchParams.get('caixa')) ?? PORTAL_CAIXA_GERAL
   })
   const [secaoId, setSecaoId] = useState<number | null>(null)
   const [tab, setTab] = useState<Tab>('despesas')
@@ -55,19 +55,19 @@ export function PortalTransparenciaPage() {
     () => portalCaixasVisiveis(profile?.codigo_ramo),
     [profile?.codigo_ramo],
   )
+  const isGeral = caixa === PORTAL_CAIXA_GERAL
   const mostrarSecoes = caixa >= 1 && caixa <= 4 && secoes.length > 1
   const agruparPorSecao = mostrarSecoes && secaoId == null
+  const showRamoCol = isGeral
 
   useEffect(() => {
-    const raw = Number(searchParams.get('caixa'))
-    if (raw === 0 || (raw >= 1 && raw <= 4)) {
-      setCaixa(raw as PortalCaixaId)
-    }
+    const parsed = parsePortalCaixaId(searchParams.get('caixa'))
+    if (parsed != null) setCaixa(parsed)
   }, [searchParams])
 
   useEffect(() => {
     if (!caixas.some((c) => c.id === caixa)) {
-      setCaixa(caixas[0]?.id ?? 0)
+      setCaixa(caixas[0]?.id ?? PORTAL_CAIXA_GERAL)
     }
   }, [caixas, caixa])
 
@@ -209,7 +209,7 @@ export function PortalTransparenciaPage() {
   }, [slug, ano, mes, caixa, secaoId])
 
   const caixaLabel =
-    caixas.find((c) => c.id === caixa)?.label ?? 'Caixa do grupo'
+    caixas.find((c) => c.id === caixa)?.label ?? 'Geral'
   const secaoLabel =
     secaoId == null
       ? 'Todas as seções'
@@ -238,7 +238,7 @@ export function PortalTransparenciaPage() {
               <th>Emissão</th>
               <th>Finalidade</th>
               <th>Fornecedor</th>
-              <th>Ramo</th>
+              {showRamoCol ? <th>Ramo</th> : null}
               {showSecaoCol ? <th>Seção</th> : null}
               <th>Valor</th>
               <th>Saldo</th>
@@ -252,7 +252,7 @@ export function PortalTransparenciaPage() {
                 <td>{formatPortalDate(row.despesa_emissao)}</td>
                 <td>{row.despesa_finalidade || '—'}</td>
                 <td>{row.fornecedor_nome || '—'}</td>
-                <td>{row.ramo_nome || 'Grupo'}</td>
+                {showRamoCol ? <td>{row.ramo_nome || 'Grupo'}</td> : null}
                 {showSecaoCol ? <td>{row.secao_nome || '—'}</td> : null}
                 <td>{formatMoney(row.despesa_valor)}</td>
                 <td>{formatMoney(row.despesa_saldo)}</td>
@@ -281,6 +281,7 @@ export function PortalTransparenciaPage() {
               <th>Competência</th>
               <th>Descrição</th>
               <th>Origem</th>
+              {showRamoCol ? <th>Ramo</th> : null}
               {showSecaoCol ? <th>Seção</th> : null}
               <th>Valor</th>
               <th>Saldo</th>
@@ -295,6 +296,7 @@ export function PortalTransparenciaPage() {
                 <td>{formatPortalDate(row.receita_competencia)}</td>
                 <td>{row.receita_descricao || '—'}</td>
                 <td>{origemReceitaLabel(row.receita_origem)}</td>
+                {showRamoCol ? <td>{row.ramo_nome || 'Grupo'}</td> : null}
                 {showSecaoCol ? <td>{row.secao_nome || '—'}</td> : null}
                 <td>{formatMoney(row.receita_valor)}</td>
                 <td>{formatMoney(row.receita_saldo)}</td>
@@ -389,8 +391,8 @@ export function PortalTransparenciaPage() {
               {profile?.codigo_ramo != null &&
               profile.codigo_ramo >= 1 &&
               profile.codigo_ramo <= 4
-                ? ' Você vê o caixa geral e o caixa do seu ramo.'
-                : ' Caixas: grupo geral e ramos.'}
+                ? ' Você vê o caixa do grupo e o caixa do seu ramo.'
+                : ' Aba Geral reúne todos os caixas; demais abas mostram cada caixa.'}
               {mostrarSecoes
                 ? ' Também é possível filtrar por seção.'
                 : ''}

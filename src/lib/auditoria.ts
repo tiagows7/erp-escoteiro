@@ -14,6 +14,7 @@ export const AUDITORIA_TABELA_LABELS: Record<string, string> = {
   fornecedor_despesa: 'Fornecedores',
   empresa: 'Grupo escoteiro',
   empresa_conta_bancaria: 'Conta bancária',
+  empresa_saldo_local: 'Locais do saldo',
   grupo_produto: 'Grupo de produto',
   produto: 'Produtos',
   movimento_estoque: 'Movimento de estoque',
@@ -33,6 +34,9 @@ export const AUDITORIA_TABELA_LABELS: Record<string, string> = {
   venda_evento_compra: 'Compras de evento',
   venda_evento_convite: 'Convites',
   venda_evento_tipo: 'Tipos de convite',
+  loja_pedido: 'Pedidos da loja',
+  loja_pedido_item: 'Itens do pedido (loja)',
+  infinitepay_pedidos: 'Pedidos InfinitePay',
   pix_cobrancas: 'Cobranças PIX',
   lgpd_consentimento_log: 'Consentimento LGPD',
 }

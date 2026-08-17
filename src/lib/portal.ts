@@ -69,6 +69,7 @@ export type PortalReceita = {
   receita_competencia: string | null
   receita_descricao: string | null
   receita_origem: string | null
+  ramo_nome?: string | null
   secao_id: number | null
   secao_nome: string | null
   receita_valor: number | null
@@ -91,14 +92,17 @@ export type PortalSaldoLocal = {
   secao_nome: string | null
 }
 
-/** 0 = caixa do grupo; 1-4 = ramos */
-export type PortalCaixaId = 0 | 1 | 2 | 3 | 4
+/** -1 = Geral (todos); 0 = caixa do grupo; 1-4 = ramos */
+export const PORTAL_CAIXA_GERAL = -1 as const
+
+export type PortalCaixaId = typeof PORTAL_CAIXA_GERAL | 0 | 1 | 2 | 3 | 4
 
 export type PortalCaixaOption = {
   id: PortalCaixaId
   label: string
 }
 
+/** Caixas reais (cadastro de locais, etc.) — sem a aba Geral. */
 export const PORTAL_CAIXAS: PortalCaixaOption[] = [
   { id: 0, label: 'Caixa do grupo' },
   { id: 1, label: 'Lobinho' },
@@ -109,7 +113,7 @@ export const PORTAL_CAIXAS: PortalCaixaOption[] = [
 
 /**
  * Usuário logado com ramo: só caixa do grupo + caixa do seu ramo.
- * Sem ramo: vê todos os caixas.
+ * Sem ramo / visitante público: Geral + todos os caixas.
  */
 export function portalCaixasVisiveis(
   codigoRamo: number | null | undefined,
@@ -117,7 +121,18 @@ export function portalCaixasVisiveis(
   if (codigoRamo != null && codigoRamo >= 1 && codigoRamo <= 4) {
     return PORTAL_CAIXAS.filter((c) => c.id === 0 || c.id === codigoRamo)
   }
-  return PORTAL_CAIXAS
+  return [{ id: PORTAL_CAIXA_GERAL, label: 'Geral' }, ...PORTAL_CAIXAS]
+}
+
+export function parsePortalCaixaId(
+  value: string | null | undefined,
+): PortalCaixaId | null {
+  if (value == null || value === '') return null
+  const raw = Number(value)
+  if (raw === PORTAL_CAIXA_GERAL || raw === 0 || (raw >= 1 && raw <= 4)) {
+    return raw as PortalCaixaId
+  }
+  return null
 }
 
 export { formatMoney, situacaoTituloLabel }

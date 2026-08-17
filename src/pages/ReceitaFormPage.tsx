@@ -5,6 +5,10 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import {
+  ReceitaReciboPrint,
+  type ReceitaReciboData,
+} from '@/components/ReceitaReciboPrint'
+import {
   RECEITA_ORIGEM,
   formatMoney,
   situacaoFromSaldo,
@@ -119,6 +123,13 @@ export function ReceitaFormPage() {
   const [loading, setLoading] = useState(!isNew)
   const [documentoUrls, setDocumentoUrls] = useState<string[]>([])
   const [docFiles, setDocFiles] = useState<File[]>([])
+  const [tiposPagamento, setTiposPagamento] = useState<
+    { tipopagto_id: number; nome: string }[]
+  >([])
+  const [gerarRecibo, setGerarRecibo] = useState(false)
+  const [tipopagtoId, setTipopagtoId] = useState('')
+  const [dataPagamento, setDataPagamento] = useState(todayISO())
+  const [recibo, setRecibo] = useState<ReceitaReciboData | null>(null)
   const documentoHrefs = useSignedDocumentUrls(documentoUrls)
 
   useEffect(() => {
@@ -251,6 +262,23 @@ export function ReceitaFormPage() {
       if (!res.error) setAcoes(res.data)
     })
   }, [empresaId, scope])
+
+  useEffect(() => {
+    if (!empresaId || !isNew) return
+    void supabase
+      .from('tipo_pagamento')
+      .select('tipopagto_id, nome')
+      .eq('empresa_id', empresaId)
+      .order('nome')
+      .then(({ data }) => {
+        setTiposPagamento(
+          (data ?? []).map((row) => ({
+            tipopagto_id: row.tipopagto_id as number,
+            nome: row.nome as string,
+          })),
+        )
+      })
+  }, [empresaId, isNew])
 
   useEffect(() => {
     if (!isNew || !projetoIdParam || !empresaId) return
@@ -548,6 +576,16 @@ export function ReceitaFormPage() {
       setError('Informe um valor maior que zero.')
       return
     }
+    if (isNew && gerarRecibo) {
+      if (!dataPagamento) {
+        setError('Informe a data do pagamento para o recibo.')
+        return
+      }
+      if (!tipopagtoId) {
+        setError('Selecione o tipo de pagamento para gerar o recibo.')
+        return
+      }
+    }
 
     const isMensalidadeSave = origem === RECEITA_ORIGEM.MENSALIDADE
     // Mensalidade = conta do grupo (caixa 0); não cai nos ramos.
@@ -570,6 +608,7 @@ export function ReceitaFormPage() {
     setError(null)
 
     if (isNew) {
+      const quitarComRecibo = gerarRecibo
       const { data: inserted, error: insertError } = await supabase
         .from('receitas')
         .insert({
@@ -586,8 +625,10 @@ export function ReceitaFormPage() {
           receita_emissao: strOrNull(form.receita_emissao),
           receita_vencimento: strOrNull(form.receita_vencimento),
           receita_valor: valor,
-          receita_saldo: valor,
-          receita_situacao: TITULO_SITUACAO.ABERTO,
+          receita_saldo: quitarComRecibo ? 0 : valor,
+          receita_situacao: quitarComRecibo
+            ? TITULO_SITUACAO.PAGO
+            : TITULO_SITUACAO.ABERTO,
           receita_observacao: strOrNull(form.receita_observacao),
         })
         .select('receita_id')
@@ -599,10 +640,68 @@ export function ReceitaFormPage() {
         return
       }
 
+      const receitaId = inserted.receita_id as number
+
+      if (quitarComRecibo) {
+        const tipoNome =
+          tiposPagamento.find((t) => t.tipopagto_id === Number(tipopagtoId))
+            ?.nome ?? null
+        const { error: pagamentoError } = await supabase
+          .from('receita_pagamento')
+          .insert({
+            empresa_id: empresaId,
+            receita_id: receitaId,
+            tipopagto_id: Number(tipopagtoId),
+            data_pagamento: dataPagamento,
+            valor,
+            observacao: strOrNull(form.receita_observacao),
+          })
+
+        if (pagamentoError) {
+          await supabase.from('receitas').delete().eq('receita_id', receitaId)
+          setSaving(false)
+          setError(pagamentoError.message)
+          return
+        }
+
+        if (docFiles.length > 0) {
+          const up = await uploadReceitaDocumentos(
+            empresaId,
+            receitaId,
+            docFiles,
+          )
+          if ('error' in up) {
+            setSaving(false)
+            setError(
+              `Receita e pagamento salvos, mas o comprovante não foi enviado: ${up.error}`,
+            )
+            return
+          }
+        }
+
+        const associadoNome =
+          associados.find((a) => a.id === Number(form.associado_id))?.nome ??
+          null
+
+        setSaving(false)
+        setRecibo({
+          empresaNome: empresa?.nome ?? 'Grupo escoteiro',
+          empresaLogoUrl: empresa?.logo_url ?? null,
+          receitaId,
+          descricao: form.receita_descricao.trim(),
+          associadoNome,
+          valor,
+          dataPagamento,
+          tipoPagamento: tipoNome,
+          observacao: strOrNull(form.receita_observacao),
+        })
+        return
+      }
+
       if (docFiles.length > 0) {
         const up = await uploadReceitaDocumentos(
           empresaId,
-          inserted.receita_id as number,
+          receitaId,
           docFiles,
         )
         if ('error' in up) {
@@ -723,6 +822,21 @@ export function ReceitaFormPage() {
 
   if (loading) {
     return <div className="loading">Carregando receita…</div>
+  }
+
+  if (recibo) {
+    return (
+      <ReceitaReciboPrint
+        data={recibo}
+        onClose={() =>
+          navigate('/receitas/inclusao', {
+            state: {
+              flashSuccess: 'Receita salva e recibo gerado com sucesso!',
+            },
+          })
+        }
+      />
+    )
   }
 
   const disabled = saving || !canWrite
@@ -1081,13 +1195,69 @@ export function ReceitaFormPage() {
               ) : null}
             </div>
           </div>
+
+          {isNew && canWrite ? (
+            <div className="field field-span-2 receita-recibo-opcao">
+              <div className="field-checks">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={gerarRecibo}
+                    onChange={(e) => setGerarRecibo(e.target.checked)}
+                    disabled={disabled}
+                  />
+                  Registrar pagamento e gerar recibo para entrega
+                </label>
+              </div>
+              {gerarRecibo ? (
+                <div className="form-grid receita-recibo-campos">
+                  <div className="field">
+                    <label htmlFor="recibo_data_pagamento">
+                      Data do pagamento
+                    </label>
+                    <input
+                      id="recibo_data_pagamento"
+                      className="input"
+                      type="date"
+                      value={dataPagamento}
+                      onChange={(e) => setDataPagamento(e.target.value)}
+                      disabled={disabled}
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="recibo_tipopagto">Tipo de pagamento</label>
+                    <select
+                      id="recibo_tipopagto"
+                      className="select"
+                      value={tipopagtoId}
+                      onChange={(e) => setTipopagtoId(e.target.value)}
+                      disabled={disabled}
+                      required
+                    >
+                      <option value="">Selecione</option>
+                      {tiposPagamento.map((t) => (
+                        <option key={t.tipopagto_id} value={t.tipopagto_id}>
+                          {t.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="form-actions">
           {canWrite && !isPaid ? (
             <>
               <button className="btn btn-primary" type="submit" disabled={saving}>
-                {saving ? 'Salvando…' : 'Salvar'}
+                {saving
+                  ? 'Salvando…'
+                  : isNew && gerarRecibo
+                    ? 'Salvar e gerar recibo'
+                    : 'Salvar'}
               </button>
               {!isNew ? (
                 <button
