@@ -3,7 +3,10 @@ import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/contexts/ToastContext'
 import { formatMoney } from '@/lib/despesas'
-import { removerPagamentoAtividade } from '@/lib/atividadePagamento'
+import {
+  cancelarConfirmacaoAtividade,
+  confirmarParticipacaoAtividade,
+} from '@/lib/atividadeConfirmacao'
 import {
   atividadeVisivelPara,
   labelAtividadeEscopo,
@@ -185,17 +188,11 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
   async function confirmarParticipacao(item: AtividadeCardItem) {
     if (!associado || item.confirmado) return
     setBusyId(item.atividade_id)
-    const { error: insertError } = await supabase
-      .from('atividade_confirmacao')
-      .insert({
-        empresa_id: empresaId,
-        atividade_id: item.atividade_id,
-        associado_id: associado.associado_id,
-      })
+    const result = await confirmarParticipacaoAtividade(item.atividade_id)
     setBusyId(null)
 
-    if (insertError) {
-      toast.error('Não foi possível confirmar', insertError.message)
+    if (!result.ok) {
+      toast.error('Não foi possível confirmar', result.mensagem)
       return
     }
     toast.success('Participação confirmada')
@@ -235,31 +232,11 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
     if (!ok) return
 
     setBusyId(item.atividade_id)
-
-    if (item.pago) {
-      const rem = await removerPagamentoAtividade({
-        empresaId,
-        atividadeId: item.atividade_id,
-        associadoId: associado.associado_id,
-      })
-      if (!rem.ok) {
-        setBusyId(null)
-        toast.error('Não foi possível remover o pagamento', rem.error)
-        return
-      }
-    }
-
-    const { error: confError } = await supabase
-      .from('atividade_confirmacao')
-      .delete()
-      .eq('empresa_id', empresaId)
-      .eq('atividade_id', item.atividade_id)
-      .eq('associado_id', associado.associado_id)
-
+    const result = await cancelarConfirmacaoAtividade(item.atividade_id)
     setBusyId(null)
 
-    if (confError) {
-      toast.error('Não foi possível cancelar', confError.message)
+    if (!result.ok) {
+      toast.error('Não foi possível cancelar', result.mensagem)
       return
     }
 
