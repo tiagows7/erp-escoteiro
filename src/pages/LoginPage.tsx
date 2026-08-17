@@ -27,8 +27,12 @@ const SISTEMA_DESTAQUES = [
     texto: 'Cadastro, saldo atual, acertos e ficha com histórico de movimentos.',
   },
   {
-    titulo: 'Loja do grupo (PDV)',
+    titulo: 'Loja local (PDV)',
     texto: 'Venda rápida com baixa de estoque, caixa do dia e PIX na hora.',
+  },
+  {
+    titulo: 'Loja online',
+    texto: 'Catálogo com os produtos do estoque para compra pelo grupo.',
   },
   {
     titulo: 'Eventos e campanhas',

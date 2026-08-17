@@ -37,6 +37,7 @@ import { VendaEventoFormPage } from '@/pages/VendaEventoFormPage'
 import { VendaEventoVendaPage } from '@/pages/VendaEventoVendaPage'
 import { VendaEventoPublicPage } from '@/pages/VendaEventoPublicPage'
 import { LojaPage } from '@/pages/LojaPage'
+import { LojaOnlinePage } from '@/pages/LojaOnlinePage'
 import { LojaCaixaPage } from '@/pages/LojaCaixaPage'
 import { UsuariosPage } from '@/pages/UsuariosPage'
 import { UsuarioFormPage } from '@/pages/UsuarioFormPage'
@@ -483,6 +484,14 @@ export default function App() {
               element={
                 <RequirePermission permission="vendas.write">
                   <LojaPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="vendas/loja-online"
+              element={
+                <RequirePermission permission="vendas.view">
+                  <LojaOnlinePage />
                 </RequirePermission>
               }
             />

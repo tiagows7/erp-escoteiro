@@ -5434,6 +5434,23 @@ form.panel .muted,
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+.loja-pdv-card-img {
+  display: block;
+  width: 100%;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 0.35rem;
+  background: #e4ebe7;
+}
+
+.loja-pdv-card-img--empty {
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+
 .loja-pdv-card:hover:not(:disabled) {
   border-color: var(--accent);
   box-shadow: var(--shadow);
@@ -5541,6 +5558,111 @@ form.panel .muted,
 
 @media (max-width: 700px) {
   .loja-caixa-resumo {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ——— Loja online ——— */
+.loja-online {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.9fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.loja-online-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+.loja-online-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(165deg, rgba(47, 125, 98, 0.06), transparent 55%),
+    var(--bg-elevated);
+}
+
+.loja-online-card-img {
+  display: block;
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #e4ebe7;
+}
+
+.loja-online-card-img--empty {
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+}
+
+.produto-imagem-preview {
+  width: min(100%, 220px);
+  max-height: 180px;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+
+.loja-online-card.is-disabled {
+  opacity: 0.65;
+}
+
+.loja-online-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.loja-online-card-body strong {
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.loja-online-card-meta,
+.loja-online-card-stock {
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+}
+
+.loja-online-card-price {
+  margin-top: 0.35rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--forest);
+}
+
+.loja-online-carrinho h3 {
+  margin-top: 0;
+}
+
+.loja-online-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 1rem 0 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  font-size: 1rem;
+}
+
+.loja-online-total strong {
+  font-size: 1.35rem;
+}
+
+@media (max-width: 900px) {
+  .loja-online {
     grid-template-columns: 1fr;
   }
 }

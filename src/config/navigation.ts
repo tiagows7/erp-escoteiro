@@ -219,7 +219,13 @@ export const NAV_ITEMS: NavItem[] = [
       {
         type: 'link',
         to: '/vendas/loja',
-        label: 'Loja',
+        label: 'Loja local',
+        permission: 'vendas.view',
+      },
+      {
+        type: 'link',
+        to: '/vendas/loja-online',
+        label: 'Loja online',
         permission: 'vendas.view',
       },
     ],
@@ -314,6 +320,12 @@ export function navItemsForProfile(
         label: 'Comprar convites',
         permission: 'vendas.view',
       },
+      {
+        type: 'link',
+        to: '/vendas/loja-online',
+        label: 'Loja online',
+        permission: 'vendas.view',
+      },
     ]
     const keys = profile?.menu_keys
     if (Array.isArray(keys) && keys.length > 0) {
@@ -330,6 +342,7 @@ export function navItemsForProfile(
         '/calendario',
         '/projetos',
         '/vendas/eventos',
+        '/vendas/loja-online',
       ] as const) {
         if (
           !filtered.some(

@@ -28,6 +28,8 @@ export type FinalizarVendaLojaInput = {
   tipopagtoId: number
   tipopagtoNome?: string | null
   observacao?: string | null
+  /** Rótulo na receita / movimento (padrão: loja local). */
+  canal?: 'local' | 'online'
 }
 
 /**
@@ -57,13 +59,14 @@ export async function finalizarVendaLoja(
   }
 
   const hoje = todayISO()
+  const canalLabel = input.canal === 'online' ? 'loja online' : 'loja'
   const nomes = input.itens.map((i) => i.nome).join(', ')
-  const descricao = truncate(`Venda loja — ${nomes}`, 120)
+  const descricao = truncate(`Venda ${canalLabel} — ${nomes}`, 120)
   const obsUser = (input.observacao ?? '').trim()
   const tipoNome = (input.tipopagtoNome ?? '').trim()
   const observacaoReceita = truncate(
     [
-      `Venda loja · ${input.itens.length} item(ns)`,
+      `Venda ${canalLabel} · ${input.itens.length} item(ns)`,
       tipoNome ? `Pagamento: ${tipoNome}` : null,
       obsUser || null,
     ]
@@ -106,7 +109,7 @@ export async function finalizarVendaLoja(
     data_pagamento: hoje,
     valor: total,
     observacao: truncate(
-      `Recebimento loja${tipoNome ? ` — ${tipoNome}` : ''}`,
+      `Recebimento ${canalLabel}${tipoNome ? ` — ${tipoNome}` : ''}`,
       200,
     ),
   })

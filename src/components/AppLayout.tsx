@@ -216,7 +216,10 @@ export function AppLayout() {
     ? 'Plataforma · todos os grupos'
     : (empresa?.nome ?? 'Grupo Escoteiro')
 
-  const hideNav = location.pathname.startsWith('/vendas/loja')
+  // PDV local fullscreen — não incluir /vendas/loja-online
+  const hideNav =
+    location.pathname === '/vendas/loja' ||
+    location.pathname.startsWith('/vendas/loja/')
 
   return (
     <div

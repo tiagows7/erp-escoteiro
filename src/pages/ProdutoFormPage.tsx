@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -6,6 +6,10 @@ import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { parseMoneyInput } from '@/lib/despesas'
 import { formatQty } from '@/lib/estoque'
+import {
+  removerProdutoImagem,
+  uploadProdutoImagem,
+} from '@/lib/uploadProdutoImagem'
 
 type GrupoOpt = { grupoproduto_id: number; nome: string }
 
@@ -37,6 +41,11 @@ export function ProdutoFormPage() {
   const [form, setForm] = useState(emptyForm)
   const [estoqueAtual, setEstoqueAtual] = useState(0)
   const [grupos, setGrupos] = useState<GrupoOpt[]>([])
+  const [imagemUrl, setImagemUrl] = useState<string | null>(null)
+  const [imagemFile, setImagemFile] = useState<File | null>(null)
+  const [imagemPreview, setImagemPreview] = useState<string | null>(null)
+  const [removerFoto, setRemoverFoto] = useState(false)
+  const imagemInputRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
@@ -61,7 +70,7 @@ export function ProdutoFormPage() {
       const { data, error: loadError } = await supabase
         .from('produto')
         .select(
-          'produto_id, nome, grupo, venda, controla_estoque, valor_venda, estoque_atual, ativo',
+          'produto_id, nome, grupo, venda, controla_estoque, valor_venda, estoque_atual, ativo, imagem_url',
         )
         .eq('produto_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -86,6 +95,10 @@ export function ProdutoFormPage() {
         ativo: data.ativo !== false,
       })
       setEstoqueAtual(Number(data.estoque_atual ?? 0))
+      setImagemUrl(data.imagem_url ?? null)
+      setImagemPreview(data.imagem_url ?? null)
+      setImagemFile(null)
+      setRemoverFoto(false)
       setLoading(false)
     })()
 
@@ -93,6 +106,15 @@ export function ProdutoFormPage() {
       mounted = false
     }
   }, [id, isNew, empresaId])
+
+  function onImagemFileChange(file: File | null) {
+    if (imagemPreview && imagemPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(imagemPreview)
+    }
+    setImagemFile(file)
+    setRemoverFoto(false)
+    setImagemPreview(file ? URL.createObjectURL(file) : imagemUrl)
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
@@ -140,13 +162,58 @@ export function ProdutoFormPage() {
           .select('produto_id')
           .single()
 
-    setSaving(false)
-
     if (result.error) {
+      setSaving(false)
       setError(result.error.message)
       return
     }
 
+    const produtoIdSalvo = Number(result.data?.produto_id)
+    if (
+      imagemFile &&
+      Number.isFinite(produtoIdSalvo) &&
+      produtoIdSalvo > 0
+    ) {
+      const imgOk = await uploadProdutoImagem(
+        empresaId,
+        produtoIdSalvo,
+        imagemFile,
+      )
+      if ('error' in imgOk) {
+        setSaving(false)
+        setError(`Produto salvo, mas a foto falhou: ${imgOk.error}`)
+        if (isNew) {
+          navigate(`/estoque/produtos/${produtoIdSalvo}`, {
+            state: {
+              flashSuccess: 'Produto salvo. Ajuste a foto se precisar.',
+            },
+          })
+        }
+        return
+      }
+      setImagemUrl(imgOk.url)
+      setImagemPreview(imgOk.url)
+      setImagemFile(null)
+    } else if (
+      removerFoto &&
+      !isNew &&
+      Number.isFinite(produtoIdSalvo) &&
+      produtoIdSalvo > 0
+    ) {
+      const rem = await removerProdutoImagem(empresaId, produtoIdSalvo)
+      if ('error' in rem) {
+        setSaving(false)
+        setError(
+          `Produto salvo, mas não foi possível remover a foto: ${rem.error}`,
+        )
+        return
+      }
+      setImagemUrl(null)
+      setImagemPreview(null)
+      setRemoverFoto(false)
+    }
+
+    setSaving(false)
     navigate('/estoque/produtos', {
       state: { flashSuccess: 'Salvo com sucesso!' },
     })
@@ -289,6 +356,86 @@ export function ProdutoFormPage() {
             <span className="field-hint">
               Atualizado automaticamente pelos movimentos (acerto, loja…).
             </span>
+          </div>
+
+          <div className="field field-span-2">
+            <label htmlFor="produto-imagem">Foto do produto</label>
+            <div className="logo-upload-field">
+              {imagemPreview && !removerFoto ? (
+                <img
+                  className="produto-imagem-preview"
+                  src={imagemPreview}
+                  alt="Pré-visualização da foto do produto"
+                />
+              ) : (
+                <div className="logo-preview logo-preview-placeholder">
+                  Sem foto
+                </div>
+              )}
+              <div>
+                <input
+                  ref={imagemInputRef}
+                  id="produto-imagem"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  disabled={disabled}
+                  onChange={(e) =>
+                    onImagemFileChange(e.target.files?.[0] ?? null)
+                  }
+                />
+                <span className="field-hint">
+                  PNG, JPG, WEBP ou GIF · máx. 2 MB. Aparece na loja local e
+                  online.
+                </span>
+                {imagemFile ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ marginTop: '0.4rem' }}
+                    onClick={() => {
+                      onImagemFileChange(null)
+                      if (imagemInputRef.current) {
+                        imagemInputRef.current.value = ''
+                      }
+                    }}
+                    disabled={disabled}
+                  >
+                    Cancelar arquivo
+                  </button>
+                ) : null}
+                {!imagemFile && imagemUrl && !removerFoto ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ marginTop: '0.4rem' }}
+                    onClick={() => {
+                      setRemoverFoto(true)
+                      setImagemPreview(null)
+                      if (imagemInputRef.current) {
+                        imagemInputRef.current.value = ''
+                      }
+                    }}
+                    disabled={disabled}
+                  >
+                    Remover foto
+                  </button>
+                ) : null}
+                {removerFoto ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ marginTop: '0.4rem' }}
+                    onClick={() => {
+                      setRemoverFoto(false)
+                      setImagemPreview(imagemUrl)
+                    }}
+                    disabled={disabled}
+                  >
+                    Manter foto atual
+                  </button>
+                ) : null}
+              </div>
+            </div>
           </div>
 
           <div className="field field-checks field-span-2">

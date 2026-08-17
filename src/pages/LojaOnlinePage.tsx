@@ -12,6 +12,7 @@ import {
   type PixCreateInput,
 } from '@/lib/pixSicredi'
 import { loadPixPendingForEmpresa } from '@/lib/pixSicrediPending'
+import { isAssociadoLogin } from '@/lib/roles'
 
 type ProdutoLoja = {
   produto_id: number
@@ -41,10 +42,13 @@ type CartItem = {
   estoque_atual: number
 }
 
-export function LojaPage() {
-  const { empresa, hasPermission } = useAuth()
+export function LojaOnlinePage() {
+  const { empresa, profile, hasPermission } = useAuth()
   const empresaId = empresa?.id
-  const canSell = hasPermission('vendas.write')
+  const associadoLogin = isAssociadoLogin(profile)
+  const canStaffSell = hasPermission('vendas.write')
+  /** Associado compra só via PIX; equipe usa qualquer tipo de pagamento. */
+  const canBuy = canStaffSell || associadoLogin
 
   const [produtos, setProdutos] = useState<ProdutoLoja[]>([])
   const [grupos, setGrupos] = useState<GrupoOpt[]>([])
@@ -60,13 +64,18 @@ export function LojaPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [pixDisponivel, setPixDisponivel] = useState(false)
-  const [pixTitle, setPixTitle] = useState('Venda loja')
+  const [pixTitle, setPixTitle] = useState('Loja online')
   const [pixInput, setPixInput] = useState<PixCreateInput | null>(null)
 
   const grupoMap = useMemo(
     () => new Map(grupos.map((g) => [g.grupoproduto_id, g.nome])),
     [grupos],
   )
+
+  const tiposVisiveis = useMemo(() => {
+    if (canStaffSell) return tiposPagamento
+    return tiposPagamento.filter((t) => t.comunica_banco)
+  }, [tiposPagamento, canStaffSell])
 
   async function loadProdutos() {
     if (!empresaId) {
@@ -110,17 +119,27 @@ export function LojaPage() {
     const tipos = (tipoRes.data as TipoPagamento[]) ?? []
     setTiposPagamento(tipos)
     setPixDisponivel(pixOk)
+
+    const tiposOk = canStaffSell
+      ? tipos
+      : tipos.filter((t) => t.comunica_banco)
     setTipopagtoId((prev) => {
-      if (prev && tipos.some((t) => String(t.tipopagto_id) === prev)) return prev
-      return tipos.length === 1 ? String(tipos[0].tipopagto_id) : ''
+      if (prev && tiposOk.some((t) => String(t.tipopagto_id) === prev)) {
+        return prev
+      }
+      if (!canStaffSell) {
+        const pixTipo = tiposOk[0]
+        return pixTipo ? String(pixTipo.tipopagto_id) : ''
+      }
+      return tiposOk.length === 1 ? String(tiposOk[0].tipopagto_id) : ''
     })
     setLoading(false)
   }
 
   useEffect(() => {
     void loadProdutos()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on empresa
-  }, [empresaId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on empresa/role
+  }, [empresaId, canStaffSell])
 
   useEffect(() => {
     if (!empresaId) return
@@ -147,14 +166,19 @@ export function LojaPage() {
   )
 
   const tipoSelecionado = useMemo(
-    () => tiposPagamento.find((t) => String(t.tipopagto_id) === tipopagtoId),
-    [tiposPagamento, tipopagtoId],
+    () => tiposVisiveis.find((t) => String(t.tipopagto_id) === tipopagtoId),
+    [tiposVisiveis, tipopagtoId],
   )
 
   function addProduto(p: ProdutoLoja) {
+    if (!canBuy) return
     setSuccess(null)
     setError(null)
     const unitario = Number(p.valor_venda ?? 0)
+    if (!(unitario > 0)) {
+      setError(`“${p.nome}” ainda não tem preço de venda.`)
+      return
+    }
     const estoque = Number(p.estoque_atual ?? 0)
     const controla = p.controla_estoque !== false
 
@@ -219,9 +243,9 @@ export function LojaPage() {
     setError(null)
   }
 
-  async function finalizarVenda() {
-    if (!canSell) {
-      setError('Sem permissão para registrar venda.')
+  async function finalizarCompra() {
+    if (!canBuy) {
+      setError('Sem permissão para comprar nesta loja.')
       return
     }
     if (!empresaId) {
@@ -233,7 +257,11 @@ export function LojaPage() {
       return
     }
     if (!tipopagtoId) {
-      setError('Selecione o tipo de pagamento.')
+      setError(
+        associadoLogin && !canStaffSell
+          ? 'Configure um tipo de pagamento PIX (comunica com o banco) no grupo.'
+          : 'Selecione o tipo de pagamento.',
+      )
       return
     }
     for (const item of cart) {
@@ -260,25 +288,41 @@ export function LojaPage() {
       quantidade: item.quantidade,
     }))
 
-    if (tipoSelecionado?.comunica_banco) {
+    const usarPix =
+      !!tipoSelecionado?.comunica_banco || (associadoLogin && !canStaffSell)
+
+    if (usarPix) {
       if (!pixDisponivel) {
         setSaving(false)
         setError(
-          'Este tipo comunica com o banco, mas o PIX Sicredi não está configurado. Cadastre a chave PIX na conta bancária do grupo (sem ramo) ou use outro tipo de pagamento.',
+          'PIX Sicredi não está configurado. Cadastre a chave PIX na conta bancária do grupo.',
+        )
+        return
+      }
+      if (!tipoSelecionado?.comunica_banco) {
+        setSaving(false)
+        setError(
+          'Para compra online é necessário um tipo de pagamento marcado para comunicar com o banco (PIX).',
         )
         return
       }
       const nomes = itens.map((i) => i.nome).join(', ')
-      setPixTitle(`Loja — ${formatMoney(total)}`)
+      setPixTitle(`Loja online — ${formatMoney(total)}`)
       setPixInput({
         empresaId,
         tipo: 'loja',
         valor: Number(total.toFixed(2)),
-        descricao: `Venda loja — ${nomes}`.slice(0, 120),
+        descricao: `Venda loja online — ${nomes}`.slice(0, 120),
         tipopagtoId: Number(tipopagtoId),
         lojaItens: itens,
       })
       setSaving(false)
+      return
+    }
+
+    if (!canStaffSell) {
+      setSaving(false)
+      setError('Sem permissão para registrar venda sem PIX.')
       return
     }
 
@@ -288,6 +332,7 @@ export function LojaPage() {
       tipopagtoId: Number(tipopagtoId),
       tipopagtoNome: tipoSelecionado?.nome ?? null,
       observacao: obs,
+      canal: 'online',
     })
 
     setSaving(false)
@@ -298,7 +343,7 @@ export function LojaPage() {
 
     clearCart()
     setSuccess(
-      `Venda #${result.receita_id} · ${result.itens} item(ns) · ${formatMoney(result.total)}${
+      `Pedido #${result.receita_id} · ${result.itens} item(ns) · ${formatMoney(result.total)}${
         tipoSelecionado ? ` · ${tipoSelecionado.nome}` : ''
       } — receita e estoque atualizados.`,
     )
@@ -308,7 +353,9 @@ export function LojaPage() {
   async function onPixPago() {
     setPixInput(null)
     clearCart()
-    setSuccess('Pagamento PIX confirmado — venda, receita e estoque atualizados.')
+    setSuccess(
+      'Pagamento PIX confirmado — pedido, receita e estoque atualizados.',
+    )
     await loadProdutos()
   }
 
@@ -326,20 +373,20 @@ export function LojaPage() {
     <>
       <header className="page-header">
         <div>
-          <h2>Loja local</h2>
+          <h2>Loja online</h2>
           <p>
-            PDV do grupo — <strong>{empresa?.nome}</strong>
+            Catálogo com os produtos do estoque à venda —{' '}
+            <strong>{empresa?.nome}</strong>
           </p>
         </div>
         <div className="page-header-actions">
-          <Link className="btn btn-soft" to="/vendas/loja-online">
-            Loja online
-          </Link>
-          <Link className="btn btn-soft" to="/vendas/loja/caixa">
-            Caixa
-          </Link>
+          {canStaffSell ? (
+            <Link className="btn btn-soft" to="/vendas/loja">
+              Loja local
+            </Link>
+          ) : null}
           <Link className="btn btn-soft" to="/dashboard">
-            Fechar loja
+            Voltar
           </Link>
         </div>
       </header>
@@ -355,8 +402,14 @@ export function LojaPage() {
         </AlertMessage>
       ) : null}
 
-      <div className="loja-pdv">
-        <section className="panel loja-pdv-produtos">
+      {!canBuy ? (
+        <AlertMessage tone="info" title="Somente consulta">
+          Você pode ver o catálogo, mas não tem permissão para comprar.
+        </AlertMessage>
+      ) : null}
+
+      <div className="loja-online">
+        <section className="panel loja-online-catalogo">
           <div className="toolbar">
             <input
               className="input"
@@ -382,61 +435,82 @@ export function LojaPage() {
           </div>
 
           {loading ? (
-            <div className="loading">Carregando produtos…</div>
+            <div className="loading">Carregando catálogo…</div>
           ) : produtosFiltrados.length === 0 ? (
             <div className="empty">
-              Nenhum produto marcado para venda. Cadastre em Estoque → Produtos.
+              Nenhum produto marcado para venda. Cadastre em Estoque → Produtos
+              (ativo + venda).
             </div>
           ) : (
-            <div className="loja-pdv-grid">
+            <div className="loja-online-grid">
               {produtosFiltrados.map((p) => {
                 const estoque = Number(p.estoque_atual ?? 0)
                 const controla = p.controla_estoque !== false
                 const semEstoque = controla && estoque <= 0
+                const semPreco = !(Number(p.valor_venda ?? 0) > 0)
+                const noCarrinho = cart.find(
+                  (c) => c.produto_id === p.produto_id,
+                )
                 return (
-                  <button
+                  <article
                     key={p.produto_id}
-                    type="button"
-                    className="loja-pdv-card"
-                    disabled={!canSell || saving || semEstoque}
-                    onClick={() => addProduto(p)}
+                    className={`loja-online-card${semEstoque || semPreco ? ' is-disabled' : ''}`}
                   >
                     {p.imagem_url ? (
                       <img
-                        className="loja-pdv-card-img"
+                        className="loja-online-card-img"
                         src={p.imagem_url}
                         alt=""
                       />
                     ) : (
-                      <span className="loja-pdv-card-img loja-pdv-card-img--empty">
+                      <div className="loja-online-card-img loja-online-card-img--empty">
                         Sem foto
-                      </span>
+                      </div>
                     )}
-                    <strong>{p.nome}</strong>
-                    <span className="loja-pdv-card-meta">
-                      {p.grupo != null
-                        ? (grupoMap.get(p.grupo) ?? '—')
-                        : '—'}
-                    </span>
-                    <span className="loja-pdv-card-price">
-                      {formatMoney(p.valor_venda)}
-                    </span>
-                    <span className="loja-pdv-card-stock">
-                      {controla
-                        ? `Estoque: ${formatQty(estoque)}`
-                        : 'Sem controle de estoque'}
-                    </span>
-                  </button>
+                    <div className="loja-online-card-body">
+                      <strong>{p.nome}</strong>
+                      <span className="loja-online-card-meta">
+                        {p.grupo != null
+                          ? (grupoMap.get(p.grupo) ?? '—')
+                          : 'Sem grupo'}
+                      </span>
+                      <span className="loja-online-card-price">
+                        {formatMoney(p.valor_venda)}
+                      </span>
+                      <span className="loja-online-card-stock">
+                        {controla
+                          ? `Estoque: ${formatQty(estoque)}`
+                          : 'Sem controle de estoque'}
+                        {noCarrinho
+                          ? ` · no carrinho: ${formatQty(noCarrinho.quantidade)}`
+                          : ''}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={
+                        !canBuy || saving || semEstoque || semPreco
+                      }
+                      onClick={() => addProduto(p)}
+                    >
+                      {semEstoque
+                        ? 'Indisponível'
+                        : semPreco
+                          ? 'Sem preço'
+                          : 'Adicionar'}
+                    </button>
+                  </article>
                 )
               })}
             </div>
           )}
         </section>
 
-        <aside className="panel loja-pdv-carrinho">
+        <aside className="panel loja-online-carrinho">
           <h3>Carrinho</h3>
           {cart.length === 0 ? (
-            <p className="muted">Clique em um produto para adicionar.</p>
+            <p className="muted">Adicione produtos do catálogo.</p>
           ) : (
             <div className="table-wrap">
               <table className="data">
@@ -444,7 +518,6 @@ export function LojaPage() {
                   <tr>
                     <th>Produto</th>
                     <th>Qtd</th>
-                    <th>Unit.</th>
                     <th>Total</th>
                     <th></th>
                   </tr>
@@ -452,7 +525,12 @@ export function LojaPage() {
                 <tbody>
                   {cart.map((item) => (
                     <tr key={item.produto_id}>
-                      <td>{item.nome}</td>
+                      <td>
+                        <div>{item.nome}</div>
+                        <span className="muted">
+                          {formatMoney(item.unitario)} un.
+                        </span>
+                      </td>
                       <td style={{ minWidth: 88 }}>
                         <input
                           className="input"
@@ -461,11 +539,10 @@ export function LojaPage() {
                           onChange={(e) =>
                             setQty(item.produto_id, e.target.value)
                           }
-                          disabled={!canSell || saving}
+                          disabled={!canBuy || saving}
                           aria-label={`Quantidade ${item.nome}`}
                         />
                       </td>
-                      <td>{formatMoney(item.unitario)}</td>
                       <td>
                         {formatMoney(item.unitario * item.quantidade)}
                       </td>
@@ -486,56 +563,55 @@ export function LojaPage() {
             </div>
           )}
 
-          <div className="field" style={{ marginTop: '0.75rem' }}>
-            <label htmlFor="loja_tipopagto">Tipo de pagamento</label>
-            <select
-              id="loja_tipopagto"
-              className="select"
-              value={tipopagtoId}
-              onChange={(e) => setTipopagtoId(e.target.value)}
-              disabled={!canSell || saving || cart.length === 0}
-              required
-            >
-              <option value="">Selecione…</option>
-              {tiposPagamento.map((t) => (
-                <option key={t.tipopagto_id} value={t.tipopagto_id}>
-                  {t.nome}
-                  {t.comunica_banco ? ' (PIX banco)' : ''}
-                </option>
-              ))}
-            </select>
-            {tiposPagamento.length === 0 ? (
-              <span className="field-hint">
-                Cadastre em Cadastros → Tipo de pagamento (ex.: Dinheiro, PIX).
-              </span>
-            ) : tipoSelecionado?.comunica_banco ? (
-              <span className="field-hint">
-                {pixDisponivel
-                  ? 'Ao finalizar, abre o PIX Sicredi — a venda só fecha após o banco confirmar.'
-                  : 'Marcado para comunicar com o banco, mas o PIX Sicredi ainda não está configurado na conta do grupo.'}
-              </span>
-            ) : null}
-          </div>
+          {canStaffSell ? (
+            <div className="field" style={{ marginTop: '0.75rem' }}>
+              <label htmlFor="loja_online_tipopagto">Tipo de pagamento</label>
+              <select
+                id="loja_online_tipopagto"
+                className="select"
+                value={tipopagtoId}
+                onChange={(e) => setTipopagtoId(e.target.value)}
+                disabled={!canBuy || saving || cart.length === 0}
+                required
+              >
+                <option value="">Selecione…</option>
+                {tiposVisiveis.map((t) => (
+                  <option key={t.tipopagto_id} value={t.tipopagto_id}>
+                    {t.nome}
+                    {t.comunica_banco ? ' (PIX banco)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <p className="field-hint" style={{ marginTop: '0.75rem' }}>
+              {pixDisponivel && tiposVisiveis.length > 0
+                ? 'Pagamento online via PIX Sicredi — a compra só fecha após o banco confirmar.'
+                : 'Compras online precisam de PIX Sicredi e um tipo de pagamento que comunique com o banco.'}
+            </p>
+          )}
 
-          <div className="field">
-            <label htmlFor="loja_obs">Observação (opcional)</label>
-            <input
-              id="loja_obs"
-              className="input"
-              value={obs}
-              onChange={(e) => setObs(e.target.value)}
-              disabled={!canSell || saving || cart.length === 0}
-              maxLength={200}
-            />
-          </div>
+          {canStaffSell ? (
+            <div className="field">
+              <label htmlFor="loja_online_obs">Observação (opcional)</label>
+              <input
+                id="loja_online_obs"
+                className="input"
+                value={obs}
+                onChange={(e) => setObs(e.target.value)}
+                disabled={!canBuy || saving || cart.length === 0}
+                maxLength={200}
+              />
+            </div>
+          ) : null}
 
-          <div className="loja-pdv-total">
+          <div className="loja-online-total">
             <span>Total</span>
             <strong>{formatMoney(total)}</strong>
           </div>
 
           <div className="form-actions">
-            {canSell ? (
+            {canBuy ? (
               <>
                 <button
                   type="button"
@@ -544,11 +620,16 @@ export function LojaPage() {
                     saving ||
                     cart.length === 0 ||
                     !tipopagtoId ||
-                    tiposPagamento.length === 0
+                    tiposVisiveis.length === 0
                   }
-                  onClick={() => void finalizarVenda()}
+                  onClick={() => void finalizarCompra()}
                 >
-                  {saving ? 'Registrando…' : 'Finalizar venda'}
+                  {saving
+                    ? 'Processando…'
+                    : tipoSelecionado?.comunica_banco ||
+                        (associadoLogin && !canStaffSell)
+                      ? 'Pagar com PIX'
+                      : 'Finalizar pedido'}
                 </button>
                 <button
                   type="button"
@@ -560,7 +641,7 @@ export function LojaPage() {
                 </button>
               </>
             ) : (
-              <p className="muted">Modo leitura — sem permissão para vender.</p>
+              <p className="muted">Sem permissão para comprar.</p>
             )}
           </div>
         </aside>

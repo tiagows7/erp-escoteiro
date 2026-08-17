@@ -184,17 +184,20 @@ export function LojaCaixaPage() {
     <>
       <header className="page-header">
         <div>
-          <h2>Caixa da loja</h2>
+          <h2>Caixa da loja local</h2>
           <p>
-            Vendas registradas no PDV — <strong>{empresa?.nome}</strong>
+            Vendas do PDV — <strong>{empresa?.nome}</strong>
           </p>
         </div>
         <div className="page-header-actions">
           <Link className="btn btn-soft" to="/vendas/loja">
-            Voltar ao PDV
+            Voltar à loja local
+          </Link>
+          <Link className="btn btn-soft" to="/vendas/loja-online">
+            Loja online
           </Link>
           <Link className="btn btn-soft" to="/dashboard">
-            Fechar loja
+            Fechar
           </Link>
         </div>
       </header>
