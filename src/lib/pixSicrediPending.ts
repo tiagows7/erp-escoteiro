@@ -11,11 +11,12 @@ export type PixPendingSession = {
 }
 
 export function pixPaymentKey(input: PixCreateInput): string {
+  const lojaItens = Array.isArray(input.lojaItens)
+    ? input.lojaItens
+    : (input.lojaItens?.itens ?? [])
   const itensKey =
     input.tipo === 'loja'
-      ? (input.lojaItens ?? [])
-          .map((i) => `${i.produto_id}:${i.quantidade}`)
-          .join(',')
+      ? lojaItens.map((i) => `${i.produto_id}:${i.quantidade}`).join(',')
       : ''
   return [
     input.empresaId,

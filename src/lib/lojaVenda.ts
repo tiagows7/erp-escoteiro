@@ -30,6 +30,84 @@ export type FinalizarVendaLojaInput = {
   observacao?: string | null
   /** Rótulo na receita / movimento (padrão: loja local). */
   canal?: 'local' | 'online'
+  compradorNome?: string | null
+  compradorTelefone?: string | null
+  associadoId?: number | null
+  criadoPor?: string | null
+}
+
+export async function registrarPedidoLoja(input: {
+  empresaId: number
+  receitaId: number
+  canal: 'local' | 'online'
+  itens: LojaVendaItem[]
+  total: number
+  observacao?: string | null
+  compradorNome?: string | null
+  compradorTelefone?: string | null
+  associadoId?: number | null
+  criadoPor?: string | null
+}): Promise<{ ok: true; pedido_id: number } | { ok: false; error: string }> {
+  const { data: pedido, error: pedError } = await supabase
+    .from('loja_pedido')
+    .insert({
+      empresa_id: input.empresaId,
+      receita_id: input.receitaId,
+      canal: input.canal,
+      comprador_nome: (input.compradorNome ?? '').trim() || null,
+      comprador_telefone: (input.compradorTelefone ?? '').trim() || null,
+      associado_id: input.associadoId ?? null,
+      total: input.total,
+      observacao: (input.observacao ?? '').trim() || null,
+      criado_por: input.criadoPor ?? null,
+    })
+    .select('pedido_id')
+    .single()
+
+  if (pedError || !pedido?.pedido_id) {
+    return {
+      ok: false,
+      error: pedError?.message ?? 'Falha ao registrar pedido da loja.',
+    }
+  }
+
+  const pedidoId = pedido.pedido_id as number
+  const itensPayload = input.itens.map((item) => ({
+    pedido_id: pedidoId,
+    empresa_id: input.empresaId,
+    produto_id: item.produto_id,
+    nome: item.nome,
+    quantidade: item.quantidade,
+    unitario: item.unitario,
+    total: Number((item.quantidade * item.unitario).toFixed(2)),
+  }))
+
+  const { error: itensError } = await supabase
+    .from('loja_pedido_item')
+    .insert(itensPayload)
+
+  if (itensError) {
+    await supabase.from('loja_pedido').delete().eq('pedido_id', pedidoId)
+    return { ok: false, error: itensError.message }
+  }
+
+  return { ok: true, pedido_id: pedidoId }
+}
+
+export async function marcarPedidoLojaEntregue(
+  pedidoId: number,
+  entregue = true,
+): Promise<{ ok: boolean; mensagem: string }> {
+  const { data, error } = await supabase.rpc('loja_pedido_marcar_entregue', {
+    p_pedido_id: pedidoId,
+    p_entregue: entregue,
+  })
+  if (error) return { ok: false, mensagem: error.message }
+  const row = Array.isArray(data) ? data[0] : data
+  return {
+    ok: !!row?.ok,
+    mensagem: String(row?.mensagem ?? 'Não foi possível atualizar a entrega.'),
+  }
 }
 
 /**
@@ -161,6 +239,25 @@ export async function finalizarVendaLoja(
   if (stockError) {
     await supabase.from('receitas').delete().eq('receita_id', receitaId)
     return { ok: false, error: stockError.message }
+  }
+
+  if (input.canal === 'online') {
+    const ped = await registrarPedidoLoja({
+      empresaId: input.empresaId,
+      receitaId,
+      canal: 'online',
+      itens: input.itens,
+      total,
+      observacao: obsUser || null,
+      compradorNome: input.compradorNome,
+      compradorTelefone: input.compradorTelefone,
+      associadoId: input.associadoId,
+      criadoPor: input.criadoPor,
+    })
+    if (!ped.ok) {
+      // Venda financeira já gravada; pedido é acompanhamento.
+      console.warn('Pedido loja online não registrado:', ped.error)
+    }
   }
 
   return {

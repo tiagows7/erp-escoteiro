@@ -123,6 +123,15 @@ export type PixLojaItem = {
   quantidade: number
 }
 
+export type PixLojaItensPayload =
+  | PixLojaItem[]
+  | {
+      canal?: 'online' | 'local'
+      comprador_nome?: string | null
+      comprador_telefone?: string | null
+      itens: PixLojaItem[]
+    }
+
 export type PixCreateInput = {
   empresaId: number
   tipo: PixCobrancaTipo
@@ -132,7 +141,7 @@ export type PixCreateInput = {
   receitaIds?: number[]
   atividadeId?: number | null
   tipopagtoId?: number | null
-  lojaItens?: PixLojaItem[]
+  lojaItens?: PixLojaItensPayload
 }
 
 async function readFunctionsError(error: unknown): Promise<string | null> {

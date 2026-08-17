@@ -43,7 +43,7 @@ type CartItem = {
 }
 
 export function LojaOnlinePage() {
-  const { empresa, profile, hasPermission } = useAuth()
+  const { empresa, profile, user, hasPermission } = useAuth()
   const empresaId = empresa?.id
   const associadoLogin = isAssociadoLogin(profile)
   const canStaffSell = hasPermission('vendas.write')
@@ -57,6 +57,9 @@ export function LojaOnlinePage() {
   const [q, setQ] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [obs, setObs] = useState('')
+  const [compradorNome, setCompradorNome] = useState('')
+  const [compradorTelefone, setCompradorTelefone] = useState('')
+  const [associadoId, setAssociadoId] = useState<number | null>(null)
   const [tipopagtoId, setTipopagtoId] = useState('')
 
   const [loading, setLoading] = useState(true)
@@ -119,6 +122,27 @@ export function LojaOnlinePage() {
     const tipos = (tipoRes.data as TipoPagamento[]) ?? []
     setTiposPagamento(tipos)
     setPixDisponivel(pixOk)
+
+    if (associadoLogin && profile?.registro) {
+      const registroNum = Number(String(profile.registro).replace(/\D/g, ''))
+      if (Number.isFinite(registroNum) && registroNum > 0) {
+        const { data: assoc } = await supabase
+          .from('associados')
+          .select('associado_id, nome, celular')
+          .eq('empresa_id', empresaId)
+          .eq('registro', registroNum)
+          .maybeSingle()
+        if (assoc?.associado_id) {
+          setAssociadoId(assoc.associado_id as number)
+          setCompradorNome((prev) => prev || String(assoc.nome ?? profile.nome ?? ''))
+          setCompradorTelefone((prev) =>
+            prev || String(assoc.celular ?? '').trim(),
+          )
+        }
+      }
+    } else if (!associadoLogin && profile?.nome) {
+      setCompradorNome((prev) => prev || profile.nome)
+    }
 
     const tiposOk = canStaffSell
       ? tipos
@@ -256,6 +280,10 @@ export function LojaOnlinePage() {
       setError('Adicione pelo menos um produto.')
       return
     }
+    if (!compradorNome.trim()) {
+      setError('Informe o nome do comprador.')
+      return
+    }
     if (!tipopagtoId) {
       setError(
         associadoLogin && !canStaffSell
@@ -314,7 +342,13 @@ export function LojaOnlinePage() {
         valor: Number(total.toFixed(2)),
         descricao: `Venda loja online — ${nomes}`.slice(0, 120),
         tipopagtoId: Number(tipopagtoId),
-        lojaItens: itens,
+        associadoId,
+        lojaItens: {
+          canal: 'online',
+          comprador_nome: compradorNome.trim(),
+          comprador_telefone: compradorTelefone.trim() || null,
+          itens,
+        },
       })
       setSaving(false)
       return
@@ -333,6 +367,10 @@ export function LojaOnlinePage() {
       tipopagtoNome: tipoSelecionado?.nome ?? null,
       observacao: obs,
       canal: 'online',
+      compradorNome: compradorNome.trim(),
+      compradorTelefone: compradorTelefone.trim() || null,
+      associadoId,
+      criadoPor: user?.id ?? null,
     })
 
     setSaving(false)
@@ -380,9 +418,9 @@ export function LojaOnlinePage() {
           </p>
         </div>
         <div className="page-header-actions">
-          {canStaffSell ? (
-            <Link className="btn btn-soft" to="/vendas/loja">
-              Loja local
+          {!associadoLogin ? (
+            <Link className="btn btn-soft" to="/vendas/loja-online/vendas">
+              Ver vendas
             </Link>
           ) : null}
           <Link className="btn btn-soft" to="/dashboard">
@@ -590,6 +628,29 @@ export function LojaOnlinePage() {
                 : 'Compras online precisam de PIX Sicredi e um tipo de pagamento que comunique com o banco.'}
             </p>
           )}
+
+          <div className="field">
+            <label htmlFor="loja_online_comprador">Nome do comprador</label>
+            <input
+              id="loja_online_comprador"
+              className="input"
+              value={compradorNome}
+              onChange={(e) => setCompradorNome(e.target.value)}
+              disabled={!canBuy || saving || cart.length === 0}
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="loja_online_fone">Telefone (opcional)</label>
+            <input
+              id="loja_online_fone"
+              className="input"
+              value={compradorTelefone}
+              onChange={(e) => setCompradorTelefone(e.target.value)}
+              disabled={!canBuy || saving || cart.length === 0}
+              inputMode="tel"
+            />
+          </div>
 
           {canStaffSell ? (
             <div className="field">

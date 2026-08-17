@@ -994,9 +994,15 @@ type LojaItemCob = {
 }
 
 function parseLojaItens(raw: unknown): LojaItemCob[] {
-  if (!Array.isArray(raw)) return []
+  let list: unknown[] = []
+  if (Array.isArray(raw)) {
+    list = raw
+  } else if (raw && typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>
+    if (Array.isArray(obj.itens)) list = obj.itens
+  }
   const out: LojaItemCob[] = []
-  for (const row of raw) {
+  for (const row of list) {
     if (!row || typeof row !== 'object') continue
     const r = row as Record<string, unknown>
     const produto_id = Number(r.produto_id)
@@ -1018,6 +1024,24 @@ function parseLojaItens(raw: unknown): LojaItemCob[] {
   return out
 }
 
+function parseLojaMeta(raw: unknown): {
+  canal: 'online' | 'local'
+  compradorNome: string | null
+  compradorTelefone: string | null
+} {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const obj = raw as Record<string, unknown>
+    const canal =
+      String(obj.canal ?? '').toLowerCase() === 'online' ? 'online' : 'local'
+    return {
+      canal,
+      compradorNome: String(obj.comprador_nome ?? '').trim() || null,
+      compradorTelefone: String(obj.comprador_telefone ?? '').trim() || null,
+    }
+  }
+  return { canal: 'local', compradorNome: null, compradorTelefone: null }
+}
+
 async function baixarLoja(
   admin: ReturnType<typeof createClient>,
   opts: {
@@ -1029,6 +1053,11 @@ async function baixarLoja(
     descricao: string | null
     observacao: string | null
     itens: LojaItemCob[]
+    canal?: 'online' | 'local'
+    compradorNome?: string | null
+    compradorTelefone?: string | null
+    associadoId?: number | null
+    criadoPor?: string | null
   },
 ) {
   if (!opts.itens.length) {
@@ -1043,16 +1072,23 @@ async function baixarLoja(
   const valor = Number(opts.valor || total)
   if (!(valor > 0)) throw new Error('Valor da venda inválido.')
 
+  const canal =
+    opts.canal === 'online' ||
+    /loja online/i.test(String(opts.descricao ?? ''))
+      ? 'online'
+      : 'local'
+  const canalLabel = canal === 'online' ? 'loja online' : 'loja'
+
   const nomes = opts.itens.map((i) => i.nome).join(', ')
   const descricao = truncate(
-    opts.descricao || `Venda loja — ${nomes}`,
+    opts.descricao || `Venda ${canalLabel} — ${nomes}`,
     120,
   )
   const tipoNome = (opts.tipopagtoNome ?? '').trim()
   const obsUser = (opts.observacao ?? '').trim()
   const observacaoReceita = truncate(
     [
-      `Venda loja · ${opts.itens.length} item(ns)`,
+      `Venda ${canalLabel} · ${opts.itens.length} item(ns)`,
       'Pagamento: PIX Sicredi',
       tipoNome ? `Tipo: ${tipoNome}` : null,
       `txid ${opts.txid}`,
@@ -1093,7 +1129,10 @@ async function baixarLoja(
     tipopagto_id: opts.tipopagtoId,
     data_pagamento: todayISO(),
     valor,
-    observacao: truncate(`Recebimento PIX Sicredi — loja txid ${opts.txid}`, 200),
+    observacao: truncate(
+      `Recebimento PIX Sicredi — ${canalLabel} txid ${opts.txid}`,
+      200,
+    ),
   })
 
   if (pagError) {
@@ -1141,6 +1180,38 @@ async function baixarLoja(
     await admin.from('receitas').delete().eq('receita_id', receitaId)
     throw new Error(stockError.message)
   }
+
+  if (canal === 'online') {
+    const { data: pedido, error: pedError } = await admin
+      .from('loja_pedido')
+      .insert({
+        empresa_id: opts.empresaId,
+        receita_id: receitaId,
+        canal: 'online',
+        comprador_nome: opts.compradorNome ?? null,
+        comprador_telefone: opts.compradorTelefone ?? null,
+        associado_id: opts.associadoId ?? null,
+        total: valor,
+        observacao: obsUser || null,
+        criado_por: opts.criadoPor ?? null,
+      })
+      .select('pedido_id')
+      .single()
+
+    if (!pedError && pedido?.pedido_id) {
+      await admin.from('loja_pedido_item').insert(
+        opts.itens.map((item) => ({
+          pedido_id: pedido.pedido_id,
+          empresa_id: opts.empresaId,
+          produto_id: item.produto_id,
+          nome: item.nome,
+          quantidade: item.quantidade,
+          unitario: item.unitario,
+          total: Number((item.quantidade * item.unitario).toFixed(2)),
+        })),
+      )
+    }
+  }
 }
 
 async function concluirEBaixar(
@@ -1186,6 +1257,7 @@ async function concluirEBaixar(
     await baixarVendaEvento(admin, cob)
   } else if (tipo === 'loja') {
     const itens = parseLojaItens(cob.loja_itens)
+    const meta = parseLojaMeta(cob.loja_itens)
     let tipopagtoNome: string | null = null
     if (tipopagtoId) {
       const { data: tp } = await admin
@@ -1204,6 +1276,11 @@ async function concluirEBaixar(
       descricao: (cob.descricao as string | null) ?? null,
       observacao: null,
       itens,
+      canal: meta.canal,
+      compradorNome: meta.compradorNome,
+      compradorTelefone: meta.compradorTelefone,
+      associadoId: (cob.associado_id as number | null) ?? null,
+      criadoPor: (cob.created_by as string | null) ?? null,
     })
   }
 
@@ -2034,6 +2111,16 @@ Deno.serve(async (req) => {
       if (tipo === 'loja' && lojaItens.length === 0) {
         return json({ error: 'Informe os itens da venda da loja.' }, 400)
       }
+      const lojaMeta = tipo === 'loja' ? parseLojaMeta(body.loja_itens) : null
+      const lojaPayload =
+        tipo === 'loja'
+          ? {
+              canal: lojaMeta?.canal ?? 'local',
+              comprador_nome: lojaMeta?.compradorNome ?? null,
+              comprador_telefone: lojaMeta?.compradorTelefone ?? null,
+              itens: lojaItens,
+            }
+          : null
       const tipopagtoIdBody = body.tipopagto_id
         ? Number(body.tipopagto_id)
         : null
@@ -2098,7 +2185,7 @@ Deno.serve(async (req) => {
           location: cobRes.location ?? null,
           descricao,
           raw_create: cobRes,
-          loja_itens: tipo === 'loja' ? lojaItens : null,
+          loja_itens: tipo === 'loja' ? lojaPayload : null,
           tipopagto_id:
             Number.isFinite(tipopagtoIdBody) && (tipopagtoIdBody as number) > 0
               ? tipopagtoIdBody
