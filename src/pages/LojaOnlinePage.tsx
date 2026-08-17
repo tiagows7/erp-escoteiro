@@ -6,7 +6,6 @@ import { AlertMessage } from '@/components/AlertMessage'
 import { PixSicrediCheckoutModal } from '@/components/PixSicrediCheckoutModal'
 import { formatMoney } from '@/lib/despesas'
 import { formatQty, parseQtyInput } from '@/lib/estoque'
-import { finalizarVendaLoja } from '@/lib/lojaVenda'
 import {
   empresaTemChavePixInformada,
   type PixCreateInput,
@@ -43,7 +42,7 @@ type CartItem = {
 }
 
 export function LojaOnlinePage() {
-  const { empresa, profile, user, hasPermission } = useAuth()
+  const { empresa, profile, hasPermission } = useAuth()
   const empresaId = empresa?.id
   const associadoLogin = isAssociadoLogin(profile)
   const canStaffSell = hasPermission('vendas.write')
@@ -75,10 +74,10 @@ export function LojaOnlinePage() {
     [grupos],
   )
 
-  const tiposVisiveis = useMemo(() => {
-    if (canStaffSell) return tiposPagamento
-    return tiposPagamento.filter((t) => t.comunica_banco)
-  }, [tiposPagamento, canStaffSell])
+  const tiposVisiveis = useMemo(
+    () => tiposPagamento.filter((t) => t.comunica_banco),
+    [tiposPagamento],
+  )
 
   async function loadProdutos() {
     if (!empresaId) {
@@ -144,18 +143,12 @@ export function LojaOnlinePage() {
       setCompradorNome((prev) => prev || profile.nome)
     }
 
-    const tiposOk = canStaffSell
-      ? tipos
-      : tipos.filter((t) => t.comunica_banco)
+    const tiposOk = tipos.filter((t) => t.comunica_banco)
     setTipopagtoId((prev) => {
       if (prev && tiposOk.some((t) => String(t.tipopagto_id) === prev)) {
         return prev
       }
-      if (!canStaffSell) {
-        const pixTipo = tiposOk[0]
-        return pixTipo ? String(pixTipo.tipopagto_id) : ''
-      }
-      return tiposOk.length === 1 ? String(tiposOk[0].tipopagto_id) : ''
+      return tiposOk.length >= 1 ? String(tiposOk[0].tipopagto_id) : ''
     })
     setLoading(false)
   }
@@ -286,9 +279,7 @@ export function LojaOnlinePage() {
     }
     if (!tipopagtoId) {
       setError(
-        associadoLogin && !canStaffSell
-          ? 'Configure um tipo de pagamento PIX (comunica com o banco) no grupo.'
-          : 'Selecione o tipo de pagamento.',
+        'Configure um tipo de pagamento que comunica com o banco (PIX) no grupo.',
       )
       return
     }
@@ -316,76 +307,41 @@ export function LojaOnlinePage() {
       quantidade: item.quantidade,
     }))
 
-    const usarPix =
-      !!tipoSelecionado?.comunica_banco || (associadoLogin && !canStaffSell)
-
-    if (usarPix) {
-      if (!pixDisponivel) {
-        setSaving(false)
-        setError(
-          'PIX Sicredi não está configurado. Cadastre a chave PIX na conta bancária do grupo.',
-        )
-        return
-      }
-      if (!tipoSelecionado?.comunica_banco) {
-        setSaving(false)
-        setError(
-          'Para compra online é necessário um tipo de pagamento marcado para comunicar com o banco (PIX).',
-        )
-        return
-      }
-      const nomes = itens.map((i) => i.nome).join(', ')
-      setPixTitle(`Loja online — ${formatMoney(total)}`)
-      setPixInput({
-        empresaId,
-        tipo: 'loja',
-        valor: Number(total.toFixed(2)),
-        descricao: `Venda loja online — ${nomes}`.slice(0, 120),
-        tipopagtoId: Number(tipopagtoId),
-        associadoId,
-        lojaItens: {
-          canal: 'online',
-          comprador_nome: compradorNome.trim(),
-          comprador_telefone: compradorTelefone.trim() || null,
-          itens,
-        },
-      })
+    if (!tipoSelecionado?.comunica_banco) {
       setSaving(false)
+      setError(
+        'Na loja online só é permitido pagamento que comunica com o banco (PIX).',
+      )
+      return
+    }
+    if (!pixDisponivel) {
+      setSaving(false)
+      setError(
+        'PIX Sicredi não está configurado. Cadastre a chave PIX na conta bancária do grupo.',
+      )
       return
     }
 
-    if (!canStaffSell) {
-      setSaving(false)
-      setError('Sem permissão para registrar venda sem PIX.')
-      return
-    }
-
-    const result = await finalizarVendaLoja({
+    const nomes = itens.map((i) => i.nome).join(', ')
+    const obsTxt = obs.trim()
+    setPixTitle(`Loja online — ${formatMoney(total)}`)
+    setPixInput({
       empresaId,
-      itens,
+      tipo: 'loja',
+      valor: Number(total.toFixed(2)),
+      descricao: `Venda loja online — ${nomes}${
+        obsTxt ? ` · ${obsTxt}` : ''
+      }`.slice(0, 120),
       tipopagtoId: Number(tipopagtoId),
-      tipopagtoNome: tipoSelecionado?.nome ?? null,
-      observacao: obs,
-      canal: 'online',
-      compradorNome: compradorNome.trim(),
-      compradorTelefone: compradorTelefone.trim() || null,
       associadoId,
-      criadoPor: user?.id ?? null,
+      lojaItens: {
+        canal: 'online',
+        comprador_nome: compradorNome.trim(),
+        comprador_telefone: compradorTelefone.trim() || null,
+        itens,
+      },
     })
-
     setSaving(false)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-
-    clearCart()
-    setSuccess(
-      `Pedido #${result.receita_id} · ${result.itens} item(ns) · ${formatMoney(result.total)}${
-        tipoSelecionado ? ` · ${tipoSelecionado.nome}` : ''
-      } — receita e estoque atualizados.`,
-    )
-    await loadProdutos()
   }
 
   async function onPixPago() {
@@ -601,33 +557,29 @@ export function LojaOnlinePage() {
             </div>
           )}
 
-          {canStaffSell ? (
-            <div className="field" style={{ marginTop: '0.75rem' }}>
-              <label htmlFor="loja_online_tipopagto">Tipo de pagamento</label>
-              <select
-                id="loja_online_tipopagto"
-                className="select"
-                value={tipopagtoId}
-                onChange={(e) => setTipopagtoId(e.target.value)}
-                disabled={!canBuy || saving || cart.length === 0}
-                required
-              >
-                <option value="">Selecione…</option>
-                {tiposVisiveis.map((t) => (
-                  <option key={t.tipopagto_id} value={t.tipopagto_id}>
-                    {t.nome}
-                    {t.comunica_banco ? ' (PIX banco)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <p className="field-hint" style={{ marginTop: '0.75rem' }}>
+          <div className="field" style={{ marginTop: '0.75rem' }}>
+            <label htmlFor="loja_online_tipopagto">Tipo de pagamento</label>
+            <select
+              id="loja_online_tipopagto"
+              className="select"
+              value={tipopagtoId}
+              onChange={(e) => setTipopagtoId(e.target.value)}
+              disabled={!canBuy || saving || cart.length === 0}
+              required
+            >
+              <option value="">Selecione…</option>
+              {tiposVisiveis.map((t) => (
+                <option key={t.tipopagto_id} value={t.tipopagto_id}>
+                  {t.nome}
+                </option>
+              ))}
+            </select>
+            <span className="field-hint">
               {pixDisponivel && tiposVisiveis.length > 0
-                ? 'Pagamento online via PIX Sicredi — a compra só fecha após o banco confirmar.'
-                : 'Compras online precisam de PIX Sicredi e um tipo de pagamento que comunique com o banco.'}
-            </p>
-          )}
+                ? 'Somente pagamentos que comunicam com o banco (PIX Sicredi).'
+                : 'Cadastre um tipo de pagamento com “comunica com o banco” e o PIX Sicredi do grupo.'}
+            </span>
+          </div>
 
           <div className="field">
             <label htmlFor="loja_online_comprador">Nome do comprador</label>
@@ -687,10 +639,7 @@ export function LojaOnlinePage() {
                 >
                   {saving
                     ? 'Processando…'
-                    : tipoSelecionado?.comunica_banco ||
-                        (associadoLogin && !canStaffSell)
-                      ? 'Pagar com PIX'
-                      : 'Finalizar pedido'}
+                    : 'Pagar com PIX'}
                 </button>
                 <button
                   type="button"
