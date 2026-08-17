@@ -454,7 +454,9 @@ export function LojaOnlinePage() {
                       <img
                         className="loja-online-card-img"
                         src={p.imagem_url}
-                        alt=""
+                        alt={p.nome}
+                        loading="lazy"
+                        decoding="async"
                       />
                     ) : (
                       <div className="loja-online-card-img loja-online-card-img--empty">
