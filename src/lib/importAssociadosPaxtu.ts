@@ -413,6 +413,31 @@ export async function importAssociadosFromPaxtuExcel(
 
       if (registrosExistentes.has(reg.registro)) {
         result.skipped += 1
+        // Associado já existe: ainda tenta criar o login se faltar.
+        const ramoExistente = await resolveRamo(row[6])
+        const secaoExistente = await resolveSecao(row[12], ramoExistente)
+        const userStatus = await ensureUsuarioFromAssociado({
+          client,
+          empresaId,
+          nome,
+          registro: reg.registro,
+          dataNascimento: parseDate(row[19]),
+          ramo: ramoExistente,
+          secao: secaoExistente,
+        })
+        if (userStatus.status === 'created') {
+          result.createdUsers += 1
+          await new Promise((r) => setTimeout(r, 250))
+        } else if (userStatus.status === 'failed') {
+          result.usersFailed += 1
+          if (result.userErrors.length < 20) {
+            result.userErrors.push({
+              nome,
+              motivo: userStatus.error || 'Falha ao criar usuário',
+            })
+          }
+          await new Promise((r) => setTimeout(r, 400))
+        }
         continue
       }
 
@@ -483,14 +508,18 @@ export async function importAssociadosFromPaxtuExcel(
       // Usuario de acesso: login = registro, senha = DDMMAAAA
       const userStatus = await ensureUsuarioFromAssociado({
         client,
+        empresaId,
         nome,
         registro: reg.registro,
         dataNascimento,
         ramo,
         secao,
       })
-      if (userStatus.status === 'created') result.createdUsers += 1
-      else if (userStatus.status === 'skipped') result.usersSkipped += 1
+      if (userStatus.status === 'created') {
+        result.createdUsers += 1
+        // Evita saturar a Edge Function em importações grandes.
+        await new Promise((r) => setTimeout(r, 250))
+      } else if (userStatus.status === 'skipped') result.usersSkipped += 1
       else {
         result.usersFailed += 1
         if (result.userErrors.length < 20) {
@@ -499,6 +528,7 @@ export async function importAssociadosFromPaxtuExcel(
             motivo: userStatus.error || 'Falha ao criar usuário',
           })
         }
+        await new Promise((r) => setTimeout(r, 400))
       }
     } catch (err) {
       result.failed.push({
@@ -520,6 +550,7 @@ export async function importAssociadosFromPaxtuExcel(
 
 async function ensureUsuarioFromAssociado(opts: {
   client: SupabaseClient
+  empresaId: number
   nome: string
   registro: number
   dataNascimento: string | null
@@ -540,6 +571,7 @@ async function ensureUsuarioFromAssociado(opts: {
     .from('profiles')
     .select('id, menu_keys')
     .eq('registro', registroStr)
+    .eq('empresa_id', opts.empresaId)
     .maybeSingle()
 
   if (existing?.id) {
@@ -574,6 +606,7 @@ async function ensureUsuarioFromAssociado(opts: {
     password,
     role: 'leitura',
     ativo: true,
+    empresa_id: opts.empresaId,
     codigo_ramo: codigoRamo,
     codigo_secao: opts.secao,
     menu_keys: portalMenus,

@@ -65,7 +65,7 @@ function roleToTipo(role: AppRole): string {
 export async function createUsuario(
   input: CreateUsuarioInput,
 ): Promise<CreateUsuarioResult> {
-  const viaFunction = await createViaEdgeFunction(input)
+  const viaFunction = await createViaEdgeFunctionWithRetry(input)
   // Login por registro usa e-mail sintetico: signUp dispara e-mail e estoura rate limit.
   // So usa fallback quando a function nao esta disponivel E ha e-mail real.
   const hasRealEmail = (input.email ?? '').includes('@')
@@ -79,6 +79,10 @@ export async function createUsuario(
   return createViaSignUpFallback(input)
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 /** Só cai no fallback se a function estiver inacessível — não em 4xx de negócio. */
 function shouldFallback(error?: string) {
   if (!error) return false
@@ -89,9 +93,38 @@ function shouldFallback(error?: string) {
     lower.includes('failed to send') ||
     lower.includes('failed to fetch') ||
     lower.includes('functionsrelayerror') ||
+    lower.includes('network') ||
     lower.includes('404') ||
     (lower.includes('not found') && lower.includes('function'))
   )
+}
+
+function isTransientEdgeError(error?: string) {
+  if (!error) return false
+  const lower = error.toLowerCase()
+  return (
+    lower.includes('failed to send') ||
+    lower.includes('failed to fetch') ||
+    lower.includes('functionsrelayerror') ||
+    lower.includes('network') ||
+    lower.includes('timeout') ||
+    lower.includes('502') ||
+    lower.includes('503') ||
+    lower.includes('504')
+  )
+}
+
+async function createViaEdgeFunctionWithRetry(
+  input: CreateUsuarioInput,
+): Promise<CreateUsuarioResult> {
+  let last: CreateUsuarioResult = { ok: false, error: 'Falha ao criar usuário.' }
+  for (let attempt = 0; attempt < 4; attempt++) {
+    last = await createViaEdgeFunction(input)
+    if (last.ok) return last
+    if (!isTransientEdgeError(last.error) || attempt === 3) return last
+    await sleep(400 * (attempt + 1) ** 2)
+  }
+  return last
 }
 
 async function createViaEdgeFunction(
