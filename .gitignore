@@ -31,3 +31,8 @@ data/export/
 supabase/.temp/
 .vercel
 .env*.local
+
+# Credenciais PIX Efí locais (nunca versionar)
+certificado efy/
+*.p12
+*.pfx

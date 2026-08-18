@@ -39,6 +39,11 @@ export const AUDITORIA_TABELA_LABELS: Record<string, string> = {
   infinitepay_pedidos: 'Pedidos InfinitePay',
   pix_cobrancas: 'Cobranças PIX',
   lgpd_consentimento_log: 'Consentimento LGPD',
+  plataforma_plano: 'Plano plataforma',
+  plataforma_cobranca: 'Cobrança plataforma',
+  plataforma_cobranca_pagamento: 'Pagamento plataforma',
+  plataforma_efi_pix: 'PIX Efí (plataforma)',
+  plataforma_pix_cobrancas: 'PIX cobrança plataforma',
 }
 
 export function tabelaAuditoriaLabel(tabela: string | null | undefined): string {

@@ -52,6 +52,8 @@ const emptyForm = {
   cidade: '',
   ativo: true,
   portal_transparencia: true,
+  plataforma_plano_id: '',
+  plataforma_isento: false,
   logo_url: '' as string | null,
   adminNome: '',
   adminEmail: '',
@@ -76,6 +78,9 @@ export function GrupoFormPage() {
 
   const [form, setForm] = useState(emptyForm)
   const [ramos, setRamos] = useState<Ramo[]>([])
+  const [planosPlataforma, setPlanosPlataforma] = useState<
+    { plano_id: number; nome: string; valor: number }[]
+  >([])
   const [secoes, setSecoes] = useState<SecaoOpt[]>([])
   const [contasBancarias, setContasBancarias] = useState<ContaBancariaRow[]>([])
   const [contasListaOpen, setContasListaOpen] = useState(false)
@@ -118,6 +123,21 @@ export function GrupoFormPage() {
   }, [])
 
   useEffect(() => {
+    if (!isSuperAdmin) return
+    void supabase
+      .from('plataforma_plano')
+      .select('plano_id, nome, valor')
+      .eq('ativo', true)
+      .order('nome')
+      .then(({ data }) => {
+        setPlanosPlataforma(
+          ((data ?? []) as { plano_id: number; nome: string; valor: number }[]) ??
+            [],
+        )
+      })
+  }, [isSuperAdmin])
+
+  useEffect(() => {
     if (!form.estado) {
       setCidades([])
       return
@@ -140,7 +160,7 @@ export function GrupoFormPage() {
         supabase
           .from('empresa')
           .select(
-            'id, nome, cnpj, email, slug, telefone, estado, cidade, logo_url, ativo, portal_transparencia',
+            'id, nome, cnpj, email, slug, telefone, estado, cidade, logo_url, ativo, portal_transparencia, plataforma_plano_id, plataforma_isento',
           )
           .eq('id', Number(id))
           .maybeSingle(),
@@ -186,6 +206,11 @@ export function GrupoFormPage() {
             : '',
         ativo: data.ativo !== false,
         portal_transparencia: data.portal_transparencia !== false,
+        plataforma_plano_id:
+          data.plataforma_plano_id != null
+            ? String(data.plataforma_plano_id)
+            : '',
+        plataforma_isento: data.plataforma_isento === true,
         logo_url: data.logo_url,
       })
       setLogoPreview(data.logo_url)
@@ -346,6 +371,14 @@ export function GrupoFormPage() {
         cidade: form.cidade.trim() ? Number(form.cidade) : null,
         ativo: form.ativo,
         portal_transparencia: form.portal_transparencia,
+        ...(isSuperAdmin
+          ? {
+              plataforma_plano_id: form.plataforma_plano_id
+                ? Number(form.plataforma_plano_id)
+                : null,
+              plataforma_isento: form.plataforma_isento,
+            }
+          : {}),
       })
       .eq('id', empresaId)
 
@@ -752,6 +785,60 @@ export function GrupoFormPage() {
           />
           Portal da transparência público
         </label>
+
+        {isSuperAdmin ? (
+          <div
+            className="form-grid form-grid-2"
+            style={{ margin: '0 0 1rem' }}
+          >
+            <div className="field">
+              <label htmlFor="plataforma_plano_id">
+                Plano mensalidade plataforma
+              </label>
+              <select
+                id="plataforma_plano_id"
+                className="select"
+                value={form.plataforma_plano_id}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    plataforma_plano_id: e.target.value,
+                  }))
+                }
+                disabled={disabled}
+              >
+                <option value="">Sem plano</option>
+                {planosPlataforma.map((p) => (
+                  <option key={p.plano_id} value={p.plano_id}>
+                    {p.nome} (
+                    {Number(p.valor).toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL',
+                    })}
+                    )
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field field-checks" style={{ alignSelf: 'end' }}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={form.plataforma_isento}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      plataforma_isento: e.target.checked,
+                    }))
+                  }
+                  disabled={disabled}
+                />
+                Isento da mensalidade da plataforma
+              </label>
+            </div>
+          </div>
+        ) : null}
+
         {!isNew && form.slug && form.portal_transparencia ? (
           <p className="field-hint" style={{ marginTop: '-0.5rem' }}>
             Link público:{' '}

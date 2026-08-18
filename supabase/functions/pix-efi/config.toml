@@ -1,0 +1,2 @@
+# Webhook Efí não envia JWT do Supabase; auth é validada no código / secret.
+verify_jwt = false

@@ -46,7 +46,8 @@ export function menuAccessCatalog(): MenuAccessOption[] {
       if (
         item.to === '/grupos' ||
         item.to === '/backup' ||
-        item.to === '/grupos/meu'
+        item.to === '/grupos/meu' ||
+        item.to.startsWith('/plataforma/')
       ) {
         continue
       }
@@ -59,6 +60,9 @@ export function menuAccessCatalog(): MenuAccessOption[] {
       })
       continue
     }
+
+    // Grupo "Mensalidade plataforma" só para super_admin.
+    if (item.id === 'plataforma') continue
 
     for (const child of item.children) {
       options.push({
@@ -129,7 +133,14 @@ export const ALWAYS_VISIBLE_MENU_KEYS = [
 ] as const
 
 /** Itens só de plataforma — nunca filtrar por menu_keys. */
-export const PLATFORM_MENU_KEYS = ['/grupos', '/backup'] as const
+export const PLATFORM_MENU_KEYS = [
+  '/grupos',
+  '/backup',
+  '/plataforma/planos',
+  '/plataforma/cobrancas',
+  '/plataforma/gerar',
+  '/plataforma/efi-pix',
+] as const
 
 export function pathAllowedByMenuKeys(
   pathname: string,

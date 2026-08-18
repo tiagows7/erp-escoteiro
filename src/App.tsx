@@ -59,6 +59,10 @@ import { GrupoMeuRedirectPage } from '@/pages/GrupoMeuRedirectPage'
 import { BackupPage } from '@/pages/BackupPage'
 import { AuditoriaPage } from '@/pages/AuditoriaPage'
 import { ConquistasPage } from '@/pages/ConquistasPage'
+import { PlataformaPlanosPage } from '@/pages/PlataformaPlanosPage'
+import { PlataformaCobrancasPage } from '@/pages/PlataformaCobrancasPage'
+import { GeraCobrancaPlataformaPage } from '@/pages/GeraCobrancaPlataformaPage'
+import { PlataformaEfiPixPage } from '@/pages/PlataformaEfiPixPage'
 import { ReceitasInclusaoPage } from '@/pages/ReceitasInclusaoPage'
 import { ReceitaFormPage } from '@/pages/ReceitaFormPage'
 import { GeraMensalidadePage } from '@/pages/GeraMensalidadePage'
@@ -570,6 +574,39 @@ export default function App() {
               element={
                 <RequirePermission permission="grupos.write">
                   <BackupPage />
+                </RequirePermission>
+              }
+            />
+
+            <Route
+              path="plataforma/planos"
+              element={
+                <RequirePermission permission="plataforma.view">
+                  <PlataformaPlanosPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="plataforma/cobrancas"
+              element={
+                <RequirePermission permission="plataforma.view">
+                  <PlataformaCobrancasPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="plataforma/gerar"
+              element={
+                <RequirePermission permission="plataforma.write">
+                  <GeraCobrancaPlataformaPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="plataforma/efi-pix"
+              element={
+                <RequirePermission permission="plataforma.write">
+                  <PlataformaEfiPixPage />
                 </RequirePermission>
               }
             />

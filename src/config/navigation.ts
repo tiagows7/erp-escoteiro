@@ -243,6 +243,38 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'grupos.write',
   },
   {
+    type: 'group',
+    id: 'plataforma',
+    label: 'Mensalidade plataforma',
+    anyOf: ['plataforma.view', 'plataforma.write'],
+    children: [
+      {
+        type: 'link',
+        to: '/plataforma/planos',
+        label: 'Planos',
+        permission: 'plataforma.view',
+      },
+      {
+        type: 'link',
+        to: '/plataforma/cobrancas',
+        label: 'Cobranças',
+        permission: 'plataforma.view',
+      },
+      {
+        type: 'link',
+        to: '/plataforma/gerar',
+        label: 'Gerar cobranças',
+        permission: 'plataforma.write',
+      },
+      {
+        type: 'link',
+        to: '/plataforma/efi-pix',
+        label: 'PIX Efí',
+        permission: 'plataforma.write',
+      },
+    ],
+  },
+  {
     type: 'link',
     to: '/grupos/meu',
     label: 'Grupo escoteiro',
@@ -385,7 +417,11 @@ export function navItemsForProfile(
       ),
     }
   }).filter((item) => {
-    // Super admin: lista de grupos + backup. Admin do grupo: só "Grupo escoteiro".
+    // Super admin: lista de grupos + backup + mensalidade plataforma.
+    // Admin do grupo: só "Grupo escoteiro".
+    if (item.type === 'group' && item.id === 'plataforma') {
+      return profile?.role === 'super_admin'
+    }
     if (item.type !== 'link') return true
     if (item.to === '/grupos' || item.to === '/backup') {
       return profile?.role === 'super_admin'

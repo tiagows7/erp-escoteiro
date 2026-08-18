@@ -50,10 +50,21 @@ const TENANT_TABLES: { name: string; filterColumn: string }[] = [
   { name: 'empresa_conta_bancaria', filterColumn: 'empresa_id' },
   { name: 'lgpd_consentimento_log', filterColumn: 'empresa_id' },
   { name: 'auditoria_log', filterColumn: 'empresa_id' },
+  { name: 'plataforma_cobranca', filterColumn: 'empresa_id' },
+  { name: 'plataforma_cobranca_pagamento', filterColumn: 'empresa_id' },
+  { name: 'plataforma_pix_cobrancas', filterColumn: 'empresa_id' },
 ]
 
 /** Cadastros globais (sem tenant). */
-const GLOBAL_TABLES = ['ramos', 'estado', 'cidade', 'categoria', 'funcao'] as const
+const GLOBAL_TABLES = [
+  'ramos',
+  'estado',
+  'cidade',
+  'categoria',
+  'funcao',
+  'plataforma_plano',
+  'plataforma_efi_pix',
+] as const
 
 /** Campos sensíveis omitidos / mascarados no export. */
 const REDACT_FIELDS: Record<string, string[]> = {
@@ -71,6 +82,11 @@ const REDACT_FIELDS: Record<string, string[]> = {
     'api_client_secret',
     'api_pix_cert',
     'api_pix_key',
+  ],
+  plataforma_efi_pix: [
+    'client_secret',
+    'certificado',
+    'certificado_senha',
   ],
 }
 

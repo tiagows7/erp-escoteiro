@@ -48,6 +48,8 @@ export const PERMISSIONS = [
   'grupos.view',
   'grupos.write',
   'auditoria.view',
+  'plataforma.view',
+  'plataforma.write',
 ] as const
 
 export type Permission = (typeof PERMISSIONS)[number]
