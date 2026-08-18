@@ -9,13 +9,13 @@ import {
   competenciaToDate,
   currentCompetenciaInput,
   formatCompetencia,
-  lastDayOfCompetencia,
 } from '@/lib/receitas'
 import {
   formatMoney,
   TITULO_SITUACAO,
   type PlataformaPlano,
 } from '@/lib/plataforma'
+import { vencimentoPlataformaCompetencia } from '@/lib/plataformaAcesso'
 
 type PreviewRow = {
   empresa_id: number
@@ -26,6 +26,7 @@ type PreviewRow = {
   valor: number
   already: boolean
   isento: boolean
+  dia_vencimento: number | null
 }
 
 export function GeraCobrancaPlataformaPage() {
@@ -75,7 +76,7 @@ export function GeraCobrancaPlataformaPage() {
       supabase
         .from('empresa')
         .select(
-          'id, nome, slug, ativo, plataforma_plano_id, plataforma_isento',
+          'id, nome, slug, ativo, plataforma_plano_id, plataforma_isento, plataforma_dia_vencimento',
         )
         .eq('ativo', true)
         .order('nome'),
@@ -110,6 +111,7 @@ export function GeraCobrancaPlataformaPage() {
         slug: string | null
         plataforma_plano_id: number | null
         plataforma_isento: boolean | null
+        plataforma_dia_vencimento: number | null
       }[]
     )
       .filter((e) => e.plataforma_plano_id != null)
@@ -124,6 +126,10 @@ export function GeraCobrancaPlataformaPage() {
           valor: Number(plano?.valor ?? 0),
           already: already.has(e.id),
           isento: e.plataforma_isento === true,
+          dia_vencimento:
+            e.plataforma_dia_vencimento != null
+              ? Number(e.plataforma_dia_vencimento)
+              : null,
         }
       })
 
@@ -159,12 +165,14 @@ export function GeraCobrancaPlataformaPage() {
 
     setGenerating(true)
     setError(null)
-    const vencimento = lastDayOfCompetencia(competencia)
     const payload = aGerar.map((row) => ({
       empresa_id: row.empresa_id,
       plano_id: row.plano_id,
       competencia: compDate,
-      vencimento,
+      vencimento: vencimentoPlataformaCompetencia(
+        compDate,
+        row.dia_vencimento,
+      ),
       descricao: `Mensalidade plataforma ${formatCompetencia(compDate)} — ${row.nome}`,
       valor: row.valor,
       saldo: row.valor,

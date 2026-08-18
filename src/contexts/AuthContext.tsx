@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -21,6 +22,18 @@ import {
 } from '@/lib/roles'
 import { normalizeMenuKeys } from '@/lib/menuAccess'
 import type { Empresa, Profile } from '@/types/database'
+import type { PlataformaCobranca } from '@/lib/plataforma'
+import {
+  evaluatePlataformaAcesso,
+  type PlataformaAcessoState,
+} from '@/lib/plataformaAcesso'
+
+const PLATAFORMA_ACESSO_OK: PlataformaAcessoState = {
+  nivel: 'ok',
+  mensagem: null,
+  cobranca: null,
+  diasAteVencimento: null,
+}
 
 type AuthState = {
   session: Session | null
@@ -31,6 +44,8 @@ type AuthState = {
   roleLabel: string | null
   loading: boolean
   isSuperAdmin: boolean
+  plataformaAcesso: PlataformaAcessoState
+  refreshPlataformaAcesso: () => Promise<void>
   hasPermission: (permission: Permission) => boolean
   hasAnyPermission: (permissions: Permission[]) => boolean
   signIn: (
@@ -67,6 +82,42 @@ function mapProfile(row: Record<string, unknown>): Profile {
   }
 }
 
+async function loadPlataformaAcessoFor(
+  profile: Profile,
+  empresa: Empresa | null,
+): Promise<PlataformaAcessoState> {
+  const isSuperAdmin = profile.role === 'super_admin'
+  if (isSuperAdmin || !empresa) return PLATAFORMA_ACESSO_OK
+
+  const isento = empresa.plataforma_isento === true
+  const temPlano = empresa.plataforma_plano_id != null
+  if (isento || !temPlano) {
+    return evaluatePlataformaAcesso({
+      isSuperAdmin: false,
+      isento,
+      temPlano,
+      cobrancas: [],
+    })
+  }
+
+  const { data } = await supabase
+    .from('plataforma_cobranca')
+    .select(
+      'cobranca_id, empresa_id, plano_id, competencia, vencimento, descricao, valor, saldo, situacao, observacao, pago_em, plataforma_plano:plano_id(plano_id, nome)',
+    )
+    .eq('empresa_id', empresa.id)
+    .in('situacao', [1, 2])
+    .gt('saldo', 0)
+    .order('vencimento', { ascending: true })
+
+  return evaluatePlataformaAcesso({
+    isSuperAdmin: false,
+    isento,
+    temPlano,
+    cobrancas: (data as unknown as PlataformaCobranca[] | null) ?? [],
+  })
+}
+
 async function loadProfile(userId: string) {
   const { data: profileRow, error } = await supabase
     .from('profiles')
@@ -75,28 +126,38 @@ async function loadProfile(userId: string) {
     .maybeSingle()
 
   if (error || !profileRow) {
-    return { profile: null, empresa: null }
+    return {
+      profile: null as Profile | null,
+      empresa: null as Empresa | null,
+      plataformaAcesso: PLATAFORMA_ACESSO_OK,
+    }
   }
 
   const profile = mapProfile(profileRow as Record<string, unknown>)
 
   if (!profile.ativo) {
-    return { profile, empresa: null }
+    return { profile, empresa: null, plataformaAcesso: PLATAFORMA_ACESSO_OK }
   }
 
   if (!profile.empresa_id) {
-    return { profile, empresa: null }
+    return { profile, empresa: null, plataformaAcesso: PLATAFORMA_ACESSO_OK }
   }
 
   const { data: empresa } = await supabase
     .from('empresa')
-    .select('id, nome, cnpj, email, slug, telefone, logo_url, ativo')
+    .select(
+      'id, nome, cnpj, email, slug, telefone, logo_url, ativo, plataforma_plano_id, plataforma_isento, plataforma_dia_vencimento',
+    )
     .eq('id', profile.empresa_id)
     .maybeSingle()
 
+  const empresaTyped = (empresa as Empresa | null) ?? null
+  const plataformaAcesso = await loadPlataformaAcessoFor(profile, empresaTyped)
+
   return {
     profile,
-    empresa: (empresa as Empresa | null) ?? null,
+    empresa: empresaTyped,
+    plataformaAcesso,
   }
 }
 
@@ -105,6 +166,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [empresa, setEmpresa] = useState<Empresa | null>(null)
+  const [plataformaAcesso, setPlataformaAcesso] =
+    useState<PlataformaAcessoState>(PLATAFORMA_ACESSO_OK)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -117,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!next?.user) {
         setProfile(null)
         setEmpresa(null)
+        setPlataformaAcesso(PLATAFORMA_ACESSO_OK)
         return
       }
 
@@ -127,14 +191,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return
       // profiles.email às vezes vem vazio; usa o e-mail do Auth.
       const authEmail = next.user.email?.trim() || null
-      const profile = loaded.profile
+      const nextProfile = loaded.profile
         ? {
             ...loaded.profile,
             email: loaded.profile.email?.trim() || authEmail,
           }
         : null
-      setProfile(profile)
+      setProfile(nextProfile)
       setEmpresa(loaded.empresa)
+      setPlataformaAcesso(loaded.plataformaAcesso)
     }
 
     void supabase.auth.getSession().then(async ({ data }) => {
@@ -164,6 +229,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sub.subscription.unsubscribe()
     }
   }, [])
+
+  const refreshPlataformaAcesso = useCallback(async () => {
+    if (!profile || !empresa) {
+      setPlataformaAcesso(PLATAFORMA_ACESSO_OK)
+      return
+    }
+    const next = await loadPlataformaAcessoFor(profile, empresa)
+    setPlataformaAcesso(next)
+  }, [profile, empresa])
 
   async function signIn(login: string, password: string) {
     const trimmed = login.trim()
@@ -205,6 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
     setProfile(null)
     setEmpresa(null)
+    setPlataformaAcesso(PLATAFORMA_ACESSO_OK)
   }
 
   const role = profile?.ativo ? profile.role : null
@@ -219,13 +294,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roleLabel: role ? ROLE_LABELS[role] : null,
       loading,
       isSuperAdmin: role === 'super_admin',
+      plataformaAcesso,
+      refreshPlataformaAcesso,
       hasPermission: (permission) => canForProfile(role, profile, permission),
       hasAnyPermission: (permissions) =>
         canAnyForProfile(role, profile, permissions),
       signIn,
       signOut,
     }),
-    [session, user, profile, empresa, role, loading],
+    [
+      session,
+      user,
+      profile,
+      empresa,
+      role,
+      loading,
+      plataformaAcesso,
+      refreshPlataformaAcesso,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

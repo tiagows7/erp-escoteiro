@@ -282,6 +282,11 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     type: 'link',
+    to: '/mensalidade-plataforma',
+    label: 'Mensalidade do sistema',
+  },
+  {
+    type: 'link',
     to: '/auditoria',
     label: 'Auditoria',
     permission: 'auditoria.view',
@@ -427,6 +432,10 @@ export function navItemsForProfile(
       return profile?.role === 'super_admin'
     }
     if (item.to === '/grupos/meu') return profile?.role === 'admin'
+    // Super admin usa o menu "Mensalidade plataforma"; grupos usam a tela própria.
+    if (item.to === '/mensalidade-plataforma') {
+      return profile?.role !== 'super_admin'
+    }
     return true
   })
 

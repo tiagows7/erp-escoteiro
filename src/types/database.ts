@@ -83,6 +83,10 @@ export type Empresa = {
   cidade: number | null
   logo_url: string | null
   ativo: boolean | null
+  plataforma_plano_id?: number | null
+  plataforma_isento?: boolean | null
+  /** Dia do mês (1–28) do vencimento da mensalidade da plataforma. */
+  plataforma_dia_vencimento?: number | null
   sicredi_pix_client_id?: string | null
   sicredi_pix_client_secret?: string | null
   sicredi_pix_chave?: string | null

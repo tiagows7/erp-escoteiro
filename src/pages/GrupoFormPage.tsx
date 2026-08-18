@@ -54,6 +54,7 @@ const emptyForm = {
   portal_transparencia: true,
   plataforma_plano_id: '',
   plataforma_isento: false,
+  plataforma_dia_vencimento: '',
   logo_url: '' as string | null,
   adminNome: '',
   adminEmail: '',
@@ -160,7 +161,7 @@ export function GrupoFormPage() {
         supabase
           .from('empresa')
           .select(
-            'id, nome, cnpj, email, slug, telefone, estado, cidade, logo_url, ativo, portal_transparencia, plataforma_plano_id, plataforma_isento',
+            'id, nome, cnpj, email, slug, telefone, estado, cidade, logo_url, ativo, portal_transparencia, plataforma_plano_id, plataforma_isento, plataforma_dia_vencimento',
           )
           .eq('id', Number(id))
           .maybeSingle(),
@@ -211,6 +212,10 @@ export function GrupoFormPage() {
             ? String(data.plataforma_plano_id)
             : '',
         plataforma_isento: data.plataforma_isento === true,
+        plataforma_dia_vencimento:
+          data.plataforma_dia_vencimento != null
+            ? String(data.plataforma_dia_vencimento)
+            : '',
         logo_url: data.logo_url,
       })
       setLogoPreview(data.logo_url)
@@ -372,6 +377,9 @@ export function GrupoFormPage() {
                   ? Number(form.plataforma_plano_id)
                   : null,
                 plataforma_isento: form.plataforma_isento,
+                plataforma_dia_vencimento: form.plataforma_dia_vencimento
+                  ? Number(form.plataforma_dia_vencimento)
+                  : null,
               }
             : {}),
         })
@@ -820,6 +828,34 @@ export function GrupoFormPage() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="field">
+              <label htmlFor="plataforma_dia_vencimento">
+                Dia do vencimento
+              </label>
+              <select
+                id="plataforma_dia_vencimento"
+                className="select"
+                value={form.plataforma_dia_vencimento}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    plataforma_dia_vencimento: e.target.value,
+                  }))
+                }
+                disabled={disabled}
+              >
+                <option value="">Último dia do mês</option>
+                {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                  <option key={d} value={d}>
+                    Dia {d}
+                  </option>
+                ))}
+              </select>
+              <p className="field-hint">
+                Usado ao gerar a mensalidade. Sem dia = último dia da
+                competência.
+              </p>
             </div>
             <div className="field field-checks" style={{ alignSelf: 'end' }}>
               <label>

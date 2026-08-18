@@ -12,6 +12,7 @@ import {
 } from '@/lib/menuAccess'
 import { useAssociadoAcaoEntreAmigos } from '@/hooks/useAssociadoAcaoEntreAmigos'
 import { isAssociadoLogin } from '@/lib/roles'
+import { PlataformaAcessoBanner } from '@/components/PlataformaAcessoGate'
 
 function groupHasVisibleChild(
   group: NavGroupItem,
@@ -370,6 +371,7 @@ export function AppLayout() {
       ) : null}
 
       <main className="main">
+        <PlataformaAcessoBanner />
         <Outlet />
       </main>
     </div>

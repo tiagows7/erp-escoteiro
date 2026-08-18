@@ -4,6 +4,8 @@ import { ToastProvider } from '@/contexts/ToastContext'
 import { AppLayout } from '@/components/AppLayout'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { RequirePermission } from '@/components/RequirePermission'
+import { PlataformaAcessoGate } from '@/components/PlataformaAcessoGate'
+import { MensalidadePlataformaGrupoPage } from '@/pages/MensalidadePlataformaGrupoPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { TermosUsoPage } from '@/pages/TermosUsoPage'
 import { PrivacidadePage } from '@/pages/PrivacidadePage'
@@ -103,11 +105,17 @@ export default function App() {
           <Route
             element={
               <ProtectedRoute>
-                <AppLayout />
+                <PlataformaAcessoGate>
+                  <AppLayout />
+                </PlataformaAcessoGate>
               </ProtectedRoute>
             }
           >
             <Route index element={<HomeRedirectPage />} />
+            <Route
+              path="mensalidade-plataforma"
+              element={<MensalidadePlataformaGrupoPage />}
+            />
             <Route
               path="dashboard"
               element={

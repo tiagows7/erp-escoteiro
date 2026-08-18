@@ -334,7 +334,7 @@ async function getCob(cfg: EfiConfig, txid: string) {
   }
 }
 
-async function requireSuperAdmin(
+async function requireAuthUser(
   admin: ReturnType<typeof createClient>,
   authHeader: string | null,
 ) {
@@ -354,17 +354,38 @@ async function requireSuperAdmin(
 
   const { data: profile } = await admin
     .from('profiles')
-    .select('role, ativo')
+    .select('role, ativo, empresa_id')
     .eq('id', user.id)
     .maybeSingle()
 
-  if (!profile || profile.ativo === false || profile.role !== 'super_admin') {
-    throw Object.assign(
-      new Error('Apenas super admin pode usar PIX da plataforma.'),
-      { status: 403 },
-    )
+  if (!profile || profile.ativo === false) {
+    throw Object.assign(new Error('Perfil inválido.'), { status: 403 })
   }
-  return user
+  return {
+    user,
+    profile: profile as {
+      role: string
+      ativo: boolean
+      empresa_id: number | null
+    },
+  }
+}
+
+function assertCanPayCobranca(
+  profile: { role: string; empresa_id: number | null },
+  cobrancaEmpresaId: number,
+) {
+  if (profile.role === 'super_admin') return
+  if (
+    profile.empresa_id != null &&
+    Number(profile.empresa_id) === Number(cobrancaEmpresaId)
+  ) {
+    return
+  }
+  throw Object.assign(
+    new Error('Sem permissão para pagar esta cobrança.'),
+    { status: 403 },
+  )
 }
 
 async function concluirEBaixar(
@@ -492,7 +513,7 @@ Deno.serve(async (req) => {
     }
 
     const authHeader = req.headers.get('Authorization')
-    const user = await requireSuperAdmin(admin, authHeader)
+    const { user, profile } = await requireAuthUser(admin, authHeader)
     const body = (await req.json()) as PixRequestBody
 
     if (body.action === 'config') {
@@ -526,6 +547,13 @@ Deno.serve(async (req) => {
           { error: cobErr?.message ?? 'Cobrança não encontrada.' },
           404,
         )
+      }
+
+      try {
+        assertCanPayCobranca(profile, Number(cobranca.empresa_id))
+      } catch (e) {
+        const err = e as Error & { status?: number }
+        return json({ error: err.message }, err.status ?? 403)
       }
 
       const saldo = Number(cobranca.saldo ?? 0)
@@ -604,6 +632,13 @@ Deno.serve(async (req) => {
           { error: pixErr?.message ?? 'PIX não encontrado.' },
           404,
         )
+      }
+
+      try {
+        assertCanPayCobranca(profile, Number(pixRow.empresa_id))
+      } catch (e) {
+        const err = e as Error & { status?: number }
+        return json({ error: err.message }, err.status ?? 403)
       }
 
       if (pixRow.baixado_em) {
