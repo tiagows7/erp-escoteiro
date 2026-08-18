@@ -166,6 +166,7 @@ export type DashboardDetalheRamo = {
   data_nascimento: string | null
   anos: number
   meses: number
+  secao_id?: number | null
   secao_nome: string | null
 }
 

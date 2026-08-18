@@ -483,7 +483,7 @@ button {
   background: rgba(26, 86, 176, 0.12);
 }
 
-/* Lobinho ÃÂ¢ÃÂÃÂ amarelo */
+/* Lobinho ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ amarelo */
 .stat-card-lobinho {
   border-left-color: #e0b000;
   background: linear-gradient(135deg, #fff8db 0%, #fffdf5 70%);
@@ -501,7 +501,7 @@ button {
   background: rgba(224, 176, 0, 0.18);
 }
 
-/* Escoteiro ÃÂ¢ÃÂÃÂ verde */
+/* Escoteiro ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ verde */
 .stat-card-escoteiro {
   border-left-color: #2f8f4e;
   background: linear-gradient(135deg, #e8f6ec 0%, #f7fcf8 70%);
@@ -519,7 +519,7 @@ button {
   background: rgba(47, 143, 78, 0.16);
 }
 
-/* SÃÂÃÂªnior ÃÂ¢ÃÂÃÂ vinho */
+/* SÃÂÃÂÃÂÃÂªnior ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ vinho */
 .stat-card-senior {
   border-left-color: #7a1f3d;
   background: linear-gradient(135deg, #f7e8ee 0%, #fcf7f9 70%);
@@ -537,7 +537,7 @@ button {
   background: rgba(122, 31, 61, 0.14);
 }
 
-/* Pioneiro ÃÂ¢ÃÂÃÂ vermelho */
+/* Pioneiro ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ vermelho */
 .stat-card-pioneiro {
   border-left-color: #c62828;
   background: linear-gradient(135deg, #fdecea 0%, #fff8f7 70%);
@@ -555,7 +555,7 @@ button {
   background: rgba(198, 40, 40, 0.14);
 }
 
-/* Diretoria ÃÂ¢ÃÂÃÂ azul */
+/* Diretoria ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ azul */
 .stat-card-diretoria {
   border-left-color: #1565c0;
   background: linear-gradient(135deg, #e3f0fb 0%, #f5f9fd 70%);
@@ -2317,6 +2317,10 @@ button {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1rem;
+}
+
+.dashboard-secao-cards {
+  margin-top: 0.25rem;
 }
 
 .passagem-dialog-header h3 {
@@ -4682,7 +4686,7 @@ form.panel .muted,
   }
 }
 
-/* ---- Portal da TransparÃÂÃÂªncia (pÃÂÃÂºblico) ---- */
+/* ---- Portal da TransparÃÂÃÂÃÂÃÂªncia (pÃÂÃÂÃÂÃÂºblico) ---- */
 .portal-page {
   min-height: 100dvh;
   display: flex;
@@ -4994,7 +4998,7 @@ form.panel .muted,
   }
 }
 
-/* ---- CalendÃÂÃÂ¡rio do grupo ---- */
+/* ---- CalendÃÂÃÂÃÂÃÂ¡rio do grupo ---- */
 .calendario-filtros {
   display: grid;
   grid-template-columns: repeat(2, minmax(140px, 1fr));
@@ -5404,7 +5408,7 @@ form.panel .muted,
   }
 }
 
-/* ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Loja PDV ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ */
+/* ÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂ Loja PDV ÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂ */
 .loja-pdv {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.9fr);
@@ -5562,7 +5566,7 @@ form.panel .muted,
   }
 }
 
-/* ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Loja online ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ */
+/* ÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂ Loja online ÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂ */
 .loja-online {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.9fr);
@@ -5722,7 +5726,7 @@ form.panel .muted,
   }
 }
 
-/* ÃÂÃÂÃÂ PWA install banner ÃÂÃÂÃÂ */
+/* ÃÂÃÂÃÂÃÂÃÂÃÂ PWA install banner ÃÂÃÂÃÂÃÂÃÂÃÂ */
 .pwa-install-banner {
   position: sticky;
   top: 0;

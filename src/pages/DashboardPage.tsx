@@ -392,6 +392,51 @@ function passagemLimiteLabel(ramoId: number): string {
   }
 }
 
+/** Com mais de uma seção, ordena por seção e depois por nome. */
+function sortDetalhePorSecao(
+  rows: DashboardDetalheRamo[],
+): DashboardDetalheRamo[] {
+  const secoes = new Set(
+    rows
+      .map((r) => (r.secao_nome ?? '').trim())
+      .filter(Boolean),
+  )
+  return [...rows].sort((a, b) => {
+    if (secoes.size > 1) {
+      const sa = (a.secao_nome ?? '').trim() || '\uffff'
+      const sb = (b.secao_nome ?? '').trim() || '\uffff'
+      const bySecao = sa.localeCompare(sb, 'pt-BR')
+      if (bySecao !== 0) return bySecao
+    }
+    return (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR')
+  })
+}
+
+type ListaSecaoCard = {
+  secao_id: number | null
+  secao_nome: string
+  total: number
+}
+
+function buildSecaoCards(rows: DashboardDetalheRamo[]): ListaSecaoCard[] {
+  const map = new Map<string, ListaSecaoCard>()
+  for (const row of rows) {
+    const key = row.secao_id != null ? `s-${row.secao_id}` : 'none'
+    const cur = map.get(key) ?? {
+      secao_id: row.secao_id ?? null,
+      secao_nome: row.secao_nome?.trim() || 'Sem seção',
+      total: 0,
+    }
+    cur.total += 1
+    map.set(key, cur)
+  }
+  return [...map.values()].sort((a, b) => {
+    if (a.secao_id == null && b.secao_id != null) return 1
+    if (a.secao_id != null && b.secao_id == null) return -1
+    return a.secao_nome.localeCompare(b.secao_nome, 'pt-BR')
+  })
+}
+
 export function DashboardPage() {
   const { empresa, profile, hasPermission } = useAuth()
   const toast = useToast()
@@ -437,6 +482,11 @@ export function DashboardPage() {
 
   const [listaRamo, setListaRamo] = useState<DashboardRamo | null>(null)
   const [listaRows, setListaRows] = useState<DashboardDetalheRamo[]>([])
+  const [listaAllRows, setListaAllRows] = useState<DashboardDetalheRamo[]>([])
+  const [listaSecoes, setListaSecoes] = useState<ListaSecaoCard[] | null>(null)
+  const [listaSecaoAtiva, setListaSecaoAtiva] = useState<ListaSecaoCard | null>(
+    null,
+  )
   const [listaLoading, setListaLoading] = useState(false)
   const [listaError, setListaError] = useState<string | null>(null)
   const [aniversarioOpen, setAniversarioOpen] = useState(false)
@@ -947,6 +997,27 @@ export function DashboardPage() {
     setListaLoading(true)
     setListaError(null)
     setListaRows([])
+    setListaAllRows([])
+    setListaSecoes(null)
+    setListaSecaoAtiva(null)
+
+    function apresentarDetalhe(rows: DashboardDetalheRamo[]) {
+      const sorted = sortDetalhePorSecao(rows)
+      const cards = buildSecaoCards(sorted)
+      // Já filtrado por seção do perfil, ou só uma seção → lista direta.
+      if (secaoFiltro != null || cards.length <= 1) {
+        setListaSecoes(null)
+        setListaSecaoAtiva(null)
+        setListaAllRows([])
+        setListaRows(sorted)
+      } else {
+        setListaAllRows(sorted)
+        setListaSecoes(cards)
+        setListaSecaoAtiva(null)
+        setListaRows([])
+      }
+      setListaLoading(false)
+    }
 
     // Login com ramo 1-4: card Voluntários lista só voluntários daquele ramo/seção.
     if (item.ramo_id === 5 && ramoFiltro != null && ramoFiltro <= 4) {
@@ -1022,13 +1093,13 @@ export function DashboardPage() {
             data_nascimento: a.data_nascimento,
             anos: idade?.anos ?? 0,
             meses: idade?.meses ?? 0,
+            secao_id: a.secao,
             secao_nome:
               a.secao != null ? (secaoNomeById.get(a.secao) ?? null) : null,
           }
         })
 
-      setListaRows(rows)
-      setListaLoading(false)
+      apresentarDetalhe(rows)
       return
     }
 
@@ -1109,13 +1180,13 @@ export function DashboardPage() {
             data_nascimento: a.data_nascimento,
             anos: idade?.anos ?? 0,
             meses: idade?.meses ?? 0,
+            secao_id: a.secao,
             secao_nome:
               a.secao != null ? (secaoNomeById.get(a.secao) ?? null) : null,
           }
         })
 
-      setListaRows(rows)
-      setListaLoading(false)
+      apresentarDetalhe(rows)
       return
     }
 
@@ -1127,15 +1198,35 @@ export function DashboardPage() {
     if (rpcError) {
       setListaError(rpcError.message)
       setListaRows([])
-    } else {
-      setListaRows((data as DashboardDetalheRamo[]) ?? [])
+      setListaLoading(false)
+      return
     }
-    setListaLoading(false)
+
+    apresentarDetalhe((data as DashboardDetalheRamo[]) ?? [])
+  }
+
+  function abrirListaSecao(card: ListaSecaoCard) {
+    setListaSecaoAtiva(card)
+    setListaRows(
+      listaAllRows.filter((row) =>
+        card.secao_id == null
+          ? row.secao_id == null
+          : row.secao_id === card.secao_id,
+      ),
+    )
+  }
+
+  function voltarListaSecoes() {
+    setListaSecaoAtiva(null)
+    setListaRows([])
   }
 
   function fecharListaRamo() {
     setListaRamo(null)
     setListaRows([])
+    setListaAllRows([])
+    setListaSecoes(null)
+    setListaSecaoAtiva(null)
     setListaError(null)
   }
 
@@ -1731,28 +1822,64 @@ export function DashboardPage() {
             <header className="passagem-dialog-header">
               <div>
                 <h3 id="lista-ramo-title">
-                  {listaRamo.ramo_nome}{' '}
-                  <span className="muted">({listaRows.length})</span>
+                  {listaRamo.ramo_nome}
+                  {listaSecaoAtiva ? (
+                    <>
+                      {' · '}
+                      {listaSecaoAtiva.secao_nome}{' '}
+                      <span className="muted">({listaRows.length})</span>
+                    </>
+                  ) : listaSecoes && listaSecoes.length > 1 ? (
+                    <>
+                      {' '}
+                      <span className="muted">
+                        (
+                        {listaAllRows.length ||
+                          listaSecoes.reduce((s, c) => s + c.total, 0)}
+                        )
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      {' '}
+                      <span className="muted">({listaRows.length})</span>
+                    </>
+                  )}
                 </h3>
                 <p className="muted">
-                  {listaRamo.ramo_id === 5
-                    ? ramoFiltro != null && ramoFiltro <= 4
-                      ? secaoFiltro != null
-                        ? 'Voluntários ativos deste ramo/seção'
-                        : 'Voluntários ativos deste ramo'
-                      : 'Voluntários ativos do grupo'
-                    : secaoFiltro != null
-                      ? 'Beneficiários ativos deste ramo/seção'
-                      : 'Beneficiários ativos deste ramo'}
+                  {listaSecoes && !listaSecaoAtiva
+                    ? 'Escolha a seção para ver os associados'
+                    : listaRamo.ramo_id === 5
+                      ? ramoFiltro != null && ramoFiltro <= 4
+                        ? secaoFiltro != null || listaSecaoAtiva
+                          ? 'Voluntários ativos deste ramo/seção'
+                          : 'Voluntários ativos deste ramo'
+                        : listaSecaoAtiva
+                          ? 'Voluntários ativos desta seção'
+                          : 'Voluntários ativos do grupo'
+                      : secaoFiltro != null || listaSecaoAtiva
+                        ? 'Beneficiários ativos deste ramo/seção'
+                        : 'Beneficiários ativos deste ramo'}
                 </p>
               </div>
-              <button
-                type="button"
-                className="btn btn-soft"
-                onClick={fecharListaRamo}
-              >
-                Fechar
-              </button>
+              <div className="actions-pair">
+                {listaSecoes && listaSecaoAtiva ? (
+                  <button
+                    type="button"
+                    className="btn btn-soft"
+                    onClick={voltarListaSecoes}
+                  >
+                    Voltar
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn btn-soft"
+                  onClick={fecharListaRamo}
+                >
+                  Fechar
+                </button>
+              </div>
             </header>
 
             {listaError ? (
@@ -1763,6 +1890,30 @@ export function DashboardPage() {
 
             {listaLoading ? (
               <div className="loading">Carregando associados…</div>
+            ) : listaSecoes && !listaSecaoAtiva ? (
+              <div className="stats-grid dashboard-secao-cards">
+                {listaSecoes.map((card, index) => (
+                  <article
+                    key={
+                      card.secao_id != null ? `s-${card.secao_id}` : 's-none'
+                    }
+                    className={`stat-card ${ramoCardClass(listaRamo.ramo_id, listaRamo.ramo_nome)}`}
+                    style={{ animationDelay: `${index * 60}ms` }}
+                  >
+                    <span>{card.secao_nome}</span>
+                    <div className="stat-card-row">
+                      <strong>{card.total}</strong>
+                      <button
+                        type="button"
+                        className="btn btn-soft stat-card-ver"
+                        onClick={() => abrirListaSecao(card)}
+                      >
+                        Ver
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
             ) : listaRows.length === 0 ? (
               <div className="empty">Nenhum associado neste card.</div>
             ) : (
@@ -1773,7 +1924,7 @@ export function DashboardPage() {
                       <th></th>
                       <th>Registro</th>
                       <th>Nome</th>
-                      <th>Seção</th>
+                      {!listaSecaoAtiva ? <th>Seção</th> : null}
                       <th>Nascimento</th>
                       <th>Idade</th>
                     </tr>
@@ -1791,7 +1942,9 @@ export function DashboardPage() {
                         </td>
                         <td>{row.registro ?? '—'}</td>
                         <td>{row.nome}</td>
-                        <td>{row.secao_nome || '—'}</td>
+                        {!listaSecaoAtiva ? (
+                          <td>{row.secao_nome || '—'}</td>
+                        ) : null}
                         <td>{formatDate(row.data_nascimento)}</td>
                         <td>
                           {row.data_nascimento
