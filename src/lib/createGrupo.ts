@@ -11,6 +11,9 @@ export type CreateGrupoInput = {
     cidade?: string
     ativo: boolean
     portal_transparencia?: boolean
+    plataforma_plano_id?: number | null
+    plataforma_isento?: boolean
+    plataforma_dia_vencimento?: number | null
   }
   admin: {
     nome: string

@@ -69,10 +69,14 @@ export async function loadCidades(
   if (!error && data && data.length > 0) {
     return (
       data as { id: number; codigo: number | null; nome: string }[]
-    ).map((row) => ({
-      id: Number(row.codigo ?? row.id),
-      nome: row.nome,
-    }))
+    ).map((row) => {
+      // Preferência: código IBGE (mesmo valor usado pela API e por empresa.cidade).
+      const codigo = row.codigo != null ? Number(row.codigo) : null
+      return {
+        id: codigo && Number.isFinite(codigo) ? codigo : Number(row.id),
+        nome: row.nome,
+      }
+    })
   }
 
   return fetchCidadesIbge(sigla)

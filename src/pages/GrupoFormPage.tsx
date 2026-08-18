@@ -328,6 +328,13 @@ export function GrupoFormPage() {
             cidade: form.cidade,
             ativo: form.ativo,
             portal_transparencia: form.portal_transparencia,
+            plataforma_plano_id: form.plataforma_plano_id
+              ? Number(form.plataforma_plano_id)
+              : null,
+            plataforma_isento: form.plataforma_isento,
+            plataforma_dia_vencimento: form.plataforma_dia_vencimento
+              ? Number(form.plataforma_dia_vencimento)
+              : null,
           },
           admin: {
             nome: adminNome,
@@ -338,6 +345,30 @@ export function GrupoFormPage() {
 
         if (!result.ok || !result.empresa?.id) {
           setError(result.error ?? 'Não foi possível criar o grupo.')
+          return
+        }
+
+        // Garante estado/cidade/plano mesmo se a edge antiga não gravar esses campos.
+        const { error: complementError } = await supabase
+          .from('empresa')
+          .update({
+            estado: form.estado.trim().toUpperCase() || null,
+            cidade: form.cidade.trim() ? Number(form.cidade) : null,
+            plataforma_plano_id: form.plataforma_plano_id
+              ? Number(form.plataforma_plano_id)
+              : null,
+            plataforma_isento: form.plataforma_isento,
+            plataforma_dia_vencimento: form.plataforma_dia_vencimento
+              ? Number(form.plataforma_dia_vencimento)
+              : null,
+          })
+          .eq('id', result.empresa.id)
+
+        if (complementError) {
+          setError(
+            `Grupo criado, mas falhou ao gravar estado/cidade/plano: ${complementError.message}`,
+          )
+          setSaving(false)
           return
         }
 

@@ -17,6 +17,9 @@ type Payload = {
     cidade?: string | number | null
     ativo?: boolean
     portal_transparencia?: boolean
+    plataforma_plano_id?: number | null
+    plataforma_isento?: boolean
+    plataforma_dia_vencimento?: number | null
   }
   admin: {
     nome: string
@@ -97,6 +100,16 @@ Deno.serve(async (req) => {
       )
     }
 
+    const estado =
+      body.grupo.estado?.toString().trim().toUpperCase() || null
+    const cidadeRaw = body.grupo.cidade
+    const cidade =
+      cidadeRaw != null && String(cidadeRaw).trim()
+        ? Number(cidadeRaw)
+        : null
+    const planoId = body.grupo.plataforma_plano_id
+    const diaVenc = body.grupo.plataforma_dia_vencimento
+
     const { data: empresa, error: empresaError } = await adminClient
       .from('empresa')
       .insert({
@@ -105,12 +118,17 @@ Deno.serve(async (req) => {
         cnpj: body.grupo.cnpj?.replace(/\D/g, '') || null,
         email: body.grupo.email?.trim() || null,
         telefone: body.grupo.telefone?.trim() || null,
-        estado: body.grupo.estado?.toString().trim().toUpperCase() || null,
-        cidade: body.grupo.cidade != null && String(body.grupo.cidade).trim()
-          ? Number(body.grupo.cidade)
-          : null,
+        estado,
+        cidade: Number.isFinite(cidade as number) ? cidade : null,
         ativo: body.grupo.ativo !== false,
         portal_transparencia: body.grupo.portal_transparencia !== false,
+        plataforma_plano_id:
+          planoId != null && Number(planoId) > 0 ? Number(planoId) : null,
+        plataforma_isento: body.grupo.plataforma_isento === true,
+        plataforma_dia_vencimento:
+          diaVenc != null && Number(diaVenc) >= 1 && Number(diaVenc) <= 28
+            ? Number(diaVenc)
+            : null,
       })
       .select('id, nome, slug')
       .single()
