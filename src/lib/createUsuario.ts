@@ -341,35 +341,141 @@ export async function createUsuariosLote(
 
   let lastError = 'Falha ao criar usuários em lote.'
   for (let attempt = 0; attempt < 4; attempt++) {
-    const { data, error } = await supabase.functions.invoke(
-      'create-usuarios-lote',
-      {
-        body: { empresa_id: empresaId, usuarios },
-      },
-    )
+    await supabase.auth.refreshSession()
+    const result = await invokeUsuariosLote(empresaId, usuarios)
 
-    if (error) {
-      const fromBody = await readFunctionsError(error)
-      lastError = fromBody || error.message
-      if (!isTransientEdgeError(lastError) || attempt === 3) {
-        return { ok: false, error: lastError }
-      }
+    if (!result.ok) {
+      lastError = result.error || lastError
+      if (!isTransientEdgeError(lastError) || attempt === 3) break
       await sleep(500 * (attempt + 1) ** 2)
       continue
+    }
+
+    return result
+  }
+
+  // Fallback: cria um a um (mais lento, mas contorna falha de rede no lote).
+  if (isTransientEdgeError(lastError)) {
+    return createUsuariosLoteSequencial(empresaId, usuarios)
+  }
+
+  return { ok: false, error: lastError }
+}
+
+async function invokeUsuariosLote(
+  empresaId: number,
+  usuarios: CreateUsuarioLoteItem[],
+): Promise<CreateUsuariosLoteResult> {
+  const baseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!baseUrl || !anonKey) {
+    return { ok: false, error: 'Configuração Supabase ausente.' }
+  }
+  if (!session?.access_token) {
+    return { ok: false, error: 'Sessão não encontrada.' }
+  }
+
+  try {
+    const res = await fetch(`${baseUrl}/functions/v1/create-usuarios-lote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: anonKey,
+      },
+      body: JSON.stringify({ empresa_id: empresaId, usuarios }),
+    })
+
+    const text = await res.text()
+    let data: Record<string, unknown> | null = null
+    try {
+      data = text ? (JSON.parse(text) as Record<string, unknown>) : null
+    } catch {
+      data = null
+    }
+
+    if (!res.ok) {
+      const msg =
+        (data?.error != null ? String(data.error) : null) ||
+        text ||
+        `HTTP ${res.status}`
+      return { ok: false, error: msg }
     }
 
     if (data?.error) {
       return { ok: false, error: String(data.error) }
     }
 
+    const details = data?.details as CreateUsuariosLoteResult['details']
     return {
       ok: true,
       created: Number(data?.created ?? 0),
       skipped: Number(data?.skipped ?? 0),
       failed: Number(data?.failed ?? 0),
-      details: data?.details,
+      details,
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        e instanceof Error
+          ? e.message || 'Failed to send a request to the Edge Function'
+          : 'Failed to send a request to the Edge Function',
+    }
+  }
+}
+
+async function createUsuariosLoteSequencial(
+  empresaId: number,
+  usuarios: CreateUsuarioLoteItem[],
+): Promise<CreateUsuariosLoteResult> {
+  const created: { registro: string | null; id: string }[] = []
+  const skipped: { registro: string | null; motivo: string }[] = []
+  const failed: { registro: string | null; nome: string; error: string }[] = []
+
+  for (let i = 0; i < usuarios.length; i++) {
+    const u = usuarios[i]
+    if (i > 0 && i % 5 === 0) {
+      await supabase.auth.refreshSession()
+      await sleep(300)
+    }
+    const result = await createUsuario({
+      ...u,
+      empresa_id: empresaId,
+    })
+    if (result.ok) {
+      created.push({ registro: u.registro, id: result.profile?.id ?? '' })
+      continue
+    }
+    const msg = (result.error ?? '').toLowerCase()
+    if (
+      msg.includes('already') ||
+      msg.includes('registered') ||
+      msg.includes('duplicate') ||
+      msg.includes('unique') ||
+      msg.includes('já') ||
+      msg.includes('ja ') ||
+      msg.includes('existe')
+    ) {
+      skipped.push({ registro: u.registro, motivo: result.error || 'Já existe' })
+    } else {
+      failed.push({
+        registro: u.registro,
+        nome: u.nome,
+        error: result.error || 'Falha ao criar usuário',
+      })
     }
   }
 
-  return { ok: false, error: lastError }
+  return {
+    ok: true,
+    created: created.length,
+    skipped: skipped.length,
+    failed: failed.length,
+    details: { created, skipped, failed },
+  }
 }

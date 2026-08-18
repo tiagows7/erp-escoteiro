@@ -1,9 +1,9 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
+import { createClient } from 'npm:@supabase/supabase-js@2.50.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type',
+    'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-retry-count, traceparent, tracestate, baggage',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
@@ -79,8 +79,8 @@ Deno.serve(async (req) => {
     if (items.length === 0) {
       return json({ error: 'Nenhum usuário informado.' }, 400)
     }
-    if (items.length > 80) {
-      return json({ error: 'Máximo de 80 usuários por lote.' }, 400)
+    if (items.length > 40) {
+      return json({ error: 'Máximo de 40 usuários por lote.' }, 400)
     }
 
     let empresaId = callerProfile.empresa_id as number | null
@@ -100,25 +100,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Mapa e-mail → id Auth (para reaproveitar órfãos)
     const emailToId = new Map<string, string>()
-    {
-      let page = 1
-      for (;;) {
-        const { data: listed } = await admin.auth.admin.listUsers({
-          page,
-          perPage: 200,
-        })
-        for (const u of listed?.users ?? []) {
-          const e = (u.email ?? '').toLowerCase()
-          if (e) emailToId.set(e, u.id)
-        }
-        if (!listed?.users?.length || listed.users.length < 200) break
-        page += 1
-        if (page > 50) break
-      }
-    }
-
     const created: { registro: string | null; id: string }[] = []
     const skipped: { registro: string | null; motivo: string }[] = []
     const failed: { registro: string | null; nome: string; error: string }[] =
@@ -149,16 +131,18 @@ Deno.serve(async (req) => {
           continue
         }
 
-        const { data: existingProfile } = await admin
-          .from('profiles')
-          .select('id')
-          .eq('empresa_id', empresaId)
-          .eq('registro', registro)
-          .maybeSingle()
+        if (registro) {
+          const { data: existingProfile } = await admin
+            .from('profiles')
+            .select('id')
+            .eq('empresa_id', empresaId)
+            .eq('registro', registro)
+            .maybeSingle()
 
-        if (existingProfile?.id) {
-          skipped.push({ registro, motivo: 'Já existe perfil neste grupo.' })
-          continue
+          if (existingProfile?.id) {
+            skipped.push({ registro, motivo: 'Já existe perfil neste grupo.' })
+            continue
+          }
         }
 
         let userId = emailToId.get(email) ?? null
@@ -177,19 +161,12 @@ Deno.serve(async (req) => {
               msg.includes('registered') ||
               msg.includes('exists')
             ) {
-              // Reconsulta lista (usuário criado em paralelo)
-              const { data: listed } = await admin.auth.admin.listUsers({
-                page: 1,
-                perPage: 200,
-              })
-              const found = listed?.users?.find(
-                (u) => (u.email ?? '').toLowerCase() === email,
-              )
-              if (found) {
-                userId = found.id
-                await admin.auth.admin.updateUserById(found.id, {
+              userId = await findUserIdByEmail(supabaseUrl, serviceKey, email)
+              if (userId) {
+                await admin.auth.admin.updateUserById(userId, {
                   password,
                   email_confirm: true,
+                  user_metadata: { nome },
                 })
               } else {
                 failed.push({
@@ -209,8 +186,8 @@ Deno.serve(async (req) => {
             }
           } else {
             userId = createdUser.user.id
-            emailToId.set(email, userId)
           }
+          emailToId.set(email, userId)
         } else {
           await admin.auth.admin.updateUserById(userId, {
             password,
@@ -278,6 +255,35 @@ Deno.serve(async (req) => {
     )
   }
 })
+
+async function findUserIdByEmail(
+  supabaseUrl: string,
+  serviceKey: string,
+  email: string,
+): Promise<string | null> {
+  for (let page = 1; page <= 20; page++) {
+    const res = await fetch(
+      `${supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=200`,
+      {
+        headers: {
+          Authorization: `Bearer ${serviceKey}`,
+          apikey: serviceKey,
+        },
+      },
+    )
+    if (!res.ok) return null
+    const body = (await res.json()) as {
+      users?: { id: string; email?: string }[]
+    }
+    const users = body.users ?? []
+    const found = users.find(
+      (u) => (u.email ?? '').toLowerCase() === email.toLowerCase(),
+    )
+    if (found) return found.id
+    if (users.length < 200) break
+  }
+  return null
+}
 
 function roleToTipo(role: string): string {
   switch (role) {

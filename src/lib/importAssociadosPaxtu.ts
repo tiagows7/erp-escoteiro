@@ -544,9 +544,8 @@ export async function importAssociadosFromPaxtuExcel(
     }
   }
 
-  // Cria logins em lotes (1 request HTTP por até 40 usuários) — evita
-  // "Failed to send a request to the Edge Function" na importação em massa.
-  const LOTE = 40
+  // Cria logins em lotes pequenos (timeout/CORS menos frequentes).
+  const LOTE = 15
   for (let i = 0; i < pendingUsers.length; i += LOTE) {
     const chunk = pendingUsers.slice(i, i + LOTE)
     const lote = await createUsuariosLote(empresaId, chunk)
@@ -569,6 +568,10 @@ export async function importAssociadosFromPaxtuExcel(
         nome: f.nome,
         motivo: f.error,
       })
+    }
+    // Pausa entre lotes para não saturar o gateway.
+    if (i + LOTE < pendingUsers.length) {
+      await new Promise((r) => setTimeout(r, 400))
     }
   }
 
