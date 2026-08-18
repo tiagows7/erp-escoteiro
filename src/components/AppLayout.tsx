@@ -39,13 +39,33 @@ function navLinkActive(pathname: string, search: string, to: string) {
 }
 
 export function AppLayout() {
-  const { profile, empresa, roleLabel, hasPermission, isSuperAdmin, signOut } =
-    useAuth()
+  const {
+    profile,
+    empresa,
+    roleLabel,
+    hasPermission,
+    isSuperAdmin,
+    empresasContexto,
+    setActingEmpresaId,
+    refreshEmpresasContexto,
+    signOut,
+  } = useAuth()
   const location = useLocation()
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
   const [menuOpen, setMenuOpen] = useState(false)
 
   const { loading: acaoMenuLoading, temAcao } = useAssociadoAcaoEntreAmigos()
+
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    void refreshEmpresasContexto()
+  }, [isSuperAdmin, location.pathname, refreshEmpresasContexto])
+
+  const grupoLabel = isSuperAdmin
+    ? empresa?.nome
+      ? `Contexto · ${empresa.nome}`
+      : 'Plataforma · selecione um grupo'
+    : (empresa?.nome ?? 'Grupo Escoteiro')
 
   const allItems = useMemo(() => {
     const base = navItemsForProfile(profile)
@@ -213,10 +233,6 @@ export function AppLayout() {
     setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
-  const grupoLabel = isSuperAdmin
-    ? 'Plataforma · todos os grupos'
-    : (empresa?.nome ?? 'Grupo Escoteiro')
-
   // PDV local fullscreen — não incluir /vendas/loja-online
   const hideNav =
     location.pathname === '/vendas/loja' ||
@@ -272,6 +288,36 @@ export function AppLayout() {
                 height={72}
               />
               <p>{grupoLabel}</p>
+              {isSuperAdmin ? (
+                <div className="field" style={{ marginTop: '0.75rem' }}>
+                  <label
+                    htmlFor="acting-empresa"
+                    style={{ fontSize: '0.75rem' }}
+                  >
+                    Grupo em contexto
+                  </label>
+                  <select
+                    id="acting-empresa"
+                    className="select"
+                    value={empresa?.id ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      void setActingEmpresaId(v ? Number(v) : null)
+                    }}
+                  >
+                    <option value="">
+                      {empresasContexto.length
+                        ? 'Selecione um grupo…'
+                        : 'Nenhum grupo cadastrado'}
+                    </option>
+                    {empresasContexto.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
             </div>
 
             <nav className="nav-group" aria-label="Principal">

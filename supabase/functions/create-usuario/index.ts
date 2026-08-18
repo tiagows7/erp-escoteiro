@@ -21,6 +21,7 @@ type Payload = {
   password: string
   role: string
   ativo?: boolean
+  empresa_id?: number | null
   codigo_ramo?: number | null
   codigo_secao?: number | null
   codigo_secao_nome?: number | null
@@ -104,12 +105,20 @@ Deno.serve(async (req) => {
       return json({ error: 'Papel de usuário inválido.' }, 400)
     }
 
-    const empresaId = callerProfile.empresa_id
+    let empresaId = callerProfile.empresa_id as number | null
+    if (isSuper) {
+      const fromBody = Number(body.empresa_id)
+      if (Number.isFinite(fromBody) && fromBody > 0) {
+        empresaId = fromBody
+      }
+    }
+
     if (!empresaId) {
       return json(
         {
-          error:
-            'Super admin precisa estar vinculado a um grupo para criar usuários por esta tela.',
+          error: isSuper
+            ? 'Selecione o grupo (contexto) no menu antes de criar usuários.'
+            : 'Admin sem grupo vinculado.',
         },
         400,
       )

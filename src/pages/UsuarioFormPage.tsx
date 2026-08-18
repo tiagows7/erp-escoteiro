@@ -67,7 +67,7 @@ export function UsuarioFormPage() {
   const { id } = useParams()
   const isNew = !id || id === 'novo'
   const navigate = useNavigate()
-  const { empresa, hasPermission, user } = useAuth()
+  const { empresa, hasPermission, user, isSuperAdmin } = useAuth()
   const canWrite = hasPermission('usuarios.write')
   const empresaId = empresa?.id
   const toast = useToast()
@@ -223,6 +223,7 @@ export function UsuarioFormPage() {
         password: form.password,
         role: form.role,
         ativo: form.ativo,
+        empresa_id: empresaId,
         codigo_ramo: form.codigo_ramo ? Number(form.codigo_ramo) : null,
         codigo_secao: form.codigo_secao ? Number(form.codigo_secao) : null,
         menu_keys: menuKeysToSave,
@@ -388,8 +389,13 @@ export function UsuarioFormPage() {
     return (
       <section className="panel">
         <p className="muted">
-          Seu usuário precisa estar vinculado a um grupo escoteiro.
+          {isSuperAdmin
+            ? 'Cadastre um grupo e selecione-o em “Grupo em contexto” no menu lateral antes de criar usuários.'
+            : 'Seu usuário precisa estar vinculado a um grupo escoteiro.'}
         </p>
+        <Link className="btn btn-soft" to="/cadastros/usuarios">
+          Voltar
+        </Link>
       </section>
     )
   }

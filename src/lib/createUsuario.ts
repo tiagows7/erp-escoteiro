@@ -8,6 +8,8 @@ export type CreateUsuarioInput = {
   password: string
   role: AppRole
   ativo: boolean
+  /** Obrigatório para super_admin sem empresa_id no perfil. */
+  empresa_id?: number | null
   codigo_ramo?: number | null
   codigo_secao?: number | null
   codigo_secao_nome?: number | null
@@ -134,14 +136,19 @@ async function createViaSignUpFallback(
 
   const { data: me } = await supabase
     .from('profiles')
-    .select('empresa_id')
+    .select('empresa_id, role')
     .eq('id', current.user.id)
     .maybeSingle()
 
-  if (!me?.empresa_id) {
+  const empresaId =
+    input.empresa_id ??
+    (me?.empresa_id != null ? Number(me.empresa_id) : null)
+
+  if (!empresaId) {
     return {
       ok: false,
-      error: 'Seu usuário precisa estar vinculado a um grupo.',
+      error:
+        'Selecione um grupo escoteiro no menu (contexto) antes de criar usuários.',
     }
   }
 
@@ -189,7 +196,7 @@ async function createViaSignUpFallback(
     .from('profiles')
     .insert({
       id: signUpData.user.id,
-      empresa_id: me.empresa_id,
+      empresa_id: empresaId,
       nome: input.nome.trim(),
       email,
       username: registro ?? email.split('@')[0],

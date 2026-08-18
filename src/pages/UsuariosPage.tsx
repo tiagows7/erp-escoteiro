@@ -18,7 +18,7 @@ type UsuarioRow = {
 }
 
 export function UsuariosPage() {
-  const { empresa, hasPermission } = useAuth()
+  const { empresa, hasPermission, isSuperAdmin } = useAuth()
   const canWrite = hasPermission('usuarios.write')
   const empresaId = empresa?.id
   const flashTick = useFlashSuccess()
@@ -86,7 +86,9 @@ export function UsuariosPage() {
     return (
       <section className="panel">
         <p className="muted">
-          Seu usuário precisa estar vinculado a um grupo escoteiro.
+          {isSuperAdmin
+            ? 'Cadastre um grupo em Grupos escoteiros e selecione-o em “Grupo em contexto” no menu lateral para gerenciar usuários.'
+            : 'Seu usuário precisa estar vinculado a um grupo escoteiro.'}
         </p>
       </section>
     )

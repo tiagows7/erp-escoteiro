@@ -35,15 +35,27 @@ const PLATAFORMA_ACESSO_OK: PlataformaAcessoState = {
   diasAteVencimento: null,
 }
 
+const ACTING_EMPRESA_KEY = 'erp.actingEmpresaId'
+
+const EMPRESA_SELECT =
+  'id, nome, cnpj, email, slug, telefone, logo_url, ativo, plataforma_plano_id, plataforma_isento, plataforma_dia_vencimento'
+
+type EmpresaOpt = { id: number; nome: string }
+
 type AuthState = {
   session: Session | null
   user: User | null
   profile: Profile | null
+  /** Grupo efetivo (perfil ou contexto escolhido pelo super admin). */
   empresa: Empresa | null
   role: AppRole | null
   roleLabel: string | null
   loading: boolean
   isSuperAdmin: boolean
+  /** Lista de grupos para o seletor do super admin. */
+  empresasContexto: EmpresaOpt[]
+  setActingEmpresaId: (empresaId: number | null) => Promise<void>
+  refreshEmpresasContexto: () => Promise<void>
   plataformaAcesso: PlataformaAcessoState
   refreshPlataformaAcesso: () => Promise<void>
   hasPermission: (permission: Permission) => boolean
@@ -118,6 +130,46 @@ async function loadPlataformaAcessoFor(
   })
 }
 
+async function fetchEmpresaById(id: number): Promise<Empresa | null> {
+  const { data } = await supabase
+    .from('empresa')
+    .select(EMPRESA_SELECT)
+    .eq('id', id)
+    .maybeSingle()
+  return (data as Empresa | null) ?? null
+}
+
+async function fetchEmpresasOpts(): Promise<EmpresaOpt[]> {
+  const { data } = await supabase
+    .from('empresa')
+    .select('id, nome')
+    .order('nome')
+  return ((data as EmpresaOpt[] | null) ?? []).map((e) => ({
+    id: Number(e.id),
+    nome: e.nome,
+  }))
+}
+
+function readStoredActingEmpresaId(): number | null {
+  try {
+    const raw = localStorage.getItem(ACTING_EMPRESA_KEY)
+    if (!raw) return null
+    const n = Number(raw)
+    return Number.isFinite(n) && n > 0 ? n : null
+  } catch {
+    return null
+  }
+}
+
+function writeStoredActingEmpresaId(id: number | null) {
+  try {
+    if (id == null) localStorage.removeItem(ACTING_EMPRESA_KEY)
+    else localStorage.setItem(ACTING_EMPRESA_KEY, String(id))
+  } catch {
+    /* ignore */
+  }
+}
+
 async function loadProfile(userId: string) {
   const { data: profileRow, error } = await supabase
     .from('profiles')
@@ -129,6 +181,7 @@ async function loadProfile(userId: string) {
     return {
       profile: null as Profile | null,
       empresa: null as Empresa | null,
+      empresasContexto: [] as EmpresaOpt[],
       plataformaAcesso: PLATAFORMA_ACESSO_OK,
     }
   }
@@ -136,27 +189,54 @@ async function loadProfile(userId: string) {
   const profile = mapProfile(profileRow as Record<string, unknown>)
 
   if (!profile.ativo) {
-    return { profile, empresa: null, plataformaAcesso: PLATAFORMA_ACESSO_OK }
+    return {
+      profile,
+      empresa: null,
+      empresasContexto: [] as EmpresaOpt[],
+      plataformaAcesso: PLATAFORMA_ACESSO_OK,
+    }
+  }
+
+  const isSuper = profile.role === 'super_admin'
+
+  if (isSuper) {
+    const opts = await fetchEmpresasOpts()
+    const stored = readStoredActingEmpresaId()
+    const preferred =
+      (stored && opts.some((o) => o.id === stored) ? stored : null) ??
+      (profile.empresa_id && opts.some((o) => o.id === profile.empresa_id)
+        ? profile.empresa_id
+        : null) ??
+      opts[0]?.id ??
+      null
+
+    const empresa = preferred != null ? await fetchEmpresaById(preferred) : null
+    if (preferred != null) writeStoredActingEmpresaId(preferred)
+
+    return {
+      profile,
+      empresa,
+      empresasContexto: opts,
+      plataformaAcesso: PLATAFORMA_ACESSO_OK,
+    }
   }
 
   if (!profile.empresa_id) {
-    return { profile, empresa: null, plataformaAcesso: PLATAFORMA_ACESSO_OK }
+    return {
+      profile,
+      empresa: null,
+      empresasContexto: [] as EmpresaOpt[],
+      plataformaAcesso: PLATAFORMA_ACESSO_OK,
+    }
   }
 
-  const { data: empresa } = await supabase
-    .from('empresa')
-    .select(
-      'id, nome, cnpj, email, slug, telefone, logo_url, ativo, plataforma_plano_id, plataforma_isento, plataforma_dia_vencimento',
-    )
-    .eq('id', profile.empresa_id)
-    .maybeSingle()
-
-  const empresaTyped = (empresa as Empresa | null) ?? null
+  const empresaTyped = await fetchEmpresaById(profile.empresa_id)
   const plataformaAcesso = await loadPlataformaAcessoFor(profile, empresaTyped)
 
   return {
     profile,
     empresa: empresaTyped,
+    empresasContexto: [] as EmpresaOpt[],
     plataformaAcesso,
   }
 }
@@ -166,6 +246,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [empresa, setEmpresa] = useState<Empresa | null>(null)
+  const [empresasContexto, setEmpresasContexto] = useState<EmpresaOpt[]>([])
   const [plataformaAcesso, setPlataformaAcesso] =
     useState<PlataformaAcessoState>(PLATAFORMA_ACESSO_OK)
   const [loading, setLoading] = useState(true)
@@ -180,6 +261,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!next?.user) {
         setProfile(null)
         setEmpresa(null)
+        setEmpresasContexto([])
         setPlataformaAcesso(PLATAFORMA_ACESSO_OK)
         return
       }
@@ -199,6 +281,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         : null
       setProfile(nextProfile)
       setEmpresa(loaded.empresa)
+      setEmpresasContexto(loaded.empresasContexto)
       setPlataformaAcesso(loaded.plataformaAcesso)
     }
 
@@ -230,8 +313,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const refreshEmpresasContexto = useCallback(async () => {
+    if (profile?.role !== 'super_admin') {
+      setEmpresasContexto([])
+      return
+    }
+    const opts = await fetchEmpresasOpts()
+    setEmpresasContexto(opts)
+    if (empresa?.id && !opts.some((o) => o.id === empresa.id)) {
+      const nextId = opts[0]?.id ?? null
+      writeStoredActingEmpresaId(nextId)
+      setEmpresa(nextId != null ? await fetchEmpresaById(nextId) : null)
+    }
+  }, [profile?.role, empresa?.id])
+
+  const setActingEmpresaId = useCallback(
+    async (empresaId: number | null) => {
+      if (profile?.role !== 'super_admin') return
+      writeStoredActingEmpresaId(empresaId)
+      if (empresaId == null) {
+        setEmpresa(null)
+        return
+      }
+      const next = await fetchEmpresaById(empresaId)
+      setEmpresa(next)
+    },
+    [profile?.role],
+  )
+
   const refreshPlataformaAcesso = useCallback(async () => {
-    if (!profile || !empresa) {
+    if (!profile || !empresa || profile.role === 'super_admin') {
       setPlataformaAcesso(PLATAFORMA_ACESSO_OK)
       return
     }
@@ -279,6 +390,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
     setProfile(null)
     setEmpresa(null)
+    setEmpresasContexto([])
     setPlataformaAcesso(PLATAFORMA_ACESSO_OK)
   }
 
@@ -294,6 +406,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roleLabel: role ? ROLE_LABELS[role] : null,
       loading,
       isSuperAdmin: role === 'super_admin',
+      empresasContexto,
+      setActingEmpresaId,
+      refreshEmpresasContexto,
       plataformaAcesso,
       refreshPlataformaAcesso,
       hasPermission: (permission) => canForProfile(role, profile, permission),
@@ -309,6 +424,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       empresa,
       role,
       loading,
+      empresasContexto,
+      setActingEmpresaId,
+      refreshEmpresasContexto,
       plataformaAcesso,
       refreshPlataformaAcesso,
     ],
