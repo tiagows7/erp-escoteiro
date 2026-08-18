@@ -6,12 +6,45 @@ import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { isAssociadoLogin } from '@/lib/roles'
 
+export const SUGESTAO_SITUACOES = [
+  'pendente',
+  'sera_atendida',
+  'feita',
+  'nao_sera_feita',
+] as const
+
+export type SugestaoSituacao = (typeof SUGESTAO_SITUACOES)[number]
+
+export function sugestaoSituacaoLabel(s: SugestaoSituacao | string | null) {
+  switch (s) {
+    case 'sera_atendida':
+      return 'Será atendida'
+    case 'feita':
+      return 'Já foi feita'
+    case 'nao_sera_feita':
+      return 'Não será feita'
+    case 'pendente':
+    default:
+      return 'Pendente'
+  }
+}
+
 type SugestaoRow = {
   sugestao_id: number
   titulo: string
   descricao: string
   empresa_nome: string
+  user_nome?: string | null
+  user_email?: string | null
   created_at: string
+  situacao: SugestaoSituacao
+  motivo: string | null
+  avaliacao_em: string | null
+}
+
+type EditDraft = {
+  situacao: SugestaoSituacao
+  motivo: string
 }
 
 export function SugestoesMelhoriaPage() {
@@ -25,6 +58,8 @@ export function SugestoesMelhoriaPage() {
   const [error, setError] = useState<string | null>(null)
   const [mine, setMine] = useState<SugestaoRow[]>([])
   const [loadingMine, setLoadingMine] = useState(true)
+  const [drafts, setDrafts] = useState<Record<number, EditDraft>>({})
+  const [savingId, setSavingId] = useState<number | null>(null)
 
   async function loadMine() {
     if (!user?.id) {
@@ -35,9 +70,11 @@ export function SugestoesMelhoriaPage() {
     setLoadingMine(true)
     let query = supabase
       .from('sugestao_melhoria')
-      .select('sugestao_id, titulo, descricao, empresa_nome, created_at')
+      .select(
+        'sugestao_id, titulo, descricao, empresa_nome, user_nome, user_email, created_at, situacao, motivo, avaliacao_em',
+      )
       .order('created_at', { ascending: false })
-      .limit(isSuperAdmin ? 50 : 20)
+      .limit(isSuperAdmin ? 100 : 30)
 
     if (!isSuperAdmin) {
       query = query.eq('user_id', user.id)
@@ -48,7 +85,18 @@ export function SugestoesMelhoriaPage() {
       setError(qErr.message)
       setMine([])
     } else {
-      setMine((data as SugestaoRow[]) ?? [])
+      const rows = (data as SugestaoRow[]) ?? []
+      setMine(rows)
+      if (isSuperAdmin) {
+        const next: Record<number, EditDraft> = {}
+        for (const row of rows) {
+          next[row.sugestao_id] = {
+            situacao: row.situacao || 'pendente',
+            motivo: row.motivo ?? '',
+          }
+        }
+        setDrafts(next)
+      }
     }
     setLoadingMine(false)
   }
@@ -86,6 +134,7 @@ export function SugestoesMelhoriaPage() {
       user_email: (profile?.email ?? user?.email ?? null)?.trim() || null,
       titulo: t.slice(0, 200),
       descricao: d.slice(0, 5000),
+      situacao: 'pendente',
     })
 
     setSaving(false)
@@ -97,6 +146,44 @@ export function SugestoesMelhoriaPage() {
     setTitulo('')
     setDescricao('')
     toast.success('Sugestão enviada. Obrigado!')
+    void loadMine()
+  }
+
+  async function salvarAvaliacao(row: SugestaoRow) {
+    if (!isSuperAdmin || !user?.id) return
+    const draft = drafts[row.sugestao_id]
+    if (!draft) return
+
+    const situacao = draft.situacao
+    const motivo = draft.motivo.trim()
+
+    if (situacao !== 'pendente' && motivo.length < 3) {
+      setError(
+        'Informe o motivo da avaliação (obrigatório quando a situação não é pendente).',
+      )
+      return
+    }
+
+    setSavingId(row.sugestao_id)
+    setError(null)
+
+    const { error: updError } = await supabase
+      .from('sugestao_melhoria')
+      .update({
+        situacao,
+        motivo: situacao === 'pendente' ? null : motivo.slice(0, 2000),
+        avaliacao_em: new Date().toISOString(),
+        avaliacao_por: user.id,
+      })
+      .eq('sugestao_id', row.sugestao_id)
+
+    setSavingId(null)
+    if (updError) {
+      setError(updError.message)
+      return
+    }
+
+    toast.success('Avaliação salva.')
     void loadMine()
   }
 
@@ -112,64 +199,70 @@ export function SugestoesMelhoriaPage() {
         </div>
       </header>
 
-      <form className="panel" onSubmit={(ev) => void onSubmit(ev)}>
-        {error ? (
-          <AlertMessage tone="error" title="Atenção">
-            {error}
-          </AlertMessage>
-        ) : null}
+      {!isSuperAdmin ? (
+        <form className="panel" onSubmit={(ev) => void onSubmit(ev)}>
+          {error ? (
+            <AlertMessage tone="error" title="Atenção">
+              {error}
+            </AlertMessage>
+          ) : null}
 
-        <p className="muted" style={{ marginBottom: '0.85rem' }}>
-          Grupo: <strong>{empresa?.nome ?? 'Plataforma'}</strong>
-          {' · '}
-          Usuário: <strong>{profile?.nome ?? '—'}</strong>
-          {profile?.email || user?.email
-            ? ` (${profile?.email ?? user?.email})`
-            : null}
-        </p>
+          <p className="muted" style={{ marginBottom: '0.85rem' }}>
+            Grupo: <strong>{empresa?.nome ?? 'Plataforma'}</strong>
+            {' · '}
+            Usuário: <strong>{profile?.nome ?? '—'}</strong>
+            {profile?.email || user?.email
+              ? ` (${profile?.email ?? user?.email})`
+              : null}
+          </p>
 
-        <div className="form-grid">
-          <div className="field field-span-2">
-            <label htmlFor="sugestao-titulo">Título</label>
-            <input
-              id="sugestao-titulo"
-              className="input"
-              value={titulo}
-              onChange={(ev) => setTitulo(ev.target.value)}
-              maxLength={200}
-              required
-              placeholder="Ex.: Relatório de mensalidades por seção"
-            />
+          <div className="form-grid">
+            <div className="field field-span-2">
+              <label htmlFor="sugestao-titulo">Título</label>
+              <input
+                id="sugestao-titulo"
+                className="input"
+                value={titulo}
+                onChange={(ev) => setTitulo(ev.target.value)}
+                maxLength={200}
+                required
+                placeholder="Ex.: Relatório de mensalidades por seção"
+              />
+            </div>
+            <div className="field field-span-2">
+              <label htmlFor="sugestao-descricao">Descrição</label>
+              <textarea
+                id="sugestao-descricao"
+                className="input"
+                rows={6}
+                value={descricao}
+                onChange={(ev) => setDescricao(ev.target.value)}
+                maxLength={5000}
+                required
+                placeholder="Descreva o que gostaria que mudasse ou fosse adicionado…"
+              />
+            </div>
           </div>
-          <div className="field field-span-2">
-            <label htmlFor="sugestao-descricao">Descrição</label>
-            <textarea
-              id="sugestao-descricao"
-              className="input"
-              rows={6}
-              value={descricao}
-              onChange={(ev) => setDescricao(ev.target.value)}
-              maxLength={5000}
-              required
-              placeholder="Descreva o que gostaria que mudasse ou fosse adicionado…"
-            />
-          </div>
-        </div>
 
-        <div className="form-actions" style={{ marginTop: '1rem' }}>
-          <button
-            className="btn btn-primary"
-            type="submit"
-            disabled={saving}
-          >
-            {saving ? 'Enviando…' : 'Enviar sugestão'}
-          </button>
-        </div>
-      </form>
+          <div className="form-actions" style={{ marginTop: '1rem' }}>
+            <button
+              className="btn btn-primary"
+              type="submit"
+              disabled={saving}
+            >
+              {saving ? 'Enviando…' : 'Enviar sugestão'}
+            </button>
+          </div>
+        </form>
+      ) : error ? (
+        <AlertMessage tone="error" title="Atenção">
+          {error}
+        </AlertMessage>
+      ) : null}
 
       <section className="panel" style={{ marginTop: '1rem' }}>
         <h3 style={{ marginTop: 0 }}>
-          {isSuperAdmin ? 'Últimas sugestões' : 'Minhas sugestões'}
+          {isSuperAdmin ? 'Sugestões recebidas' : 'Minhas sugestões'}
         </h3>
         {loadingMine ? (
           <p className="muted">Carregando…</p>
@@ -181,22 +274,110 @@ export function SugestoesMelhoriaPage() {
               <thead>
                 <tr>
                   <th>Data</th>
-                  {isSuperAdmin ? <th>Grupo</th> : null}
+                  {isSuperAdmin ? <th>Grupo / Usuário</th> : null}
                   <th>Título</th>
                   <th>Descrição</th>
+                  <th>Situação</th>
+                  <th>Motivo</th>
+                  {isSuperAdmin ? <th></th> : null}
                 </tr>
               </thead>
               <tbody>
-                {mine.map((row) => (
-                  <tr key={row.sugestao_id}>
-                    <td>
-                      {new Date(row.created_at).toLocaleString('pt-BR')}
-                    </td>
-                    {isSuperAdmin ? <td>{row.empresa_nome}</td> : null}
-                    <td>{row.titulo}</td>
-                    <td style={{ whiteSpace: 'pre-wrap' }}>{row.descricao}</td>
-                  </tr>
-                ))}
+                {mine.map((row) => {
+                  const draft = drafts[row.sugestao_id]
+                  return (
+                    <tr key={row.sugestao_id}>
+                      <td>
+                        {new Date(row.created_at).toLocaleString('pt-BR')}
+                      </td>
+                      {isSuperAdmin ? (
+                        <td>
+                          <div>{row.empresa_nome}</div>
+                          <div className="muted" style={{ fontSize: '0.85em' }}>
+                            {row.user_nome ?? '—'}
+                            {row.user_email ? ` · ${row.user_email}` : ''}
+                          </div>
+                        </td>
+                      ) : null}
+                      <td>{row.titulo}</td>
+                      <td style={{ whiteSpace: 'pre-wrap', maxWidth: 280 }}>
+                        {row.descricao}
+                      </td>
+                      <td>
+                        {isSuperAdmin && draft ? (
+                          <select
+                            className="select"
+                            value={draft.situacao}
+                            onChange={(ev) =>
+                              setDrafts((prev) => ({
+                                ...prev,
+                                [row.sugestao_id]: {
+                                  ...prev[row.sugestao_id],
+                                  situacao: ev.target
+                                    .value as SugestaoSituacao,
+                                },
+                              }))
+                            }
+                          >
+                            {SUGESTAO_SITUACOES.map((s) => (
+                              <option key={s} value={s}>
+                                {sugestaoSituacaoLabel(s)}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <strong>
+                            {sugestaoSituacaoLabel(row.situacao)}
+                          </strong>
+                        )}
+                      </td>
+                      <td style={{ minWidth: 180 }}>
+                        {isSuperAdmin && draft ? (
+                          <textarea
+                            className="input"
+                            rows={3}
+                            value={draft.motivo}
+                            onChange={(ev) =>
+                              setDrafts((prev) => ({
+                                ...prev,
+                                [row.sugestao_id]: {
+                                  ...prev[row.sugestao_id],
+                                  motivo: ev.target.value,
+                                },
+                              }))
+                            }
+                            placeholder={
+                              draft.situacao === 'pendente'
+                                ? 'Motivo (opcional enquanto pendente)'
+                                : 'Motivo da decisão (obrigatório)'
+                            }
+                            maxLength={2000}
+                          />
+                        ) : row.motivo ? (
+                          <span style={{ whiteSpace: 'pre-wrap' }}>
+                            {row.motivo}
+                          </span>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                      {isSuperAdmin ? (
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            disabled={savingId === row.sugestao_id}
+                            onClick={() => void salvarAvaliacao(row)}
+                          >
+                            {savingId === row.sugestao_id
+                              ? 'Salvando…'
+                              : 'Salvar'}
+                          </button>
+                        </td>
+                      ) : null}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
