@@ -287,6 +287,11 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     type: 'link',
+    to: '/sugestoes-melhoria',
+    label: 'Sugestões de melhorias',
+  },
+  {
+    type: 'link',
     to: '/auditoria',
     label: 'Auditoria',
     permission: 'auditoria.view',
@@ -435,6 +440,10 @@ export function navItemsForProfile(
     // Super admin usa o menu "Mensalidade plataforma"; grupos usam a tela própria.
     if (item.to === '/mensalidade-plataforma') {
       return profile?.role !== 'super_admin'
+    }
+    // Só login por e-mail (equipe); associados (registro) não veem.
+    if (item.to === '/sugestoes-melhoria') {
+      return !isAssociadoLogin(profile)
     }
     return true
   })

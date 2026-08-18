@@ -6,6 +6,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { RequirePermission } from '@/components/RequirePermission'
 import { PlataformaAcessoGate } from '@/components/PlataformaAcessoGate'
 import { MensalidadePlataformaGrupoPage } from '@/pages/MensalidadePlataformaGrupoPage'
+import { SugestoesMelhoriaPage } from '@/pages/SugestoesMelhoriaPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { TermosUsoPage } from '@/pages/TermosUsoPage'
 import { PrivacidadePage } from '@/pages/PrivacidadePage'
@@ -115,6 +116,10 @@ export default function App() {
             <Route
               path="mensalidade-plataforma"
               element={<MensalidadePlataformaGrupoPage />}
+            />
+            <Route
+              path="sugestoes-melhoria"
+              element={<SugestoesMelhoriaPage />}
             />
             <Route
               path="dashboard"

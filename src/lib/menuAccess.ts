@@ -131,6 +131,7 @@ export const ALWAYS_VISIBLE_MENU_KEYS = [
   '/vendas/eventos',
   '/vendas/loja-online',
   '/mensalidade-plataforma',
+  '/sugestoes-melhoria',
 ] as const
 
 /** Itens só de plataforma — nunca filtrar por menu_keys. */
