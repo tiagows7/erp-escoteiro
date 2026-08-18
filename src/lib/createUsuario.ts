@@ -77,15 +77,18 @@ export async function createUsuario(
   return createViaSignUpFallback(input)
 }
 
+/** Só cai no fallback se a function estiver inacessível — não em 4xx de negócio. */
 function shouldFallback(error?: string) {
   if (!error) return false
   const lower = error.toLowerCase()
+  // "Edge Function returned a non-2xx..." = erro de negócio (400/403), NÃO fallback
+  if (lower.includes('non-2xx')) return false
   return (
     lower.includes('failed to send') ||
-    lower.includes('404') ||
-    lower.includes('not found') ||
+    lower.includes('failed to fetch') ||
     lower.includes('functionsrelayerror') ||
-    lower.includes('edge function')
+    lower.includes('404') ||
+    (lower.includes('not found') && lower.includes('function'))
   )
 }
 

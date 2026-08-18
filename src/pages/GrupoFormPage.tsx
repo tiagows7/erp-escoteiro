@@ -288,122 +288,123 @@ export function GrupoFormPage() {
     setSaving(true)
     setError(null)
 
-    if (await slugJaExiste(slug, isNew ? undefined : Number(id))) {
-      setSaving(false)
-      setError(
-        `Já existe um grupo com o identificador "${slug}". Escolha outro slug.`,
-      )
-      return
-    }
-
-    if (isNew) {
-      const adminNome = form.adminNome.trim()
-      const adminEmail = form.adminEmail.trim().toLowerCase()
-      if (!adminNome || !adminEmail) {
-        setSaving(false)
-        setError('Informe nome e e-mail do usuário administrador do grupo.')
-        return
-      }
-      if (form.adminPassword.length < 6) {
-        setSaving(false)
-        setError('A senha do admin deve ter pelo menos 6 caracteres.')
-        return
-      }
-      if (form.adminPassword !== form.adminPasswordConfirm) {
-        setSaving(false)
-        setError('A confirmação de senha não confere.')
+    try {
+      if (await slugJaExiste(slug, isNew ? undefined : Number(id))) {
+        setError(
+          `Já existe um grupo com o identificador "${slug}". Escolha outro slug.`,
+        )
         return
       }
 
-      const result = await createGrupoComAdmin({
-        grupo: {
-          nome,
+      if (isNew) {
+        const adminNome = form.adminNome.trim()
+        const adminEmail = form.adminEmail.trim().toLowerCase()
+        if (!adminNome || !adminEmail) {
+          setError('Informe nome e e-mail do usuário administrador do grupo.')
+          return
+        }
+        if (form.adminPassword.length < 6) {
+          setError('A senha do admin deve ter pelo menos 6 caracteres.')
+          return
+        }
+        if (form.adminPassword !== form.adminPasswordConfirm) {
+          setError('A confirmação de senha não confere.')
+          return
+        }
+
+        const result = await createGrupoComAdmin({
+          grupo: {
+            nome,
+            slug,
+            cnpj: form.cnpj,
+            email: form.email,
+            telefone: form.telefone,
+            estado: form.estado,
+            cidade: form.cidade,
+            ativo: form.ativo,
+            portal_transparencia: form.portal_transparencia,
+          },
+          admin: {
+            nome: adminNome,
+            email: adminEmail,
+            password: form.adminPassword,
+          },
+        })
+
+        if (!result.ok || !result.empresa?.id) {
+          setError(result.error ?? 'Não foi possível criar o grupo.')
+          return
+        }
+
+        let logoMsg = ''
+        if (logoFile) {
+          const logoOk = await uploadGrupoLogo(result.empresa.id, logoFile)
+          logoMsg =
+            'error' in logoOk
+              ? ' Grupo criado, mas o logo não pôde ser enviado.'
+              : ''
+        }
+
+        navigate('/grupos', {
+          state: {
+            flashSuccess: `Salvo com sucesso! Admin: ${result.admin?.email}.${logoMsg}`,
+          },
+        })
+        return
+      }
+
+      const empresaId = Number(id)
+      const { error: updateError } = await supabase
+        .from('empresa')
+        .update({
+          nome: nome.toUpperCase(),
           slug,
-          cnpj: form.cnpj,
-          email: form.email,
-          telefone: form.telefone,
-          estado: form.estado,
-          cidade: form.cidade,
+          cnpj: form.cnpj.replace(/\D/g, '') || null,
+          email: form.email.trim() || null,
+          telefone: form.telefone.trim() || null,
+          estado: form.estado.trim().toUpperCase() || null,
+          cidade: form.cidade.trim() ? Number(form.cidade) : null,
           ativo: form.ativo,
           portal_transparencia: form.portal_transparencia,
-        },
-        admin: {
-          nome: adminNome,
-          email: adminEmail,
-          password: form.adminPassword,
-        },
-      })
+          ...(isSuperAdmin
+            ? {
+                plataforma_plano_id: form.plataforma_plano_id
+                  ? Number(form.plataforma_plano_id)
+                  : null,
+                plataforma_isento: form.plataforma_isento,
+              }
+            : {}),
+        })
+        .eq('id', empresaId)
 
-      if (!result.ok || !result.empresa?.id) {
-        setSaving(false)
-        setError(result.error ?? 'Não foi possível criar o grupo.')
+      if (updateError) {
+        setError(mapEmpresaError(updateError.message, slug))
         return
       }
 
-      let logoMsg = ''
       if (logoFile) {
-        const logoOk = await uploadGrupoLogo(result.empresa.id, logoFile)
-        logoMsg =
-          'error' in logoOk
-            ? ' Grupo criado, mas o logo não pôde ser enviado.'
-            : ''
+        const logoOk = await uploadGrupoLogo(empresaId, logoFile)
+        if ('error' in logoOk) {
+          setError(`Grupo atualizado, mas o logo falhou: ${logoOk.error}`)
+          return
+        }
       }
 
-      setSaving(false)
-      navigate('/grupos', {
-        state: {
-          flashSuccess: `Salvo com sucesso! Admin: ${result.admin?.email}.${logoMsg}`,
-        },
-      })
-      return
-    }
-
-    const empresaId = Number(id)
-    const { error: updateError } = await supabase
-      .from('empresa')
-      .update({
-        nome: nome.toUpperCase(),
-        slug,
-        cnpj: form.cnpj.replace(/\D/g, '') || null,
-        email: form.email.trim() || null,
-        telefone: form.telefone.trim() || null,
-        estado: form.estado.trim().toUpperCase() || null,
-        cidade: form.cidade.trim() ? Number(form.cidade) : null,
-        ativo: form.ativo,
-        portal_transparencia: form.portal_transparencia,
-        ...(isSuperAdmin
-          ? {
-              plataforma_plano_id: form.plataforma_plano_id
-                ? Number(form.plataforma_plano_id)
-                : null,
-              plataforma_isento: form.plataforma_isento,
-            }
-          : {}),
-      })
-      .eq('id', empresaId)
-
-    if (updateError) {
-      setSaving(false)
-      setError(mapEmpresaError(updateError.message, slug))
-      return
-    }
-
-    if (logoFile) {
-      const logoOk = await uploadGrupoLogo(empresaId, logoFile)
-      if ('error' in logoOk) {
-        setSaving(false)
-        setError(`Grupo atualizado, mas o logo falhou: ${logoOk.error}`)
-        return
+      if (canManagePlatform) {
+        navigate('/grupos', {
+          state: { flashSuccess: 'Salvo com sucesso!' },
+        })
+      } else {
+        toast.success('Grupo atualizado com sucesso!')
       }
-    }
-
-    setSaving(false)
-    if (canManagePlatform) {
-      navigate('/grupos', {
-        state: { flashSuccess: 'Salvo com sucesso!' },
-      })
-    } else {
-      toast.success('Grupo atualizado com sucesso!')
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Erro inesperado ao salvar o grupo.',
+      )
+    } finally {
+      setSaving(false)
     }
   }
 

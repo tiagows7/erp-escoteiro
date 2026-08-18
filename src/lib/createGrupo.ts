@@ -62,8 +62,9 @@ export async function slugJaExiste(
 }
 
 /**
- * Preferência: Edge Function (service role, usuário já confirmado).
- * Fallback: signUp + restaura sessão do super admin.
+ * Cria grupo + admin via Edge Function (service role).
+ * Não usa signUp no cliente: isso trocava a sessão e fazia a tela “piscar”
+ * sem mensagem quando a function respondia 4xx.
  */
 export async function createGrupoComAdmin(
   input: CreateGrupoInput,
@@ -76,29 +77,26 @@ export async function createGrupoComAdmin(
     }
   }
 
-  const viaFunction = await createViaEdgeFunction(input)
-  if (viaFunction.ok || !shouldFallback(viaFunction.error)) {
-    if (!viaFunction.ok && viaFunction.error) {
-      return {
-        ...viaFunction,
-        error: mapEmpresaError(viaFunction.error, slug),
-      }
+  const result = await createViaEdgeFunction(input)
+  if (!result.ok && result.error) {
+    return {
+      ...result,
+      error: mapEmpresaError(result.error, slug),
     }
-    return viaFunction
   }
-  return createViaSignUpFallback(input)
+  return result
 }
 
-function shouldFallback(error?: string) {
-  if (!error) return false
-  const lower = error.toLowerCase()
-  return (
-    lower.includes('failed to send') ||
-    lower.includes('404') ||
-    lower.includes('not found') ||
-    lower.includes('functionsrelayerror') ||
-    lower.includes('edge function')
-  )
+async function readFunctionsError(error: unknown): Promise<string | null> {
+  const ctx = (error as { context?: Response })?.context
+  if (!ctx || typeof ctx.json !== 'function') return null
+  try {
+    const body = (await ctx.json()) as { error?: string }
+    if (body?.error) return String(body.error)
+  } catch {
+    /* ignore */
+  }
+  return null
 }
 
 async function createViaEdgeFunction(
@@ -109,107 +107,30 @@ async function createViaEdgeFunction(
   })
 
   if (error) {
-    return { ok: false, error: error.message }
+    const fromBody = await readFunctionsError(error)
+    return {
+      ok: false,
+      error:
+        fromBody ||
+        error.message ||
+        'Não foi possível criar o grupo (edge function).',
+    }
   }
 
   if (data?.error) {
     return { ok: false, error: String(data.error) }
   }
 
+  if (!data?.empresa?.id) {
+    return {
+      ok: false,
+      error: 'Resposta inválida ao criar o grupo. Tente novamente.',
+    }
+  }
+
   return {
     ok: true,
     empresa: data.empresa,
     admin: data.admin,
-  }
-}
-
-async function createViaSignUpFallback(
-  input: CreateGrupoInput,
-): Promise<CreateGrupoResult> {
-  const { data: sessionData } = await supabase.auth.getSession()
-  const current = sessionData.session
-  if (!current) {
-    return { ok: false, error: 'Sessão do super admin não encontrada.' }
-  }
-
-  const { data: empresa, error: empresaError } = await supabase
-    .from('empresa')
-    .insert({
-      nome: input.grupo.nome.toUpperCase(),
-      slug: input.grupo.slug,
-      cnpj: input.grupo.cnpj?.replace(/\D/g, '') || null,
-      email: input.grupo.email?.trim() || null,
-      telefone: input.grupo.telefone?.trim() || null,
-      estado: input.grupo.estado?.trim().toUpperCase() || null,
-      cidade: input.grupo.cidade?.trim()
-        ? Number(input.grupo.cidade)
-        : null,
-      ativo: input.grupo.ativo,
-      portal_transparencia: input.grupo.portal_transparencia !== false,
-    })
-    .select('id, nome, slug')
-    .single()
-
-  if (empresaError || !empresa) {
-    return {
-      ok: false,
-      error: mapEmpresaError(
-        empresaError?.message ?? 'Falha ao criar grupo.',
-        input.grupo.slug,
-      ),
-    }
-  }
-
-  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-    email: input.admin.email.trim().toLowerCase(),
-    password: input.admin.password,
-    options: {
-      data: { nome: input.admin.nome.trim() },
-    },
-  })
-
-  // Sempre tenta restaurar a sessão do super admin
-  await supabase.auth.setSession({
-    access_token: current.access_token,
-    refresh_token: current.refresh_token,
-  })
-
-  if (signUpError || !signUpData.user) {
-    await supabase.from('empresa').delete().eq('id', empresa.id)
-    return {
-      ok: false,
-      error:
-        signUpError?.message ??
-        'Falha ao criar usuário. Verifique se o e-mail já existe.',
-    }
-  }
-
-  const { error: profileError } = await supabase.from('profiles').insert({
-    id: signUpData.user.id,
-    empresa_id: empresa.id,
-    nome: input.admin.nome.trim(),
-    username: input.admin.email.split('@')[0],
-    role: 'admin',
-    tipo: 'A',
-    ativo: true,
-  })
-
-  if (profileError) {
-    await supabase.from('empresa').delete().eq('id', empresa.id)
-    return {
-      ok: false,
-      error: `Usuário Auth criado, mas falhou o perfil: ${profileError.message}`,
-    }
-  }
-
-  return {
-    ok: true,
-    empresa,
-    admin: {
-      id: signUpData.user.id,
-      email: input.admin.email.trim().toLowerCase(),
-      nome: input.admin.nome.trim(),
-      role: 'admin',
-    },
   }
 }
