@@ -64,7 +64,7 @@ export function RequirePermission({
       location.pathname,
       profile?.menu_keys,
     )
-    // Eventos: sempre liberado para quem tem vendas.view.
+    // Eventos / Loja online: sempre liberados para quem tem vendas.view.
     // Equipe (e-mail): Cadastros liberado conforme permissão do papel.
     // Associado: Projetos sempre; ação só se tiver faixa.
     const isCadastrosPath =
@@ -75,6 +75,7 @@ export function RequirePermission({
     const menuBypass =
       pathMatchesMenuKey(location.pathname, '/dashboard') ||
       pathMatchesMenuKey(location.pathname, '/vendas/eventos') ||
+      pathMatchesMenuKey(location.pathname, '/vendas/loja-online') ||
       pathMatchesMenuKey(location.pathname, '/calendario') ||
       (!isAssociadoLogin(profile) && isCadastrosPath) ||
       (isAssociadoLogin(profile) &&
