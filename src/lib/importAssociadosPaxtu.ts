@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createUsuario } from '@/lib/createUsuario'
+import { createUsuariosLote, type CreateUsuarioLoteItem } from '@/lib/createUsuario'
 import { associadoPortalMenuKeys } from '@/lib/menuAccess'
 import type { Associado } from '@/types/database'
 
@@ -180,6 +180,18 @@ export function passwordFromNascimento(
   const [y, m, d] = isoDate.slice(0, 10).split('-')
   if (!y || !m || !d || y.length !== 4) return null
   return `${d}${m}${y}`
+}
+
+/** Senha para login de associado: nascimento, senão nº registro (mín. 6). */
+export function passwordForAssociadoLogin(
+  isoDate: string | null | undefined,
+  registro: number | string,
+): string {
+  const fromBirth = passwordFromNascimento(isoDate)
+  if (fromBirth && fromBirth.length >= 6) return fromBirth
+  const digits = String(registro).replace(/\D/g, '')
+  if (digits.length >= 6) return digits.slice(0, 20)
+  return digits.padStart(6, '0')
 }
 
 function sheetToRows(file: ArrayBuffer): Cell[][] {
@@ -402,6 +414,34 @@ export async function importAssociadosFromPaxtuExcel(
     if (Number.isFinite(n) && n > 0) registrosExistentes.add(n)
   }
 
+  const portalMenus = associadoPortalMenuKeys()
+  const pendingUsers: CreateUsuarioLoteItem[] = []
+  const pendingByRegistro = new Set<string>()
+
+  function queueLogin(opts: {
+    nome: string
+    registro: number
+    dataNascimento: string | null
+    ramo: number | null
+    secao: number | null
+  }) {
+    const registroStr = String(opts.registro)
+    if (pendingByRegistro.has(registroStr)) return
+    pendingByRegistro.add(registroStr)
+    const codigoRamo =
+      opts.ramo != null && opts.ramo >= 1 && opts.ramo <= 4 ? opts.ramo : null
+    pendingUsers.push({
+      nome: opts.nome,
+      registro: registroStr,
+      password: passwordForAssociadoLogin(opts.dataNascimento, opts.registro),
+      role: 'leitura',
+      ativo: true,
+      codigo_ramo: codigoRamo,
+      codigo_secao: opts.secao,
+      menu_keys: portalMenus,
+    })
+  }
+
   for (const row of dataRows) {
     const nomeRaw = cellStr(row[1])
     const nome = truncate(nomeRaw.toUpperCase(), 100)
@@ -413,31 +453,15 @@ export async function importAssociadosFromPaxtuExcel(
 
       if (registrosExistentes.has(reg.registro)) {
         result.skipped += 1
-        // Associado já existe: ainda tenta criar o login se faltar.
         const ramoExistente = await resolveRamo(row[6])
         const secaoExistente = await resolveSecao(row[12], ramoExistente)
-        const userStatus = await ensureUsuarioFromAssociado({
-          client,
-          empresaId,
+        queueLogin({
           nome,
           registro: reg.registro,
           dataNascimento: parseDate(row[19]),
           ramo: ramoExistente,
           secao: secaoExistente,
         })
-        if (userStatus.status === 'created') {
-          result.createdUsers += 1
-          await new Promise((r) => setTimeout(r, 250))
-        } else if (userStatus.status === 'failed') {
-          result.usersFailed += 1
-          if (result.userErrors.length < 20) {
-            result.userErrors.push({
-              nome,
-              motivo: userStatus.error || 'Falha ao criar usuário',
-            })
-          }
-          await new Promise((r) => setTimeout(r, 400))
-        }
         continue
       }
 
@@ -505,35 +529,45 @@ export async function importAssociadosFromPaxtuExcel(
       result.inserted += 1
       registrosExistentes.add(reg.registro)
 
-      // Usuario de acesso: login = registro, senha = DDMMAAAA
-      const userStatus = await ensureUsuarioFromAssociado({
-        client,
-        empresaId,
+      queueLogin({
         nome,
         registro: reg.registro,
         dataNascimento,
         ramo,
         secao,
       })
-      if (userStatus.status === 'created') {
-        result.createdUsers += 1
-        // Evita saturar a Edge Function em importações grandes.
-        await new Promise((r) => setTimeout(r, 250))
-      } else if (userStatus.status === 'skipped') result.usersSkipped += 1
-      else {
-        result.usersFailed += 1
-        if (result.userErrors.length < 20) {
-          result.userErrors.push({
-            nome,
-            motivo: userStatus.error || 'Falha ao criar usuário',
-          })
-        }
-        await new Promise((r) => setTimeout(r, 400))
-      }
     } catch (err) {
       result.failed.push({
         nome: nome || cellStr(row[0]) || 'Linha sem nome',
         motivo: err instanceof Error ? err.message : 'Erro desconhecido',
+      })
+    }
+  }
+
+  // Cria logins em lotes (1 request HTTP por até 40 usuários) — evita
+  // "Failed to send a request to the Edge Function" na importação em massa.
+  const LOTE = 40
+  for (let i = 0; i < pendingUsers.length; i += LOTE) {
+    const chunk = pendingUsers.slice(i, i + LOTE)
+    const lote = await createUsuariosLote(empresaId, chunk)
+    if (!lote.ok) {
+      result.usersFailed += chunk.length
+      if (result.userErrors.length < 20) {
+        result.userErrors.push({
+          nome: `Lote ${Math.floor(i / LOTE) + 1}`,
+          motivo: lote.error || 'Falha ao criar logins em lote',
+        })
+      }
+      continue
+    }
+    result.createdUsers += lote.created ?? 0
+    result.usersSkipped += lote.skipped ?? 0
+    result.usersFailed += lote.failed ?? 0
+    for (const f of lote.details?.failed ?? []) {
+      if (result.userErrors.length >= 20) break
+      result.userErrors.push({
+        nome: f.nome,
+        motivo: f.error,
       })
     }
   }
@@ -546,87 +580,4 @@ export async function importAssociadosFromPaxtuExcel(
     patrulhaCache.created
 
   return result
-}
-
-async function ensureUsuarioFromAssociado(opts: {
-  client: SupabaseClient
-  empresaId: number
-  nome: string
-  registro: number
-  dataNascimento: string | null
-  ramo: number | null
-  secao: number | null
-}): Promise<
-  | { status: 'created' }
-  | { status: 'skipped' }
-  | { status: 'failed'; error: string }
-> {
-  const registroStr = String(opts.registro)
-  const password = passwordFromNascimento(opts.dataNascimento)
-  if (!password) return { status: 'skipped' }
-
-  const portalMenus = associadoPortalMenuKeys()
-
-  const { data: existing } = await opts.client
-    .from('profiles')
-    .select('id, menu_keys')
-    .eq('registro', registroStr)
-    .eq('empresa_id', opts.empresaId)
-    .maybeSingle()
-
-  if (existing?.id) {
-    // Reimportação: garante menus do portal (inclui Projetos).
-    const atual = Array.isArray(existing.menu_keys)
-      ? existing.menu_keys.map((k) => String(k))
-      : []
-    const merged = [...new Set([...atual, ...portalMenus])]
-    const same =
-      merged.length === atual.length &&
-      merged.every((k) => atual.includes(k))
-    if (!same) {
-      const { error: menuError } = await opts.client
-        .from('profiles')
-        .update({ menu_keys: merged })
-        .eq('id', existing.id)
-      if (menuError) {
-        return { status: 'failed', error: menuError.message }
-      }
-    }
-    return { status: 'skipped' }
-  }
-
-  const codigoRamo =
-    opts.ramo != null && opts.ramo >= 1 && opts.ramo <= 4 ? opts.ramo : null
-
-  // Sem e-mail do associado: Auth usa r{registro}@usuarios.local (login por registro)
-  // Menus: Dashboard, Portal, Conquistas, Atividades e Projetos.
-  const result = await createUsuario({
-    nome: opts.nome,
-    registro: registroStr,
-    password,
-    role: 'leitura',
-    ativo: true,
-    empresa_id: opts.empresaId,
-    codigo_ramo: codigoRamo,
-    codigo_secao: opts.secao,
-    menu_keys: portalMenus,
-  })
-
-  if (!result.ok) {
-    const msg = (result.error ?? '').toLowerCase()
-    // Ja existe no Auth / registro duplicado → nao aborta a importacao
-    if (
-      msg.includes('already') ||
-      msg.includes('registered') ||
-      msg.includes('duplicate') ||
-      msg.includes('unique') ||
-      msg.includes('já') ||
-      msg.includes('ja ')
-    ) {
-      return { status: 'skipped' }
-    }
-    return { status: 'failed', error: result.error || 'Falha ao criar usuário' }
-  }
-
-  return { status: 'created' }
 }

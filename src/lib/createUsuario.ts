@@ -306,3 +306,70 @@ export async function excluirUsuario(
 
   return { ok: true }
 }
+
+export type CreateUsuarioLoteItem = {
+  nome: string
+  registro: string
+  password: string
+  role: AppRole
+  ativo: boolean
+  codigo_ramo?: number | null
+  codigo_secao?: number | null
+  menu_keys?: string[] | null
+}
+
+export type CreateUsuariosLoteResult = {
+  ok: boolean
+  error?: string
+  created?: number
+  skipped?: number
+  failed?: number
+  details?: {
+    created: { registro: string | null; id: string }[]
+    skipped: { registro: string | null; motivo: string }[]
+    failed: { registro: string | null; nome: string; error: string }[]
+  }
+}
+
+export async function createUsuariosLote(
+  empresaId: number,
+  usuarios: CreateUsuarioLoteItem[],
+): Promise<CreateUsuariosLoteResult> {
+  if (usuarios.length === 0) {
+    return { ok: true, created: 0, skipped: 0, failed: 0 }
+  }
+
+  let lastError = 'Falha ao criar usuários em lote.'
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { data, error } = await supabase.functions.invoke(
+      'create-usuarios-lote',
+      {
+        body: { empresa_id: empresaId, usuarios },
+      },
+    )
+
+    if (error) {
+      const fromBody = await readFunctionsError(error)
+      lastError = fromBody || error.message
+      if (!isTransientEdgeError(lastError) || attempt === 3) {
+        return { ok: false, error: lastError }
+      }
+      await sleep(500 * (attempt + 1) ** 2)
+      continue
+    }
+
+    if (data?.error) {
+      return { ok: false, error: String(data.error) }
+    }
+
+    return {
+      ok: true,
+      created: Number(data?.created ?? 0),
+      skipped: Number(data?.skipped ?? 0),
+      failed: Number(data?.failed ?? 0),
+      details: data?.details,
+    }
+  }
+
+  return { ok: false, error: lastError }
+}

@@ -200,7 +200,8 @@ export function AssociadosPage() {
       message:
         'Deseja importar os associados deste arquivo?\n\n' +
         'Registros já cadastrados neste grupo serão ignorados (não atualiza).\n' +
-        'Também serão criados logins (nº registro / senha = data de nascimento sem barras) ' +
+        'Também serão criados logins (nº registro / senha = data de nascimento sem barras, ' +
+        'ou o próprio registro se não houver data) ' +
         'com acesso a Dashboard, Portal da Transparência, Conquistas e Atividades.',
       confirmLabel: 'Sim, importar',
       cancelLabel: 'Não',
