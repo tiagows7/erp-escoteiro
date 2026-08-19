@@ -10,6 +10,7 @@ import {
 import { uploadGrupoLogo } from '@/lib/uploadGrupoLogo'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   formDraftKey,
   usePersistedFormState,
@@ -616,6 +617,11 @@ export function GrupoFormPage() {
 
   return (
     <>
+      <WaitingOverlay
+        open={saving}
+        title="Aguarde"
+        message="Criando/atualizando o grupo. Isso pode levar alguns instantes…"
+      />
       <header className="page-header">
         <div>
           <h2>

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   formDraftKey,
   usePersistedFormState,
@@ -769,6 +770,11 @@ export function DespesaFormPage() {
 
   return (
     <>
+      <WaitingOverlay
+        open={saving}
+        title="Aguarde"
+        message="Salvando no banco de dados. Isso pode levar alguns instantes…"
+      />
       <header className="page-header">
         <div>
           <h2>{isNew ? 'Nova despesa' : 'Editar despesa'}</h2>

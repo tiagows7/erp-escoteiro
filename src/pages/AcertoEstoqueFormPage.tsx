@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   ESTOQUE_OPERACAO_ACERTO,
   ESTOQUE_ORIGEM,
@@ -265,6 +266,11 @@ export function AcertoEstoqueFormPage() {
 
   return (
     <>
+      <WaitingOverlay
+        open={saving}
+        title="Aguarde"
+        message="Salvando no banco de dados. Isso pode levar alguns instantes…"
+      />
       <header className="page-header">
         <div>
           <h2>Novo acerto de estoque</h2>

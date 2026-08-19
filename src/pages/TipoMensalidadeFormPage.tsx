@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { WaitingOverlay } from '@/components/WaitingOverlay'
 
 const emptyForm = {
   nome: '',
@@ -177,6 +178,11 @@ export function TipoMensalidadeFormPage() {
 
   return (
     <>
+      <WaitingOverlay
+        open={saving}
+        title="Aguarde"
+        message="Salvando no banco de dados. Isso pode levar alguns instantes…"
+      />
       <header className="page-header">
         <div>
           <h2>
