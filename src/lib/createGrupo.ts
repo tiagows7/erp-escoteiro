@@ -80,60 +80,112 @@ export async function createGrupoComAdmin(
     }
   }
 
-  const result = await createViaEdgeFunction(input)
-  if (!result.ok && result.error) {
-    return {
-      ...result,
-      error: mapEmpresaError(result.error, slug),
+  let lastError = 'Não foi possível criar o grupo (edge function).'
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await supabase.auth.refreshSession()
+    const result = await createViaEdgeFunction(input)
+    if (result.ok) {
+      return result
     }
+    lastError = result.error || lastError
+    if (!isTransientEdgeError(lastError) || attempt === 2) {
+      return {
+        ok: false,
+        error: mapEmpresaError(lastError, slug),
+      }
+    }
+    await sleep(400 * (attempt + 1) ** 2)
   }
-  return result
+
+  return { ok: false, error: mapEmpresaError(lastError, slug) }
 }
 
-async function readFunctionsError(error: unknown): Promise<string | null> {
-  const ctx = (error as { context?: Response })?.context
-  if (!ctx || typeof ctx.json !== 'function') return null
-  try {
-    const body = (await ctx.json()) as { error?: string }
-    if (body?.error) return String(body.error)
-  } catch {
-    /* ignore */
-  }
-  return null
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isTransientEdgeError(error?: string) {
+  if (!error) return false
+  const lower = error.toLowerCase()
+  return (
+    lower.includes('failed to send') ||
+    lower.includes('failed to fetch') ||
+    lower.includes('functionsrelayerror') ||
+    lower.includes('network') ||
+    lower.includes('timeout') ||
+    lower.includes('502') ||
+    lower.includes('503') ||
+    lower.includes('504')
+  )
 }
 
 async function createViaEdgeFunction(
   input: CreateGrupoInput,
 ): Promise<CreateGrupoResult> {
-  const { data, error } = await supabase.functions.invoke('create-grupo', {
-    body: input,
-  })
+  const baseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  if (error) {
-    const fromBody = await readFunctionsError(error)
+  if (!baseUrl || !anonKey) {
+    return { ok: false, error: 'Configuração Supabase ausente.' }
+  }
+  if (!session?.access_token) {
+    return { ok: false, error: 'Sessão não encontrada.' }
+  }
+
+  try {
+    const res = await fetch(`${baseUrl}/functions/v1/create-grupo`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: anonKey,
+      },
+      body: JSON.stringify(input),
+    })
+
+    const text = await res.text()
+    let data: Record<string, unknown> | null = null
+    try {
+      data = text ? (JSON.parse(text) as Record<string, unknown>) : null
+    } catch {
+      data = null
+    }
+
+    if (!res.ok) {
+      const msg =
+        (data?.error != null ? String(data.error) : null) ||
+        text ||
+        `HTTP ${res.status}`
+      return { ok: false, error: msg }
+    }
+
+    if (data?.error) {
+      return { ok: false, error: String(data.error) }
+    }
+
+    const empresa = data?.empresa as CreateGrupoResult['empresa']
+    if (!empresa?.id) {
+      return {
+        ok: false,
+        error: 'Resposta inválida ao criar o grupo. Tente novamente.',
+      }
+    }
+
+    return {
+      ok: true,
+      empresa,
+      admin: data?.admin as CreateGrupoResult['admin'],
+    }
+  } catch (e) {
     return {
       ok: false,
       error:
-        fromBody ||
-        error.message ||
-        'Não foi possível criar o grupo (edge function).',
+        e instanceof Error
+          ? e.message || 'Failed to send a request to the Edge Function'
+          : 'Failed to send a request to the Edge Function',
     }
-  }
-
-  if (data?.error) {
-    return { ok: false, error: String(data.error) }
-  }
-
-  if (!data?.empresa?.id) {
-    return {
-      ok: false,
-      error: 'Resposta inválida ao criar o grupo. Tente novamente.',
-    }
-  }
-
-  return {
-    ok: true,
-    empresa: data.empresa,
-    admin: data.admin,
   }
 }
