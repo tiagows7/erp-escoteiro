@@ -144,7 +144,7 @@ export function AcaoEntreAmigosVendaPage() {
         supabase
           .from('acao_entre_amigos')
           .select(
-            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, imagem_url, encerrado_em, numero_sorteado, sorteado_em, created_at',
+            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, quantidade_premios, imagem_url, encerrado_em, numero_sorteado, numeros_sorteados, sorteado_em, created_at',
           )
           .eq('acao_id', acaoId)
           .eq('empresa_id', empresaId)
@@ -530,6 +530,9 @@ export function AcaoEntreAmigosVendaPage() {
       numero_final: acao.numero_final,
       qtde_vendidos: vendas.length,
       numero_sorteado: acao.numero_sorteado,
+      numeros_sorteados: Array.isArray(acao.numeros_sorteados)
+        ? acao.numeros_sorteados
+        : null,
     })
 
   async function onEncerrarVendas() {
@@ -548,7 +551,7 @@ export function AcaoEntreAmigosVendaPage() {
       .eq('acao_id', acao.acao_id)
       .eq('empresa_id', empresaId)
       .select(
-        'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, imagem_url, encerrado_em, numero_sorteado, sorteado_em, created_at',
+        'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, quantidade_premios, imagem_url, encerrado_em, numero_sorteado, numeros_sorteados, sorteado_em, created_at',
       )
       .single()
     if (upError || !data) {
@@ -561,18 +564,22 @@ export function AcaoEntreAmigosVendaPage() {
 
   async function onSortear() {
     if (!podeSortear || !acao) return
-    const refazer = acao.numero_sorteado != null
+    const jaTem =
+      acao.numero_sorteado != null ||
+      (Array.isArray(acao.numeros_sorteados) &&
+        acao.numeros_sorteados.length > 0)
+    const qtd = Math.max(1, Number(acao.quantidade_premios ?? 1) || 1)
     const ok = await toast.confirm({
-      title: refazer ? 'Sortear novamente?' : 'Realizar sorteio?',
-      message: refazer
-        ? 'Um novo número será sorteado entre os vendidos e substitui o resultado anterior.'
-        : 'Será sorteado um número entre os já vendidos, com contagem de 10 segundos.',
-      confirmLabel: refazer ? 'Sortear novamente' : 'Sortear',
-      danger: refazer,
+      title: jaTem ? 'Sortear novamente?' : 'Realizar sorteio?',
+      message: jaTem
+        ? 'Um novo sorteio substituirá o(s) ganhador(es) atual(is).'
+        : `Será(ão) sorteado(s) ${qtd} prêmio(s) entre os números vendidos, com contagem de 10 segundos.`,
+      confirmLabel: jaTem ? 'Sortear novamente' : 'Sortear',
+      danger: jaTem,
     })
     if (!ok) return
     setError(null)
-    setSorteioRefazer(refazer)
+    setSorteioRefazer(jaTem)
     setSorteioOpen(true)
   }
 
@@ -600,9 +607,17 @@ export function AcaoEntreAmigosVendaPage() {
             {acao.data_sorteio
               ? ` · sorteio ${formatDateBR(acao.data_sorteio)}`
               : null}
-            {acao.numero_sorteado != null
-              ? ` · ganhador nº ${acao.numero_sorteado}`
-              : null}
+            {(() => {
+              const nums = Array.isArray(acao.numeros_sorteados)
+                ? acao.numeros_sorteados.map(Number).filter(Number.isFinite)
+                : acao.numero_sorteado != null
+                  ? [Number(acao.numero_sorteado)]
+                  : []
+              if (nums.length === 0) return null
+              return nums.length === 1
+                ? ` · ganhador nº ${nums[0]}`
+                : ` · ${nums.length} ganhadores`
+            })()}
             {faixa
               ? ` · sua faixa ${faixa.numero_inicial}–${faixa.numero_final}`
               : null}
@@ -633,7 +648,11 @@ export function AcaoEntreAmigosVendaPage() {
               className="btn btn-primary"
               onClick={() => void onSortear()}
             >
-              {acao.numero_sorteado != null ? 'Sortear novamente' : 'Sortear'}
+              {(Array.isArray(acao.numeros_sorteados) &&
+                acao.numeros_sorteados.length > 0) ||
+              acao.numero_sorteado != null
+                ? 'Sortear novamente'
+                : 'Sortear'}
             </button>
           ) : null}
           {canStaffEdit ? (
@@ -656,42 +675,47 @@ export function AcaoEntreAmigosVendaPage() {
         </AlertMessage>
       ) : null}
 
-      {acao.numero_sorteado != null ? (
-        <AlertMessage tone="success" title="Sorteio realizado">
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '0.75rem',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <span>
-              Número sorteado: <strong>{acao.numero_sorteado}</strong>
-              {(() => {
-                const v = vendas.find((x) => x.numero === acao.numero_sorteado)
-                if (!v) return null
+      {(() => {
+        const nums = Array.isArray(acao.numeros_sorteados)
+          ? acao.numeros_sorteados.map(Number).filter(Number.isFinite)
+          : acao.numero_sorteado != null
+            ? [Number(acao.numero_sorteado)]
+            : []
+        if (nums.length === 0) return null
+        return (
+          <AlertMessage tone="success" title="Sorteio realizado">
+            <div style={{ display: 'grid', gap: '0.5rem' }}>
+              {nums.map((numero, i) => {
+                const v = vendas.find((x) => x.numero === numero)
                 return (
-                  <>
-                    {' '}
-                    · <strong>{v.comprador_nome}</strong> · {v.comprador_telefone}
-                  </>
+                  <div key={numero}>
+                    {nums.length > 1 ? <strong>{i + 1}º prêmio · </strong> : null}
+                    Nº <strong>{numero}</strong>
+                    {v ? (
+                      <>
+                        {' '}
+                        · <strong>{v.comprador_nome}</strong> ·{' '}
+                        {v.comprador_telefone}
+                      </>
+                    ) : null}
+                  </div>
                 )
-              })()}
-            </span>
-            {canStaffEdit ? (
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => void onSortear()}
-              >
-                Sortear novamente
-              </button>
-            ) : null}
-          </div>
-        </AlertMessage>
-      ) : null}
+              })}
+              {canStaffEdit ? (
+                <div>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => void onSortear()}
+                  >
+                    Sortear novamente
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </AlertMessage>
+        )
+      })()}
 
       {numerosPagos.length > 0 && acao ? (
         <section className="panel">

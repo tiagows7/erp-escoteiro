@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 export type SorteioGanhador = {
+  premio?: number
   numero: number
   nome: string
   telefone: string
@@ -14,9 +15,9 @@ type Props = {
   acaoNome?: string
   countdownFrom?: number
   /** Inicia o sorteio (RPC). Resolvido durante a contagem. */
-  runSorteio: () => Promise<SorteioGanhador>
+  runSorteio: () => Promise<SorteioGanhador | SorteioGanhador[]>
   onClose: () => void
-  onDone?: (ganhador: SorteioGanhador) => void
+  onDone?: (ganhadores: SorteioGanhador[]) => void
 }
 
 const MENSAGENS = [
@@ -24,7 +25,7 @@ const MENSAGENS = [
   'Embaralhando os números vendidos…',
   'Conferindo a lista de compradores…',
   'Quase lá…',
-  'Sorteando o ganhador…',
+  'Sorteando o(s) ganhador(es)…',
 ] as const
 
 function mensagemParaSegundos(sec: number, from: number): string {
@@ -34,6 +35,19 @@ function mensagemParaSegundos(sec: number, from: number): string {
     Math.floor(progress * MENSAGENS.length),
   )
   return MENSAGENS[idx]
+}
+
+function normalizeGanhadores(
+  value: SorteioGanhador | SorteioGanhador[],
+): SorteioGanhador[] {
+  const list = Array.isArray(value) ? value : [value]
+  return list
+    .filter((g) => g && Number.isFinite(g.numero))
+    .map((g, i) => ({
+      ...g,
+      premio: g.premio ?? i + 1,
+    }))
+    .sort((a, b) => (a.premio ?? 0) - (b.premio ?? 0))
 }
 
 export function AcaoSorteioModal({
@@ -46,27 +60,28 @@ export function AcaoSorteioModal({
 }: Props) {
   const [phase, setPhase] = useState<Phase>('countdown')
   const [seconds, setSeconds] = useState(countdownFrom)
-  const [ganhador, setGanhador] = useState<SorteioGanhador | null>(null)
+  const [ganhadores, setGanhadores] = useState<SorteioGanhador[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [pending, setPending] = useState<SorteioGanhador | null>(null)
+  const [pending, setPending] = useState(false)
 
   useEffect(() => {
     if (!open) return
 
     setPhase('countdown')
     setSeconds(countdownFrom)
-    setGanhador(null)
+    setGanhadores([])
     setError(null)
-    setPending(null)
+    setPending(false)
 
     let cancelled = false
-    let result: SorteioGanhador | null = null
+    let result: SorteioGanhador[] | null = null
     let fail: string | null = null
 
     void (async () => {
       try {
-        result = await runSorteio()
-        if (!cancelled) setPending(result)
+        const raw = await runSorteio()
+        result = normalizeGanhadores(raw)
+        if (!cancelled) setPending(true)
       } catch (e) {
         fail = e instanceof Error ? e.message : 'Falha no sorteio.'
         if (!cancelled) setError(fail)
@@ -81,18 +96,17 @@ export function AcaoSorteioModal({
       if (left <= 0) {
         window.clearInterval(timer)
         void (async () => {
-          // espera resultado se ainda estiver carregando
           const started = Date.now()
           while (!cancelled && !result && !fail && Date.now() - started < 15000) {
             await new Promise((r) => setTimeout(r, 120))
           }
           if (cancelled) return
-          if (fail || !result) {
+          if (fail || !result || result.length === 0) {
             setError(fail ?? 'Não foi possível concluir o sorteio.')
             setPhase('error')
             return
           }
-          setGanhador(result)
+          setGanhadores(result)
           setPhase('reveal')
           onDone?.(result)
         })()
@@ -107,6 +121,8 @@ export function AcaoSorteioModal({
   }, [open, countdownFrom])
 
   if (!open) return null
+
+  const multi = ganhadores.length > 1
 
   return createPortal(
     <div className="waiting-overlay acao-sorteio-overlay" role="dialog" aria-modal="true">
@@ -133,18 +149,29 @@ export function AcaoSorteioModal({
           </>
         ) : null}
 
-        {phase === 'reveal' && ganhador ? (
+        {phase === 'reveal' && ganhadores.length > 0 ? (
           <>
-            <p className="acao-sorteio-eyebrow">Ganhador</p>
-            <div className="acao-sorteio-numero">{ganhador.numero}</div>
-            <strong className="acao-sorteio-nome">
-              {ganhador.nome.trim() || 'Comprador não informado'}
-            </strong>
-            <p className="acao-sorteio-fone">
-              {ganhador.telefone.trim()
-                ? ganhador.telefone
-                : 'Telefone não informado'}
+            <p className="acao-sorteio-eyebrow">
+              {multi ? 'Ganhadores' : 'Ganhador'}
             </p>
+            <div className="acao-sorteio-lista">
+              {ganhadores.map((g) => (
+                <div key={`${g.premio}-${g.numero}`} className="acao-sorteio-item">
+                  {multi ? (
+                    <p className="acao-sorteio-premio">{g.premio}º prêmio</p>
+                  ) : null}
+                  <div className="acao-sorteio-numero">{g.numero}</div>
+                  <strong className="acao-sorteio-nome">
+                    {g.nome.trim() || 'Comprador não informado'}
+                  </strong>
+                  <p className="acao-sorteio-fone">
+                    {g.telefone.trim()
+                      ? g.telefone
+                      : 'Telefone não informado'}
+                  </p>
+                </div>
+              ))}
+            </div>
             <button
               type="button"
               className="btn btn-primary"

@@ -240,7 +240,9 @@ export type AcaoEntreAmigos = {
   data_limite_venda: string | null
   imagem_url: string | null
   encerrado_em: string | null
+  quantidade_premios?: number | null
   numero_sorteado: number | null
+  numeros_sorteados?: number[] | null
   sorteado_em: string | null
   created_at: string | null
 }

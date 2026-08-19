@@ -106,37 +106,49 @@ export function podeSortearAcao(input: {
   numero_final?: number
   qtde_vendidos?: number
   numero_sorteado?: number | null
+  numeros_sorteados?: number[] | null
 }): boolean {
+  const jaSorteou =
+    input.numero_sorteado != null ||
+    (Array.isArray(input.numeros_sorteados) &&
+      input.numeros_sorteados.length > 0)
   // Já sorteou: sempre permite refazer (o RPC valida os vendidos no servidor)
-  if (input.numero_sorteado != null) return true
+  if (jaSorteou) return true
   if ((input.qtde_vendidos ?? 0) < 1) return false
   return isAcaoVendasBloqueadas(input)
+}
+
+export type SorteioGanhadorResult = {
+  premio: number
+  numero: number
+  nome: string
+  telefone: string
 }
 
 export async function executarSorteioAcao(
   acaoId: number,
   refazer = false,
-): Promise<{
-  numero: number
-  nome: string
-  telefone: string
-}> {
+): Promise<SorteioGanhadorResult[]> {
   const { data, error } = await supabase.rpc('acao_amigos_sortear', {
     p_acao_id: acaoId,
     p_refazer: refazer,
   })
-  const row = Array.isArray(data) ? data[0] : data
-  if (error || !row?.ok || row.numero_sorteado == null) {
+  const rows = Array.isArray(data) ? data : data ? [data] : []
+  if (error || rows.length === 0 || !rows[0]?.ok) {
     throw new Error(
       error?.message ??
-        String(row?.mensagem ?? 'Não foi possível realizar o sorteio.'),
+        String(rows[0]?.mensagem ?? 'Não foi possível realizar o sorteio.'),
     )
   }
-  return {
-    numero: Number(row.numero_sorteado),
-    nome: String(row.comprador_nome ?? ''),
-    telefone: String(row.comprador_telefone ?? ''),
-  }
+  return rows
+    .filter((row) => row?.ok && row.numero_sorteado != null)
+    .map((row) => ({
+      premio: Number(row.premio ?? 1),
+      numero: Number(row.numero_sorteado),
+      nome: String(row.comprador_nome ?? ''),
+      telefone: String(row.comprador_telefone ?? ''),
+    }))
+    .sort((a, b) => a.premio - b.premio)
 }
 
 /** Dinheiro / PIX direto — RPC (associado não tem INSERT direto após RLS 071). */

@@ -25,7 +25,11 @@ async function enrichComVencedores(
   empresaId: number,
   list: AcaoRow[],
 ): Promise<AcaoRow[]> {
-  const comSorteio = list.filter((r) => r.numero_sorteado != null)
+  const comSorteio = list.filter(
+    (r) =>
+      r.numero_sorteado != null ||
+      (Array.isArray(r.numeros_sorteados) && r.numeros_sorteados.length > 0),
+  )
   if (comSorteio.length === 0) return list
 
   const { data: vendas } = await supabase
@@ -48,12 +52,26 @@ async function enrichComVencedores(
   )
 
   return list.map((row) => {
-    if (row.numero_sorteado == null) return row
-    const hit = byKey.get(`${row.acao_id}:${row.numero_sorteado}`)
+    const nums = Array.isArray(row.numeros_sorteados)
+      ? row.numeros_sorteados.map(Number).filter(Number.isFinite)
+      : row.numero_sorteado != null
+        ? [Number(row.numero_sorteado)]
+        : []
+    if (nums.length === 0) return row
+    const first = byKey.get(`${row.acao_id}:${nums[0]}`)
+    const label =
+      nums.length === 1
+        ? `Nº ${nums[0]}`
+        : nums.map((n, i) => `${i + 1}º:${n}`).join(' · ')
     return {
       ...row,
-      vencedor_nome: hit?.nome ?? null,
-      vencedor_telefone: hit?.telefone ?? null,
+      numero_sorteado: nums[0],
+      numeros_sorteados: nums,
+      vencedor_nome:
+        nums.length === 1
+          ? first?.nome ?? null
+          : label,
+      vencedor_telefone: nums.length === 1 ? first?.telefone ?? null : null,
     }
   })
 }
@@ -156,7 +174,7 @@ export function AcaoEntreAmigosPage() {
         const { data, error: listError } = await supabase
           .from('acao_entre_amigos')
           .select(
-            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, encerrado_em, numero_sorteado, created_at',
+            'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, encerrado_em, quantidade_premios, numero_sorteado, numeros_sorteados, created_at',
           )
           .eq('empresa_id', empresaId)
           .in('acao_id', acaoIds)
@@ -187,7 +205,7 @@ export function AcaoEntreAmigosPage() {
       let query = supabase
         .from('acao_entre_amigos')
         .select(
-          'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, encerrado_em, numero_sorteado, created_at',
+          'acao_id, empresa_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, encerrado_em, quantidade_premios, numero_sorteado, numeros_sorteados, created_at',
         )
         .eq('empresa_id', empresaId)
         .order('created_at', { ascending: false })
@@ -435,9 +453,18 @@ export function AcaoEntreAmigosPage() {
                       <td>{limite}</td>
                       <td>{sorteio}</td>
                       <td>
-                        {row.numero_sorteado != null ? (
+                        {row.numero_sorteado != null ||
+                        (Array.isArray(row.numeros_sorteados) &&
+                          row.numeros_sorteados.length > 0) ? (
                           <div className="acao-grid-vencedor">
-                            <strong>Nº {row.numero_sorteado}</strong>
+                            <strong>
+                              {Array.isArray(row.numeros_sorteados) &&
+                              row.numeros_sorteados.length > 1
+                                ? row.numeros_sorteados
+                                    .map((n, i) => `${i + 1}º:${n}`)
+                                    .join(' · ')
+                                : `Nº ${row.numero_sorteado}`}
+                            </strong>
                             <span>{row.vencedor_nome || '—'}</span>
                             <span className="muted">
                               {row.vencedor_telefone || '—'}
