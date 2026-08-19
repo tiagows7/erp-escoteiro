@@ -93,7 +93,6 @@ export function AcaoEntreAmigosVendaPage() {
   const [saving, setSaving] = useState(false)
   const [numerosPagos, setNumerosPagos] = useState<NumeroImpressoItem[]>([])
   const [sorteioOpen, setSorteioOpen] = useState(false)
-  const [sorteioRefazer, setSorteioRefazer] = useState(false)
 
   const vendidos = useMemo(
     () => new Map(vendas.map((v) => [v.numero, v])),
@@ -564,22 +563,14 @@ export function AcaoEntreAmigosVendaPage() {
 
   async function onSortear() {
     if (!podeSortear || !acao) return
-    const jaTem =
-      acao.numero_sorteado != null ||
-      (Array.isArray(acao.numeros_sorteados) &&
-        acao.numeros_sorteados.length > 0)
     const qtd = Math.max(1, Number(acao.quantidade_premios ?? 1) || 1)
     const ok = await toast.confirm({
-      title: jaTem ? 'Sortear novamente?' : 'Realizar sorteio?',
-      message: jaTem
-        ? 'Um novo sorteio substituirá o(s) ganhador(es) atual(is).'
-        : `Será(ão) sorteado(s) ${qtd} prêmio(s) entre os números vendidos, com contagem de 10 segundos.`,
-      confirmLabel: jaTem ? 'Sortear novamente' : 'Sortear',
-      danger: jaTem,
+      title: 'Realizar sorteio?',
+      message: `Será(ão) sorteado(s) ${qtd} prêmio(s) entre os números vendidos, com contagem de 10 segundos. Esta ação não poderá ser refeita.`,
+      confirmLabel: 'Sortear',
     })
     if (!ok) return
     setError(null)
-    setSorteioRefazer(jaTem)
     setSorteioOpen(true)
   }
 
@@ -648,11 +639,7 @@ export function AcaoEntreAmigosVendaPage() {
               className="btn btn-primary"
               onClick={() => void onSortear()}
             >
-              {(Array.isArray(acao.numeros_sorteados) &&
-                acao.numeros_sorteados.length > 0) ||
-              acao.numero_sorteado != null
-                ? 'Sortear novamente'
-                : 'Sortear'}
+              Sortear
             </button>
           ) : null}
           {canStaffEdit ? (
@@ -701,17 +688,6 @@ export function AcaoEntreAmigosVendaPage() {
                   </div>
                 )
               })}
-              {canStaffEdit ? (
-                <div>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => void onSortear()}
-                  >
-                    Sortear novamente
-                  </button>
-                </div>
-              ) : null}
             </div>
           </AlertMessage>
         )
@@ -1057,9 +1033,7 @@ export function AcaoEntreAmigosVendaPage() {
       <AcaoSorteioModal
         open={sorteioOpen}
         acaoNome={acao.nome}
-        runSorteio={() =>
-          executarSorteioAcao(acao.acao_id, sorteioRefazer)
-        }
+        runSorteio={() => executarSorteioAcao(acao.acao_id)}
         onDone={() => {
           void reload()
         }}

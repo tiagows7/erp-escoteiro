@@ -98,7 +98,7 @@ export function isAcaoVendasBloqueadas(input: {
   return false
 }
 
-/** Pode sortear (primeira vez) ou refazer (já há ganhador). */
+/** Pode sortear apenas se ainda não houver ganhador(es). */
 export function podeSortearAcao(input: {
   encerrado_em?: string | null
   data_limite_venda?: string | null
@@ -112,8 +112,7 @@ export function podeSortearAcao(input: {
     input.numero_sorteado != null ||
     (Array.isArray(input.numeros_sorteados) &&
       input.numeros_sorteados.length > 0)
-  // Já sorteou: sempre permite refazer (o RPC valida os vendidos no servidor)
-  if (jaSorteou) return true
+  if (jaSorteou) return false
   if ((input.qtde_vendidos ?? 0) < 1) return false
   return isAcaoVendasBloqueadas(input)
 }
@@ -127,11 +126,10 @@ export type SorteioGanhadorResult = {
 
 export async function executarSorteioAcao(
   acaoId: number,
-  refazer = false,
 ): Promise<SorteioGanhadorResult[]> {
   const { data, error } = await supabase.rpc('acao_amigos_sortear', {
     p_acao_id: acaoId,
-    p_refazer: refazer,
+    p_refazer: false,
   })
   const rows = Array.isArray(data) ? data : data ? [data] : []
   if (error || rows.length === 0 || !rows[0]?.ok) {

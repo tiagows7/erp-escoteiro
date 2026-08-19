@@ -155,7 +155,6 @@ export function AcaoEntreAmigosFormPage() {
   const [sorteadoEm, setSorteadoEm] = useState<string | null>(null)
   const [qtdeVendidos, setQtdeVendidos] = useState(0)
   const [sorteioOpen, setSorteioOpen] = useState(false)
-  const [sorteioRefazer, setSorteioRefazer] = useState(false)
   const [ganhadores, setGanhadores] = useState<
     { premio: number; numero: number; nome: string; telefone: string }[]
   >([])
@@ -493,29 +492,20 @@ export function AcaoEntreAmigosFormPage() {
     toast.success('Vendas encerradas', 'Agora é possível realizar o sorteio.')
   }
 
-  async function onSortear(refazer = false) {
+  async function onSortear() {
     if (!canWrite || isNew || !empresaId) return
-    const jaTemGanhador =
-      numerosSorteados.length > 0 || numeroSorteado != null
-    if (jaTemGanhador && !refazer) {
-      refazer = true
-    }
+    if (numerosSorteados.length > 0 || numeroSorteado != null) return
     const qtd = Math.max(
       1,
       Number(String(form.quantidade_premios).replace(/\D/g, '')) || 1,
     )
     const ok = await toast.confirm({
-      title: refazer && jaTemGanhador ? 'Sortear novamente?' : 'Realizar sorteio?',
-      message:
-        refazer && jaTemGanhador
-          ? 'Um novo sorteio substituirá o(s) ganhador(es) atual(is).'
-          : `Será(ão) sorteado(s) ${qtd} prêmio(s) entre os números vendidos, com contagem de 10 segundos.`,
-      confirmLabel: refazer && jaTemGanhador ? 'Sortear novamente' : 'Sortear',
-      danger: refazer && jaTemGanhador,
+      title: 'Realizar sorteio?',
+      message: `Será(ão) sorteado(s) ${qtd} prêmio(s) entre os números vendidos, com contagem de 10 segundos. Esta ação não poderá ser refeita.`,
+      confirmLabel: 'Sortear',
     })
     if (!ok) return
     setError(null)
-    setSorteioRefazer(refazer && jaTemGanhador)
     setSorteioOpen(true)
   }
 
@@ -903,9 +893,9 @@ export function AcaoEntreAmigosFormPage() {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => void onSortear(jaSorteou)}
+              onClick={() => void onSortear()}
             >
-              {jaSorteou ? 'Sortear novamente' : 'Sortear'}
+              Sortear
             </button>
           ) : null}
           <Link className="btn btn-soft" to="/vendas/acao-entre-amigos">
@@ -960,17 +950,6 @@ export function AcaoEntreAmigosFormPage() {
                 <span className="muted">
                   {new Date(sorteadoEm).toLocaleString('pt-BR')}
                 </span>
-              ) : null}
-              {canWrite ? (
-                <div>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => void onSortear(true)}
-                  >
-                    Sortear novamente
-                  </button>
-                </div>
               ) : null}
             </div>
           </AlertMessage>
@@ -1523,9 +1502,7 @@ export function AcaoEntreAmigosFormPage() {
       <AcaoSorteioModal
         open={sorteioOpen}
         acaoNome={form.nome}
-        runSorteio={() =>
-          executarSorteioAcao(Number(id), sorteioRefazer)
-        }
+        runSorteio={() => executarSorteioAcao(Number(id))}
         onDone={(lista) => {
           setGanhadores(
             lista.map((g, i) => ({
