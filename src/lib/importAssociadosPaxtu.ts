@@ -50,6 +50,11 @@ function truncate(value: string | null, max: number): string | null {
   return value.length > max ? value.slice(0, max) : value
 }
 
+/** Mesma regra do dashboard: nome da categoria contém BENEFICI. */
+function categoriaEhBeneficiario(nome: string | null | undefined): boolean {
+  return (nome ?? '').toUpperCase().includes('BENEFICI')
+}
+
 function parseRegistro(raw: string): { registro: number; identificador: number | null } | null {
   const text = raw.trim()
   if (!text) return null
@@ -244,6 +249,7 @@ export async function importAssociadosFromPaxtuExcel(
     { data: secoes },
     { data: patrulhas },
     { data: cidades },
+    { data: tiposMensalidade },
   ] = await Promise.all([
     client.from('categoria').select('categoria_id, nome'),
     client.from('funcao').select('funcao_id, nome'),
@@ -254,7 +260,18 @@ export async function importAssociadosFromPaxtuExcel(
       .select('secaonome_id, nome')
       .eq('empresa_id', empresaId),
     client.from('cidade').select('codigo, nome, uf'),
+    client
+      .from('tipo_mensalidade')
+      .select('tipomensalidade_id, nome')
+      .eq('empresa_id', empresaId)
+      .order('tipomensalidade_id', { ascending: true }),
   ])
+
+  /** Se o grupo tiver tipo(s) de mensalidade, usa o primeiro cadastrado. */
+  const tipoMensalidadePadraoId =
+    Array.isArray(tiposMensalidade) && tiposMensalidade.length > 0
+      ? Number(tiposMensalidade[0].tipomensalidade_id)
+      : null
 
   const catCache: LookupCache = {
     map: new Map(
@@ -265,6 +282,12 @@ export async function importAssociadosFromPaxtuExcel(
     ),
     created: 0,
   }
+  const catNomeById = new Map<number, string>(
+    (categorias ?? []).map((c) => [
+      c.categoria_id as number,
+      String(c.nome ?? ''),
+    ]),
+  )
   const funcaoCache: LookupCache = {
     map: new Map(
       (funcoes ?? []).map((f) => [normKey(f.nome), f.funcao_id as number]),
@@ -315,7 +338,9 @@ export async function importAssociadosFromPaxtuExcel(
         .select('categoria_id')
         .single()
       if (error) throw new Error(`Categoria "${nome}": ${error.message}`)
-      return data.categoria_id as number
+      const id = data.categoria_id as number
+      catNomeById.set(id, nome)
+      return id
     })
   }
 
@@ -489,6 +514,14 @@ export async function importAssociadosFromPaxtuExcel(
       const patrulha_matilha = await resolvePatrulha(row[13], ramo, secao)
       const dataNascimento = parseDate(row[19])
 
+      const ehBeneficiario =
+        categoriaEhBeneficiario(
+          categoria != null ? catNomeById.get(categoria) : null,
+        ) ||
+        categoriaEhBeneficiario(
+          categoria2 != null ? catNomeById.get(categoria2) : null,
+        )
+
       const payload: Partial<Associado> = {
         empresa_id: empresaId,
         registro: reg.registro,
@@ -514,6 +547,10 @@ export async function importAssociadosFromPaxtuExcel(
         cpf: truncate(cellStr(row[18]) || null, 15),
         data_nascimento: dataNascimento,
         isento: false,
+        tipo_mensalidade:
+          ehBeneficiario && tipoMensalidadePadraoId != null
+            ? tipoMensalidadePadraoId
+            : null,
         // V = validade; W não usada; X–AB = responsável
         validade_registro: parseDate(row[21]),
         responsavel_nome: displayName(row[23], 100),
