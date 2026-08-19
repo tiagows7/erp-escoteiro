@@ -5,6 +5,10 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import {
+  formDraftKey,
+  usePersistedFormState,
+} from '@/hooks/usePersistedFormState'
+import {
   ReceitaReciboPrint,
   type ReceitaReciboData,
 } from '@/components/ReceitaReciboPrint'
@@ -102,11 +106,17 @@ export function ReceitaFormPage() {
   const lockedByVinculo =
     lockedByProjeto || lockedByEvento || lockedByAcao || lockedByAtividade
 
-  const [form, setForm] = useState({
-    ...emptyForm,
-    receita_emissao: todayISO(),
-    receita_vencimento: todayISO(),
-  })
+  const draftKey = formDraftKey(
+    empresaId,
+    `receita${searchParams.toString() ? `?${searchParams.toString()}` : ''}`,
+    id,
+  )
+  const [form, setForm, { hydrateFromServer, clearDraft, restored }] =
+    usePersistedFormState(draftKey, {
+      ...emptyForm,
+      receita_emissao: todayISO(),
+      receita_vencimento: todayISO(),
+    })
   const [origem, setOrigem] = useState<string>(RECEITA_ORIGEM.AVULSA)
   const [saldo, setSaldo] = useState<number | null>(null)
   const [situacao, setSituacao] = useState<number | null>(null)
@@ -518,7 +528,7 @@ export function ReceitaFormPage() {
       const valorNum = Number(data.receita_valor ?? 0)
       const saldoNum = Number(data.receita_saldo ?? 0)
 
-      setForm({
+      hydrateFromServer({
         receita_descricao: data.receita_descricao ?? '',
         associado_id: data.associado_id?.toString() ?? '',
         receita_ramo: data.receita_ramo?.toString() ?? '',
@@ -767,6 +777,7 @@ export function ReceitaFormPage() {
     }
 
     setSaving(false)
+    clearDraft()
     navigate('/receitas/inclusao', {
       state: { flashSuccess: 'Salvo com sucesso!' },
     })
@@ -805,6 +816,7 @@ export function ReceitaFormPage() {
       return
     }
 
+    clearDraft()
     navigate('/receitas/inclusao', {
       state: { flashSuccess: 'Excluído com sucesso!' },
     })
@@ -869,6 +881,11 @@ export function ReceitaFormPage() {
         {error ? (
           <AlertMessage tone="error" title="Atenção">
             {error}
+          </AlertMessage>
+        ) : null}
+        {restored ? (
+          <AlertMessage tone="info" title="Rascunho restaurado">
+            Continuamos de onde você parou nesta aba.
           </AlertMessage>
         ) : null}
 

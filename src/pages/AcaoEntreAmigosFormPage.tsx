@@ -10,6 +10,10 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import {
+  formDraftKey,
+  usePersistedFormState,
+} from '@/hooks/usePersistedFormState'
 import { AcaoSorteioModal } from '@/components/AcaoSorteioModal'
 import { DocumentosLinks } from '@/components/DocumentosLinks'
 import {
@@ -119,7 +123,9 @@ export function AcaoEntreAmigosFormPage() {
   const ramoScoped = useMemo(() => staffRamoScope(profile), [profile])
   const toast = useToast()
 
-  const [form, setForm] = useState(emptyForm)
+  const draftKey = formDraftKey(empresaId, 'acao', id)
+  const [form, setForm, { hydrateFromServer, clearDraft, restored }] =
+    usePersistedFormState(draftKey, emptyForm)
   const [ramos, setRamos] = useState<Ramo[]>([])
   const [secoes, setSecoes] = useState<Secao[]>([])
   const [patrulhas, setPatrulhas] = useState<Patrulha[]>([])
@@ -303,7 +309,7 @@ export function AcaoEntreAmigosFormPage() {
         return
       }
 
-      setForm({
+      hydrateFromServer({
         ramo: data.ramo?.toString() ?? '',
         secao: data.secao?.toString() ?? '',
         patrulha_matilha: data.patrulha_matilha?.toString() ?? '',
@@ -586,6 +592,7 @@ export function AcaoEntreAmigosFormPage() {
         setSaving(false)
         setError(`Ação salva, mas a imagem falhou: ${imgOk.error}`)
         if (isNew) {
+          clearDraft()
           navigate(`/vendas/acao-entre-amigos/${acaoIdSalva}`, {
             state: {
               flashSuccess:
@@ -603,6 +610,7 @@ export function AcaoEntreAmigosFormPage() {
     setSaving(false)
 
     if (isNew && acaoIdSalva > 0) {
+      clearDraft()
       navigate(`/vendas/acao-entre-amigos/${acaoIdSalva}`, {
         state: {
           flashSuccess:
@@ -725,6 +733,7 @@ export function AcaoEntreAmigosFormPage() {
       return
     }
 
+    clearDraft()
     navigate('/vendas/acao-entre-amigos', {
       state: { flashSuccess: 'Ação excluída com sucesso!' },
     })
@@ -871,6 +880,11 @@ export function AcaoEntreAmigosFormPage() {
         {error ? (
           <AlertMessage tone="error" title="Atenção">
             {error}
+          </AlertMessage>
+        ) : null}
+        {restored ? (
+          <AlertMessage tone="info" title="Rascunho restaurado">
+            Continuamos de onde você parou nesta aba.
           </AlertMessage>
         ) : null}
         {numeroSorteado != null ? (

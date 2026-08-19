@@ -4,6 +4,10 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import {
+  formDraftKey,
+  usePersistedFormState,
+} from '@/hooks/usePersistedFormState'
 import { StaffAtividadesPanel } from '@/components/StaffAtividadesPanel'
 import { formatMoney, parseMoneyInput } from '@/lib/despesas'
 import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
@@ -64,10 +68,12 @@ export function AtividadeFormPage() {
     }
   }, [associadoLogin, isNew, navigate])
 
-  const [form, setForm] = useState(() => ({
-    ...emptyForm,
-    data_atividade: dataFromQuery,
-  }))
+  const draftKey = formDraftKey(empresaId, 'atividade', id)
+  const [form, setForm, { hydrateFromServer, clearDraft, restored }] =
+    usePersistedFormState(draftKey, {
+      ...emptyForm,
+      data_atividade: dataFromQuery,
+    })
   const [ramos, setRamos] = useState<Ramo[]>([])
   const [secoes, setSecoes] = useState<Secao[]>([])
   const [patrulhas, setPatrulhas] = useState<Patrulha[]>([])
@@ -156,7 +162,7 @@ export function AtividadeFormPage() {
         return
       }
 
-      setForm({
+      hydrateFromServer({
         ramo: data.ramo?.toString() ?? '',
         secao: data.secao?.toString() ?? '',
         patrulha_matilha: data.patrulha_matilha?.toString() ?? '',
@@ -254,6 +260,7 @@ export function AtividadeFormPage() {
       return
     }
 
+    clearDraft()
     navigate('/atividades', {
       state: {
         flash: isNew ? 'Atividade criada.' : 'Atividade atualizada.',
@@ -282,6 +289,7 @@ export function AtividadeFormPage() {
       return
     }
 
+    clearDraft()
     navigate('/atividades', {
       state: { flash: 'Atividade excluída.' },
     })
@@ -355,6 +363,11 @@ export function AtividadeFormPage() {
       {error ? (
         <AlertMessage tone="error" title="Não foi possível salvar">
           {error}
+        </AlertMessage>
+      ) : null}
+      {restored ? (
+        <AlertMessage tone="info" title="Rascunho restaurado">
+          Continuamos de onde você parou nesta aba.
         </AlertMessage>
       ) : null}
 

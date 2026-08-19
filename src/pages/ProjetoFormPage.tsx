@@ -4,6 +4,10 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import {
+  formDraftKey,
+  usePersistedFormState,
+} from '@/hooks/usePersistedFormState'
 import { formatMoney, parseMoneyInput, situacaoDespesaLabel } from '@/lib/despesas'
 import { DocumentosLinks } from '@/components/DocumentosLinks'
 import { isEncerrado } from '@/lib/encerrado'
@@ -75,7 +79,9 @@ export function ProjetoFormPage() {
   const ramoScoped = useMemo(() => staffRamoScope(profile), [profile])
   const toast = useToast()
 
-  const [form, setForm] = useState(emptyForm)
+  const draftKey = formDraftKey(empresaId, 'projeto', id)
+  const [form, setForm, { hydrateFromServer, clearDraft, restored }] =
+    usePersistedFormState(draftKey, emptyForm)
   const [projeto, setProjeto] = useState<Projeto | null>(null)
   const [ramos, setRamos] = useState<Ramo[]>([])
   const [secoes, setSecoes] = useState<Secao[]>([])
@@ -187,7 +193,7 @@ export function ProjetoFormPage() {
       }
 
       setProjeto(proj)
-      setForm({
+      hydrateFromServer({
         ramo: proj.ramo?.toString() ?? '',
         secao: proj.secao?.toString() ?? '',
         descricao: proj.descricao ?? '',
@@ -349,6 +355,7 @@ export function ProjetoFormPage() {
       return
     }
 
+    clearDraft()
     navigate('/projetos', {
       state: { flashSuccess: 'Salvo com sucesso!' },
     })
@@ -379,6 +386,7 @@ export function ProjetoFormPage() {
       return
     }
 
+    clearDraft()
     navigate('/projetos', {
       state: { flashSuccess: 'Projeto excluído com sucesso!' },
     })
@@ -654,6 +662,11 @@ export function ProjetoFormPage() {
         {error ? (
           <AlertMessage tone="error" title="Atenção">
             {error}
+          </AlertMessage>
+        ) : null}
+        {restored ? (
+          <AlertMessage tone="info" title="Rascunho restaurado">
+            Continuamos de onde você parou nesta aba.
           </AlertMessage>
         ) : null}
         {encerrado ? (

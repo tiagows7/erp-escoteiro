@@ -11,6 +11,10 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import {
+  formDraftKey,
+  usePersistedFormState,
+} from '@/hooks/usePersistedFormState'
+import {
   formatMoney,
   parseMoneyInput,
   situacaoDespesaLabel,
@@ -109,7 +113,9 @@ export function VendaEventoFormPage() {
   const ramoScoped = useMemo(() => staffRamoScope(profile), [profile])
   const toast = useToast()
 
-  const [form, setForm] = useState(emptyForm)
+  const draftKey = formDraftKey(empresaId, 'evento', id)
+  const [form, setForm, { hydrateFromServer, clearDraft, restored }] =
+    usePersistedFormState(draftKey, emptyForm)
   const [tiposForm, setTiposForm] = useState<TipoFormRow[]>(defaultTiposForm)
   const [ramos, setRamos] = useState<Ramo[]>([])
   const [secoes, setSecoes] = useState<Secao[]>([])
@@ -198,7 +204,7 @@ export function VendaEventoFormPage() {
         return
       }
 
-      setForm({
+      hydrateFromServer({
         ramo: data.ramo?.toString() ?? '',
         secao: data.secao?.toString() ?? '',
         patrulha_matilha: data.patrulha_matilha?.toString() ?? '',
@@ -526,6 +532,7 @@ export function VendaEventoFormPage() {
         setSaving(false)
         setError(`Evento salvo, mas a imagem falhou: ${imgOk.error}`)
         if (isNew) {
+          clearDraft()
           navigate(`/vendas/eventos/${eventoIdSalvo}`, {
             state: {
               flashSuccess: 'Evento salvo. Ajuste a imagem se precisar.',
@@ -542,6 +549,7 @@ export function VendaEventoFormPage() {
     setSaving(false)
 
     if (isNew && eventoIdSalvo > 0) {
+      clearDraft()
       navigate(`/vendas/eventos/${eventoIdSalvo}/vender`, {
         state: { flashSuccess: 'Evento salvo! Já pode vender convites.' },
       })
@@ -575,6 +583,7 @@ export function VendaEventoFormPage() {
       setError(delError.message)
       return
     }
+    clearDraft()
     navigate('/vendas/eventos', {
       state: { flashSuccess: 'Evento excluído.' },
     })
@@ -661,6 +670,11 @@ export function VendaEventoFormPage() {
         {error ? (
           <AlertMessage tone="error" title="Atenção">
             {error}
+          </AlertMessage>
+        ) : null}
+        {restored ? (
+          <AlertMessage tone="info" title="Rascunho restaurado">
+            Continuamos de onde você parou nesta aba.
           </AlertMessage>
         ) : null}
         {encerrado ? (

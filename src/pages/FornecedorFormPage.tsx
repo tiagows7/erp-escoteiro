@@ -4,6 +4,10 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import {
+  formDraftKey,
+  usePersistedFormState,
+} from '@/hooks/usePersistedFormState'
 import { loadCidades, loadEstados } from '@/lib/brasilLocalidades'
 
 type Lookup = { id: number; nome: string }
@@ -45,7 +49,9 @@ export function FornecedorFormPage() {
   const empresaId = empresa?.id
   const toast = useToast()
 
-  const [form, setForm] = useState(emptyForm)
+  const draftKey = formDraftKey(empresaId, 'fornecedor', id)
+  const [form, setForm, { hydrateFromServer, clearDraft, restored }] =
+    usePersistedFormState(draftKey, emptyForm)
   const [estados, setEstados] = useState<{ codigo: string; nome: string }[]>(
     [],
   )
@@ -93,7 +99,7 @@ export function FornecedorFormPage() {
         return
       }
 
-      setForm({
+      hydrateFromServer({
         fordespesa_nome: data.fordespesa_nome ?? '',
         fordespesa_cnpj: data.fordespesa_cnpj ?? '',
         fordespesa_tipo: data.fordespesa_tipo ?? 'J',
@@ -190,6 +196,7 @@ export function FornecedorFormPage() {
       }
     }
 
+    clearDraft()
     navigate('/cadastros/fornecedores', {
       state: { flashSuccess: 'Salvo com sucesso!' },
     })
@@ -221,6 +228,7 @@ export function FornecedorFormPage() {
       return
     }
 
+    clearDraft()
     navigate('/cadastros/fornecedores', {
       state: { flashSuccess: 'Excluído com sucesso!' },
     })
@@ -260,6 +268,11 @@ export function FornecedorFormPage() {
         {error ? (
           <AlertMessage tone="error" title="Atenção">
             {error}
+          </AlertMessage>
+        ) : null}
+        {restored ? (
+          <AlertMessage tone="info" title="Rascunho restaurado">
+            Continuamos de onde você parou nesta aba.
           </AlertMessage>
         ) : null}
 

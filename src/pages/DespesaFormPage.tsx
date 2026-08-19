@@ -5,6 +5,10 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import {
+  formDraftKey,
+  usePersistedFormState,
+} from '@/hooks/usePersistedFormState'
+import {
   DESPESA_SITUACAO,
   formatMoney,
   situacaoDespesaLabel,
@@ -96,11 +100,17 @@ export function DespesaFormPage() {
   const lockedByVinculo =
     lockedByProjeto || lockedByEvento || lockedByAcao || lockedByAtividade
 
-  const [form, setForm] = useState({
-    ...emptyForm,
-    despesa_emissao: todayISO(),
-    despesa_vencimento: todayISO(),
-  })
+  const draftKey = formDraftKey(
+    empresaId,
+    `despesa${searchParams.toString() ? `?${searchParams.toString()}` : ''}`,
+    id,
+  )
+  const [form, setForm, { hydrateFromServer, clearDraft, restored }] =
+    usePersistedFormState(draftKey, {
+      ...emptyForm,
+      despesa_emissao: todayISO(),
+      despesa_vencimento: todayISO(),
+    })
   const [saldo, setSaldo] = useState<number | null>(null)
   const [situacao, setSituacao] = useState<number | null>(null)
   const [paidAmount, setPaidAmount] = useState(0)
@@ -527,7 +537,7 @@ export function DespesaFormPage() {
       const valorNum = Number(data.despesa_valor ?? 0)
       const saldoNum = Number(data.despesa_saldo ?? 0)
 
-      setForm({
+      hydrateFromServer({
         despesa_fornecedor: data.despesa_fornecedor?.toString() ?? '',
         despesa_ramo: data.despesa_ramo?.toString() ?? '',
         despesa_secao: data.despesa_secao?.toString() ?? '',
@@ -695,6 +705,7 @@ export function DespesaFormPage() {
     }
 
     setSaving(false)
+    clearDraft()
     navigate('/despesas/inclusao', {
       state: { flashSuccess: 'Salvo com sucesso!' },
     })
@@ -733,6 +744,7 @@ export function DespesaFormPage() {
       return
     }
 
+    clearDraft()
     navigate('/despesas/inclusao', {
       state: { flashSuccess: 'Excluído com sucesso!' },
     })
@@ -780,6 +792,11 @@ export function DespesaFormPage() {
         {error ? (
           <AlertMessage tone="error" title="Atenção">
             {error}
+          </AlertMessage>
+        ) : null}
+        {restored ? (
+          <AlertMessage tone="info" title="Rascunho restaurado">
+            Continuamos de onde você parou nesta aba.
           </AlertMessage>
         ) : null}
 

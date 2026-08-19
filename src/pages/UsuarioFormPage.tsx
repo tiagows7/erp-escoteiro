@@ -5,6 +5,10 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import {
+  formDraftKey,
+  usePersistedFormState,
+} from '@/hooks/usePersistedFormState'
+import {
   createUsuario,
   excluirUsuario,
   updateUsuarioSenha,
@@ -72,7 +76,9 @@ export function UsuarioFormPage() {
   const empresaId = empresa?.id
   const toast = useToast()
 
-  const [form, setForm] = useState(emptyForm)
+  const draftKey = formDraftKey(empresaId, 'usuario', id)
+  const [form, setForm, { hydrateFromServer, clearDraft, restored }] =
+    usePersistedFormState(draftKey, emptyForm)
   const [ramos, setRamos] = useState<Ramo[]>([])
   const [secoes, setSecoes] = useState<Lookup[]>([])
   const [showPassword, setShowPassword] = useState(false)
@@ -133,7 +139,7 @@ export function UsuarioFormPage() {
       const role = normalizeRole(data.role as string)
       const savedMenus = normalizeMenuKeys(data.menu_keys)
 
-      setForm({
+      hydrateFromServer({
         nome: data.nome ?? '',
         email: emailReal,
         registro: data.registro ?? '',
@@ -235,6 +241,7 @@ export function UsuarioFormPage() {
         return
       }
 
+      clearDraft()
       navigate('/cadastros/usuarios', {
         state: { flashSuccess: 'Salvo com sucesso!' },
       })
@@ -292,6 +299,7 @@ export function UsuarioFormPage() {
     }
 
     setSaving(false)
+    clearDraft()
     navigate('/cadastros/usuarios', {
       state: { flashSuccess: 'Salvo com sucesso!' },
     })
@@ -366,6 +374,7 @@ export function UsuarioFormPage() {
       return
     }
 
+    clearDraft()
     navigate('/cadastros/usuarios', {
       state: { flashSuccess: 'Usuário excluído com sucesso!' },
     })
@@ -445,6 +454,11 @@ export function UsuarioFormPage() {
         {error ? (
           <AlertMessage tone="error" title="Atenção">
             {error}
+          </AlertMessage>
+        ) : null}
+        {restored ? (
+          <AlertMessage tone="info" title="Rascunho restaurado">
+            Continuamos de onde você parou nesta aba.
           </AlertMessage>
         ) : null}
 

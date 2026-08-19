@@ -4,6 +4,10 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import {
+  formDraftKey,
+  usePersistedFormState,
+} from '@/hooks/usePersistedFormState'
 import { loadCidades, loadEstados } from '@/lib/brasilLocalidades'
 import {
   formatLgpdAceite,
@@ -86,7 +90,9 @@ export function AssociadoFormPage() {
   const toast = useToast()
 
   const [tab, setTab] = useState<TabId>('geral')
-  const [form, setForm] = useState(emptyForm)
+  const draftKey = formDraftKey(empresaId, 'associado', id)
+  const [form, setForm, { hydrateFromServer, clearDraft, restored }] =
+    usePersistedFormState(draftKey, emptyForm)
   const [ramos, setRamos] = useState<Ramo[]>([])
   const [secoes, setSecoes] = useState<Lookup[]>([])
   const [patrulhas, setPatrulhas] = useState<Lookup[]>([])
@@ -213,7 +219,7 @@ export function AssociadoFormPage() {
         return
       }
 
-      setForm({
+      hydrateFromServer({
         registro: data.registro?.toString() ?? '',
         registro_identificador: data.registro_identificador?.toString() ?? '',
         nome: data.nome ?? '',
@@ -413,6 +419,7 @@ export function AssociadoFormPage() {
     }
 
     setSaving(false)
+    clearDraft()
     navigate('/associados', {
       state: { flashSuccess: 'Salvo com sucesso!' },
     })
@@ -445,6 +452,7 @@ export function AssociadoFormPage() {
       return
     }
 
+    clearDraft()
     navigate('/associados', {
       state: { flashSuccess: 'Associado excluído com sucesso!' },
     })
@@ -484,6 +492,11 @@ export function AssociadoFormPage() {
         {error ? (
           <AlertMessage tone="error" title="Não foi possível salvar">
             {error}
+          </AlertMessage>
+        ) : null}
+        {restored ? (
+          <AlertMessage tone="info" title="Rascunho restaurado">
+            Continuamos de onde você parou nesta aba.
           </AlertMessage>
         ) : null}
 

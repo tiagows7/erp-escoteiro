@@ -4,6 +4,10 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import {
+  formDraftKey,
+  usePersistedFormState,
+} from '@/hooks/usePersistedFormState'
 import { parseMoneyInput } from '@/lib/despesas'
 import { formatQty } from '@/lib/estoque'
 import {
@@ -38,7 +42,9 @@ export function ProdutoFormPage() {
   const empresaId = empresa?.id
   const toast = useToast()
 
-  const [form, setForm] = useState(emptyForm)
+  const draftKey = formDraftKey(empresaId, 'produto', id)
+  const [form, setForm, { hydrateFromServer, clearDraft, restored }] =
+    usePersistedFormState(draftKey, emptyForm)
   const [estoqueAtual, setEstoqueAtual] = useState(0)
   const [grupos, setGrupos] = useState<GrupoOpt[]>([])
   const [imagemUrl, setImagemUrl] = useState<string | null>(null)
@@ -83,7 +89,7 @@ export function ProdutoFormPage() {
         return
       }
 
-      setForm({
+      hydrateFromServer({
         descricao: data.nome ?? '',
         grupo: data.grupo != null ? String(data.grupo) : '',
         controla_estoque: data.controla_estoque !== false,
@@ -183,6 +189,7 @@ export function ProdutoFormPage() {
         setSaving(false)
         setError(`Produto salvo, mas a foto falhou: ${imgOk.error}`)
         if (isNew) {
+          clearDraft()
           navigate(`/estoque/produtos/${produtoIdSalvo}`, {
             state: {
               flashSuccess: 'Produto salvo. Ajuste a foto se precisar.',
@@ -214,6 +221,7 @@ export function ProdutoFormPage() {
     }
 
     setSaving(false)
+    clearDraft()
     navigate('/estoque/produtos', {
       state: { flashSuccess: 'Salvo com sucesso!' },
     })
@@ -245,6 +253,7 @@ export function ProdutoFormPage() {
       return
     }
 
+    clearDraft()
     navigate('/estoque/produtos', {
       state: { flashSuccess: 'Produto excluído com sucesso!' },
     })
@@ -284,6 +293,11 @@ export function ProdutoFormPage() {
         {error ? (
           <AlertMessage tone="error" title="Atenção">
             {error}
+          </AlertMessage>
+        ) : null}
+        {restored ? (
+          <AlertMessage tone="info" title="Rascunho restaurado">
+            Continuamos de onde você parou nesta aba.
           </AlertMessage>
         ) : null}
 

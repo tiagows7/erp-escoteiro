@@ -10,6 +10,10 @@ import {
 import { uploadGrupoLogo } from '@/lib/uploadGrupoLogo'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import {
+  formDraftKey,
+  usePersistedFormState,
+} from '@/hooks/usePersistedFormState'
 import { ContaBancariaModal } from '@/components/ContaBancariaModal'
 import {
   SaldoLocalModal,
@@ -77,7 +81,10 @@ export function GrupoFormPage() {
   const toast = useToast()
   const backTo = canManagePlatform ? '/grupos' : '/'
 
-  const [form, setForm] = useState(emptyForm)
+  const draftEmpresaId = isNew ? empresa?.id : Number(id)
+  const draftKey = formDraftKey(draftEmpresaId, 'grupo', id)
+  const [form, setForm, { hydrateFromServer, clearDraft, restored }] =
+    usePersistedFormState(draftKey, emptyForm)
   const [ramos, setRamos] = useState<Ramo[]>([])
   const [planosPlataforma, setPlanosPlataforma] = useState<
     { plano_id: number; nome: string; valor: number }[]
@@ -193,7 +200,7 @@ export function GrupoFormPage() {
       }
 
       const data = empresaRes.data
-      setForm({
+      hydrateFromServer({
         ...emptyForm,
         nome: data.nome ?? '',
         slug: data.slug ?? '',
@@ -381,6 +388,7 @@ export function GrupoFormPage() {
               : ''
         }
 
+        clearDraft()
         navigate('/grupos', {
           state: {
             flashSuccess: `Salvo com sucesso! Admin: ${result.admin?.email}.${logoMsg}`,
@@ -430,6 +438,7 @@ export function GrupoFormPage() {
       }
 
       if (canManagePlatform) {
+        clearDraft()
         navigate('/grupos', {
           state: { flashSuccess: 'Salvo com sucesso!' },
         })
@@ -507,6 +516,7 @@ export function GrupoFormPage() {
       return
     }
 
+    clearDraft()
     navigate('/grupos', {
       state: { flashSuccess: 'Grupo excluído com sucesso!' },
     })
@@ -654,6 +664,11 @@ export function GrupoFormPage() {
         {error ? (
           <AlertMessage tone="error" title="Atenção">
             {error}
+          </AlertMessage>
+        ) : null}
+        {restored ? (
+          <AlertMessage tone="info" title="Rascunho restaurado">
+            Continuamos de onde você parou nesta aba.
           </AlertMessage>
         ) : null}
 
