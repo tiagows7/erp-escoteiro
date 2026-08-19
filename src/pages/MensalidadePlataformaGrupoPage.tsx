@@ -63,18 +63,19 @@ export function MensalidadePlataformaGrupoPage() {
     void getPixEfiConfigured().then((r) => setEfiOk(r.configured))
   }, [empresa?.id])
 
-  if (isSuperAdmin) {
+  if (isSuperAdmin && !empresa?.id) {
     return (
       <section className="panel">
         <p className="muted">
-          Super admin gerencia cobranças em{' '}
+          Selecione um grupo em contexto no menu para ver a mensalidade do
+          sistema, ou gerencie todas as cobranças em{' '}
           <Link to="/plataforma/cobrancas">Mensalidade plataforma</Link>.
         </p>
       </section>
     )
   }
 
-  const blocked = plataformaAcesso.nivel === 'bloqueado'
+  const blocked = !isSuperAdmin && plataformaAcesso.nivel === 'bloqueado'
   const isento = empresa?.plataforma_isento === true
   const semPlano = empresa?.plataforma_plano_id == null
 
@@ -82,12 +83,17 @@ export function MensalidadePlataformaGrupoPage() {
     <>
       <header className="page-header">
         <div>
-          <h2>Mensalidade da plataforma</h2>
+          <h2>Mensalidade do sistema</h2>
           <p>
             Cobrança do uso do sistema ERP Escoteiro para o grupo
             {empresa?.nome ? ` ${empresa.nome}` : ''}.
           </p>
         </div>
+        {isSuperAdmin ? (
+          <Link className="btn btn-soft" to="/plataforma/cobrancas">
+            Todas as cobranças
+          </Link>
+        ) : null}
       </header>
 
       {blocked ? (

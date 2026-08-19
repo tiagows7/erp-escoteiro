@@ -437,9 +437,9 @@ export function navItemsForProfile(
       return profile?.role === 'super_admin'
     }
     if (item.to === '/grupos/meu') return profile?.role === 'admin'
-    // Super admin usa o menu "Mensalidade plataforma"; grupos usam a tela própria.
+    // Só o super admin vê "Mensalidade do sistema" (com grupo em contexto).
     if (item.to === '/mensalidade-plataforma') {
-      return profile?.role !== 'super_admin'
+      return profile?.role === 'super_admin'
     }
     // Só login por e-mail (equipe); associados (registro) não veem.
     if (item.to === '/sugestoes-melhoria') {
