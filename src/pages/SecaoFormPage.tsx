@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
+import { clearSecaoRefsAndPatrulhas } from '@/lib/estruturaDelete'
 import type { Ramo } from '@/types/database'
 
 const emptyForm = {
@@ -134,23 +135,27 @@ export function SecaoFormPage() {
     if (!canWrite || !empresaId || isNew) return
     const ok = await toast.confirm({
       title: 'Excluir seção?',
-      message: `Tem certeza que deseja excluir "${form.nome}"?`,
+      message:
+        `Tem certeza que deseja excluir "${form.nome}"?\n\n` +
+        'Associados e demais cadastros vinculados serão desvinculados (seção/patrulha ficam em branco). ' +
+        'Patrulhas/matilhas desta seção também serão excluídas.',
       confirmLabel: 'Sim, excluir',
       cancelLabel: 'Não',
       danger: true,
     })
     if (!ok) return
 
-    const { count: patrulhas } = await supabase
-      .from('secao_nome')
-      .select('secaonome_id', { count: 'exact', head: true })
-      .eq('secao', Number(id))
-      .eq('empresa_id', empresaId)
+    setSaving(true)
+    setError(null)
 
-    if ((patrulhas ?? 0) > 0) {
-      setError(
-        `Não é possível excluir: existem ${patrulhas} patrulha(s)/matilha(s) nesta seção.`,
-      )
+    const cleared = await clearSecaoRefsAndPatrulhas(
+      supabase,
+      empresaId,
+      Number(id),
+    )
+    if (cleared.error) {
+      setSaving(false)
+      setError(cleared.error)
       return
     }
 
@@ -159,6 +164,8 @@ export function SecaoFormPage() {
       .delete()
       .eq('secao_id', Number(id))
       .eq('empresa_id', empresaId)
+
+    setSaving(false)
 
     if (delError) {
       setError(delError.message)

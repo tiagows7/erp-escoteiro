@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
+import { clearPatrulhaMatilhaRefs } from '@/lib/estruturaDelete'
 import type { Ramo } from '@/types/database'
 
 type Secao = {
@@ -173,18 +174,34 @@ export function PatrulhaFormPage() {
     if (!canWrite || !empresaId || isNew) return
     const ok = await toast.confirm({
       title: 'Excluir patrulha?',
-      message: `Tem certeza que deseja excluir "${form.nome}"?`,
+      message:
+        `Tem certeza que deseja excluir "${form.nome}"?\n\n` +
+        'Associados e demais cadastros vinculados a esta patrulha/matilha serão desvinculados.',
       confirmLabel: 'Sim, excluir',
       cancelLabel: 'Não',
       danger: true,
     })
     if (!ok) return
 
+    setSaving(true)
+    setError(null)
+
+    const cleared = await clearPatrulhaMatilhaRefs(supabase, empresaId, [
+      Number(id),
+    ])
+    if (cleared.error) {
+      setSaving(false)
+      setError(cleared.error)
+      return
+    }
+
     const { error: delError } = await supabase
       .from('secao_nome')
       .delete()
       .eq('secaonome_id', Number(id))
       .eq('empresa_id', empresaId)
+
+    setSaving(false)
 
     if (delError) {
       setError(delError.message)
