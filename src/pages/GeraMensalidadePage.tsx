@@ -551,7 +551,13 @@ export function GeraMensalidadePage() {
                         )}
                       </td>
                       <td>
-                        <div className="table-row-actions">
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: '0.35rem',
+                          }}
+                        >
                           {!row.already ? (
                             <button
                               type="button"
