@@ -112,6 +112,7 @@ export function AppLayout() {
   }, [profile])
 
   const items = useMemo(() => {
+    const menuKeys = profileUsesMenuKeys(profile) ? profile?.menu_keys : null
     const filtered = allItems.filter((item) => {
       if (item.type === 'link') {
         if (
@@ -121,13 +122,42 @@ export function AppLayout() {
         ) {
           return false
         }
-        return !item.permission || hasPermission(item.permission)
+        if (!item.permission) return true
+        if (hasPermission(item.permission)) return true
+        // Menu marcado no cadastro: libera visualização mesmo se o papel base não tiver.
+        return menuKeys != null && menuKeys.includes(item.to)
       }
-      if (item.anyOf && !item.anyOf.some((p) => hasPermission(p))) {
-        return false
+      if (item.anyOf && item.anyOf.some((p) => hasPermission(p))) {
+        return groupHasVisibleChild(item, hasPermission) ||
+          (menuKeys != null &&
+            item.children.some((c) => menuKeys.includes(c.to)))
+      }
+      // Grupo sem anyOf liberado pelo papel: ainda mostra filhos marcados em menu_keys.
+      if (menuKeys != null) {
+        const children = item.children.filter(
+          (child) =>
+            (!child.permission ||
+              hasPermission(child.permission) ||
+              menuKeys.includes(child.to)),
+        )
+        return children.length > 0
       }
       return groupHasVisibleChild(item, hasPermission)
     })
+
+    // Quando menu_keys liberou filhos sem permissão do papel, reescreve o grupo.
+    const withGrantedChildren = filtered.map((item) => {
+      if (item.type !== 'group' || menuKeys == null) return item
+      const children = item.children.filter(
+        (child) =>
+          !child.permission ||
+          hasPermission(child.permission) ||
+          menuKeys.includes(child.to),
+      )
+      return { ...item, children }
+    })
+
+    const next = [...withGrantedChildren]
 
     // Associado com faixa: garante o item no menu mesmo sem menu_keys.
     if (
@@ -135,12 +165,12 @@ export function AppLayout() {
       !acaoMenuLoading &&
       temAcao &&
       hasPermission('vendas.view') &&
-      !filtered.some(
+      !next.some(
         (item) =>
           item.type === 'link' && item.to === '/vendas/acao-entre-amigos',
       )
     ) {
-      filtered.push({
+      next.push({
         type: 'link',
         to: '/vendas/acao-entre-amigos',
         label: 'Ação entre amigos',
@@ -150,14 +180,14 @@ export function AppLayout() {
 
     // Associado: Eventos sempre no portal. Equipe: só se marcado em menu_keys.
     if (isAssociadoLogin(profile) && hasPermission('vendas.view')) {
-      const hasEventosLink = filtered.some(
+      const hasEventosLink = next.some(
         (item) =>
           (item.type === 'link' && item.to === '/vendas/eventos') ||
           (item.type === 'group' &&
             item.children.some((c) => c.to === '/vendas/eventos')),
       )
       if (!hasEventosLink) {
-        filtered.push({
+        next.push({
           type: 'link',
           to: '/vendas/eventos',
           label: 'Comprar convites',
@@ -170,10 +200,10 @@ export function AppLayout() {
     const ordemTopo = ['/dashboard', '/calendario'] as const
     const topo = ordemTopo
       .map((to) =>
-        filtered.find((item) => item.type === 'link' && item.to === to),
+        next.find((item) => item.type === 'link' && item.to === to),
       )
-      .filter((item): item is (typeof filtered)[number] => item != null)
-    const resto = filtered.filter(
+      .filter((item): item is (typeof next)[number] => item != null)
+    const resto = next.filter(
       (item) =>
         !(
           item.type === 'link' &&

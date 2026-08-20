@@ -44,13 +44,20 @@ export function RequirePermission({
     return <Navigate to="/dashboard" replace />
   }
 
-  const allowed = permission
+  const allowedByRole = permission
     ? hasPermission(permission)
     : anyOf
       ? hasAnyPermission(anyOf)
       : true
 
-  if (!allowed) {
+  // Menus marcados no cadastro liberam a rota mesmo sem a permissão base do papel.
+  const allowedByMenu =
+    profileUsesMenuKeys(profile) &&
+    pathAllowedByMenuKeys(location.pathname, profile?.menu_keys, {
+      associadoLogin: isAssociadoLogin(profile),
+    })
+
+  if (!allowedByRole && !allowedByMenu) {
     return <Navigate to="/dashboard" replace />
   }
 
@@ -65,8 +72,8 @@ export function RequirePermission({
       profile?.menu_keys,
       { associadoLogin: isAssociadoLogin(profile) },
     )
-    // Associado: Projetos sempre; ação só se tiver faixa.
-    // Equipe: sem bypass de Cadastros/Eventos — vale o que foi marcado.
+    // Associado: Projetos/calendário/eventos/loja sempre; ação só se tiver faixa.
+    // Equipe: vale o que foi marcado no cadastro.
     const menuBypass =
       pathMatchesMenuKey(location.pathname, '/dashboard') ||
       (isAssociadoLogin(profile) &&

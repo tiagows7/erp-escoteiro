@@ -79,7 +79,7 @@ export function menuAccessCatalog(): MenuAccessOption[] {
   return options
 }
 
-/** Opções de menu permitidas para o papel (cadastro de usuário). */
+/** Opções de menu permitidas para o papel (pré-marca / padrão). */
 export function menuAccessCatalogForRole(role: AppRole): MenuAccessOption[] {
   const admin = isGrupoAdmin(role)
   return menuAccessCatalog().filter((opt) => {
@@ -89,18 +89,26 @@ export function menuAccessCatalogForRole(role: AppRole): MenuAccessOption[] {
   })
 }
 
+/**
+ * Catálogo completo para o formulário de usuário (admin marca o que liberar).
+ * Inclui Projetos, tipos de pagamento/mensalidade, fornecedores, etc.
+ */
+export function menuAccessCatalogForForm(): MenuAccessOption[] {
+  return menuAccessCatalog()
+}
+
 /** Menus padrão liberados para o papel (pré-marca no formulário). */
 export function defaultMenuKeysForRole(role: AppRole): string[] {
   return menuAccessCatalogForRole(role).map((opt) => opt.key)
 }
 
-/** Mantém só chaves válidas para o papel. */
+/** Mantém só chaves que existem no catálogo do grupo (não corta pelo papel). */
 export function pruneMenuKeysForRole(
-  role: AppRole,
+  _role: AppRole,
   keys: string[] | null | undefined,
 ): string[] {
   if (!keys?.length) return []
-  const allowed = new Set(defaultMenuKeysForRole(role))
+  const allowed = new Set(menuAccessCatalog().map((opt) => opt.key))
   return keys.filter((key) => allowed.has(key))
 }
 

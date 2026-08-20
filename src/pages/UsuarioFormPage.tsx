@@ -17,7 +17,7 @@ import {
 import {
   associadoPortalMenuKeys,
   defaultMenuKeysForRole,
-  menuAccessCatalogForRole,
+  menuAccessCatalogForForm,
   normalizeMenuKeys,
   pruneMenuKeysForRole,
 } from '@/lib/menuAccess'
@@ -388,7 +388,8 @@ export function UsuarioFormPage() {
   }
 
   const menuGroups = useMemo(() => {
-    const catalog = menuAccessCatalogForRole(form.role)
+    // Catálogo completo: admin escolhe o que liberar (Projetos, tipos, fornecedores…).
+    const catalog = menuAccessCatalogForForm()
     const map = new Map<string, typeof catalog>()
     for (const opt of catalog) {
       const list = map.get(opt.group) ?? []
@@ -396,9 +397,9 @@ export function UsuarioFormPage() {
       map.set(opt.group, list)
     }
     return [...map.entries()]
-  }, [form.role])
+  }, [])
 
-  // Remove marcações inválidas quando o papel muda (ex.: rascunho antigo).
+  // Remove só chaves que não existem mais no catálogo (não corta pelo papel).
   useEffect(() => {
     if (form.role === 'super_admin') return
     setForm((prev) => {
@@ -723,7 +724,7 @@ export function UsuarioFormPage() {
               <p className="muted">
                 {isAssociadoForm
                   ? 'Login por registro (associado) usa um menu fixo: Dashboard, Portal, Conquistas e Atividades.'
-                  : 'Marque apenas os menus permitidos para este papel. O papel continua limitando o que ele pode alterar.'}
+                  : 'Marque os menus que este usuário poderá ver. Use “Padrão do papel” para pré-marcar conforme o papel.'}
               </p>
             </div>
             {!isAssociadoForm ? (
