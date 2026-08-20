@@ -63,23 +63,17 @@ export function RequirePermission({
     const menuOk = pathAllowedByMenuKeys(
       location.pathname,
       profile?.menu_keys,
+      { associadoLogin: isAssociadoLogin(profile) },
     )
-    // Eventos / Loja online: sempre liberados para quem tem vendas.view.
-    // Equipe (e-mail): Cadastros liberado conforme permissão do papel.
     // Associado: Projetos sempre; ação só se tiver faixa.
-    const isCadastrosPath =
-      pathMatchesMenuKey(location.pathname, '/associados') ||
-      pathMatchesMenuKey(location.pathname, '/cadastros') ||
-      pathMatchesMenuKey(location.pathname, '/secoes') ||
-      pathMatchesMenuKey(location.pathname, '/patrulhas')
+    // Equipe: sem bypass de Cadastros/Eventos — vale o que foi marcado.
     const menuBypass =
       pathMatchesMenuKey(location.pathname, '/dashboard') ||
-      pathMatchesMenuKey(location.pathname, '/vendas/eventos') ||
-      pathMatchesMenuKey(location.pathname, '/vendas/loja-online') ||
-      pathMatchesMenuKey(location.pathname, '/calendario') ||
-      (!isAssociadoLogin(profile) && isCadastrosPath) ||
       (isAssociadoLogin(profile) &&
-        (pathMatchesMenuKey(location.pathname, '/projetos') ||
+        (pathMatchesMenuKey(location.pathname, '/calendario') ||
+          pathMatchesMenuKey(location.pathname, '/projetos') ||
+          pathMatchesMenuKey(location.pathname, '/vendas/eventos') ||
+          pathMatchesMenuKey(location.pathname, '/vendas/loja-online') ||
           (isAcaoPath && temAcao)))
     if (!menuOk && !menuBypass) {
       const fallback = firstAllowedMenuPath(profile?.menu_keys)

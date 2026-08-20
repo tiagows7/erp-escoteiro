@@ -138,16 +138,23 @@ export function pathMatchesMenuKey(pathname: string, menuKey: string): boolean {
   return pathname === menuKey || pathname.startsWith(`${menuKey}/`)
 }
 
-/** Menus sempre liberados mesmo com menu_keys restrito. */
+/** Menus sempre liberados mesmo com menu_keys restrito (equipe e associado). */
 export const ALWAYS_VISIBLE_MENU_KEYS = [
   '/dashboard',
+  // Admin do grupo: item só entra no nav se role=admin.
+  '/grupos/meu',
+  '/sugestoes-melhoria',
+] as const
+
+/**
+ * Menus do portal do associado que continuam visíveis mesmo se menu_keys
+ * personalizado omitir (importações antigas).
+ */
+export const ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS = [
   '/calendario',
+  '/projetos',
   '/vendas/eventos',
   '/vendas/loja-online',
-  // Admin do grupo: editar o próprio grupo (item só entra no nav se role=admin).
-  '/grupos/meu',
-  '/mensalidade-plataforma',
-  '/sugestoes-melhoria',
 ] as const
 
 /** Itens só de plataforma — nunca filtrar por menu_keys. */
@@ -158,15 +165,50 @@ export const PLATFORM_MENU_KEYS = [
   '/plataforma/cobrancas',
   '/plataforma/gerar',
   '/plataforma/efi-pix',
+  '/mensalidade-plataforma',
 ] as const
+
+function isAlwaysVisibleMenuKey(
+  to: string,
+  associadoLogin: boolean,
+): boolean {
+  if (
+    ALWAYS_VISIBLE_MENU_KEYS.includes(
+      to as (typeof ALWAYS_VISIBLE_MENU_KEYS)[number],
+    )
+  ) {
+    return true
+  }
+  if (
+    associadoLogin &&
+    ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS.includes(
+      to as (typeof ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS)[number],
+    )
+  ) {
+    return true
+  }
+  return PLATFORM_MENU_KEYS.includes(
+    to as (typeof PLATFORM_MENU_KEYS)[number],
+  )
+}
 
 export function pathAllowedByMenuKeys(
   pathname: string,
   menuKeys: string[] | null | undefined,
+  opts?: { associadoLogin?: boolean },
 ): boolean {
   if (menuKeys == null) return true
+  const associadoLogin = opts?.associadoLogin === true
   if (
     ALWAYS_VISIBLE_MENU_KEYS.some((key) => pathMatchesMenuKey(pathname, key))
+  ) {
+    return true
+  }
+  if (
+    associadoLogin &&
+    ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS.some((key) =>
+      pathMatchesMenuKey(pathname, key),
+    )
   ) {
     return true
   }
@@ -191,28 +233,23 @@ export function firstAllowedMenuPath(
 export function filterNavItemsByMenuKeys(
   items: NavItem[],
   menuKeys: string[] | null | undefined,
+  opts?: { associadoLogin?: boolean },
 ): NavItem[] {
   if (menuKeys == null) return items
+  const associadoLogin = opts?.associadoLogin === true
 
   return items
     .map((item) => {
       if (item.type === 'link') {
         return menuKeys.includes(item.to) ||
-          ALWAYS_VISIBLE_MENU_KEYS.includes(
-            item.to as (typeof ALWAYS_VISIBLE_MENU_KEYS)[number],
-          ) ||
-          PLATFORM_MENU_KEYS.includes(
-            item.to as (typeof PLATFORM_MENU_KEYS)[number],
-          )
+          isAlwaysVisibleMenuKey(item.to, associadoLogin)
           ? item
           : null
       }
       const children = item.children.filter(
         (child) =>
           menuKeys.includes(child.to) ||
-          ALWAYS_VISIBLE_MENU_KEYS.includes(
-            child.to as (typeof ALWAYS_VISIBLE_MENU_KEYS)[number],
-          ),
+          isAlwaysVisibleMenuKey(child.to, associadoLogin),
       )
       if (children.length === 0) return null
       return { ...item, children }

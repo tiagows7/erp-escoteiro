@@ -76,30 +76,10 @@ export function AppLayout() {
     if (isAssociadoLogin(profile) || !profileUsesMenuKeys(profile)) {
       result = base
     } else {
-      const filtered = filterNavItemsByMenuKeys(base, profile?.menu_keys)
-      // Equipe (e-mail): Cadastros fica disponível conforme o papel, mesmo se
-      // menu_keys omitir esses itens.
-      const cadastros = base.find(
-        (item) => item.type === 'group' && item.id === 'cadastros',
-      )
-      if (!cadastros || cadastros.type !== 'group') {
-        result = filtered
-      } else {
-        const idx = filtered.findIndex(
-          (item) => item.type === 'group' && item.id === 'cadastros',
-        )
-        if (idx >= 0) {
-          result = filtered.map((item, i) =>
-            i === idx ? { ...cadastros, children: cadastros.children } : item,
-          )
-        } else {
-          const after = filtered.findIndex(
-            (item) => item.type === 'link' && item.to === '/conquistas',
-          )
-          const pos = after >= 0 ? after + 1 : filtered.length
-          result = [...filtered.slice(0, pos), cadastros, ...filtered.slice(pos)]
-        }
-      }
+      // Equipe: respeita estritamente os menus marcados no cadastro.
+      result = filterNavItemsByMenuKeys(base, profile?.menu_keys, {
+        associadoLogin: false,
+      })
     }
 
     // Admin do grupo: sempre exibe "Grupo escoteiro" (editar o próprio grupo),
@@ -168,8 +148,8 @@ export function AppLayout() {
       })
     }
 
-    // Eventos: sempre visível para quem tem vendas.view (todos os usuários).
-    if (hasPermission('vendas.view')) {
+    // Associado: Eventos sempre no portal. Equipe: só se marcado em menu_keys.
+    if (isAssociadoLogin(profile) && hasPermission('vendas.view')) {
       const hasEventosLink = filtered.some(
         (item) =>
           (item.type === 'link' && item.to === '/vendas/eventos') ||
@@ -177,41 +157,12 @@ export function AppLayout() {
             item.children.some((c) => c.to === '/vendas/eventos')),
       )
       if (!hasEventosLink) {
-        if (isAssociadoLogin(profile)) {
-          filtered.push({
-            type: 'link',
-            to: '/vendas/eventos',
-            label: 'Comprar convites',
-            permission: 'vendas.view',
-          })
-        } else {
-          const vendasIdx = filtered.findIndex(
-            (item) => item.type === 'group' && item.id === 'vendas',
-          )
-          const eventoChild = {
-            type: 'link' as const,
-            to: '/vendas/eventos',
-            label: 'Eventos',
-            permission: 'vendas.view' as const,
-          }
-          if (vendasIdx >= 0) {
-            const group = filtered[vendasIdx]
-            if (group.type === 'group') {
-              filtered[vendasIdx] = {
-                ...group,
-                children: [...group.children, eventoChild],
-              }
-            }
-          } else {
-            filtered.push({
-              type: 'group',
-              id: 'vendas',
-              label: 'Vendas',
-              anyOf: ['vendas.view'],
-              children: [eventoChild],
-            })
-          }
-        }
+        filtered.push({
+          type: 'link',
+          to: '/vendas/eventos',
+          label: 'Comprar convites',
+          permission: 'vendas.view',
+        })
       }
     }
 
