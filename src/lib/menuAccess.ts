@@ -47,6 +47,7 @@ export function menuAccessCatalog(): MenuAccessOption[] {
         item.to === '/grupos' ||
         item.to === '/backup' ||
         item.to === '/grupos/meu' ||
+        item.to === '/mensalidade-plataforma' ||
         item.to.startsWith('/plataforma/')
       ) {
         continue
@@ -78,16 +79,29 @@ export function menuAccessCatalog(): MenuAccessOption[] {
   return options
 }
 
+/** Opções de menu permitidas para o papel (cadastro de usuário). */
+export function menuAccessCatalogForRole(role: AppRole): MenuAccessOption[] {
+  const admin = isGrupoAdmin(role)
+  return menuAccessCatalog().filter((opt) => {
+    if (opt.grupoAdminOnly && !admin) return false
+    if (!opt.permission) return true
+    return can(role, opt.permission)
+  })
+}
+
 /** Menus padrão liberados para o papel (pré-marca no formulário). */
 export function defaultMenuKeysForRole(role: AppRole): string[] {
-  const admin = isGrupoAdmin(role)
-  return menuAccessCatalog()
-    .filter((opt) => {
-      if (opt.grupoAdminOnly && !admin) return false
-      if (!opt.permission) return true
-      return can(role, opt.permission)
-    })
-    .map((opt) => opt.key)
+  return menuAccessCatalogForRole(role).map((opt) => opt.key)
+}
+
+/** Mantém só chaves válidas para o papel. */
+export function pruneMenuKeysForRole(
+  role: AppRole,
+  keys: string[] | null | undefined,
+): string[] {
+  if (!keys?.length) return []
+  const allowed = new Set(defaultMenuKeysForRole(role))
+  return keys.filter((key) => allowed.has(key))
 }
 
 export function normalizeMenuKeys(

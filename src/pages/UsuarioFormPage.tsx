@@ -17,8 +17,9 @@ import {
 import {
   associadoPortalMenuKeys,
   defaultMenuKeysForRole,
-  menuAccessCatalog,
+  menuAccessCatalogForRole,
   normalizeMenuKeys,
+  pruneMenuKeysForRole,
 } from '@/lib/menuAccess'
 import {
   ROLE_LABELS,
@@ -150,7 +151,10 @@ export function UsuarioFormPage() {
         ativo: data.ativo !== false,
         codigo_ramo: data.codigo_ramo?.toString() ?? '',
         codigo_secao: data.codigo_secao?.toString() ?? '',
-        menu_keys: savedMenus ?? defaultMenuKeysForRole(role),
+        menu_keys: pruneMenuKeysForRole(
+          role,
+          savedMenus ?? defaultMenuKeysForRole(role),
+        ),
       })
       setLoading(false)
     })()
@@ -189,9 +193,10 @@ export function UsuarioFormPage() {
         ? null
         : isAssociado
           ? associadoPortalMenuKeys()
-          : form.menu_keys.length > 0
-            ? form.menu_keys
-            : null
+          : (() => {
+              const pruned = pruneMenuKeysForRole(form.role, form.menu_keys)
+              return pruned.length > 0 ? pruned : null
+            })()
     if (
       form.role !== 'super_admin' &&
       !isAssociado &&
@@ -382,10 +387,7 @@ export function UsuarioFormPage() {
   }
 
   const menuGroups = useMemo(() => {
-    const catalog = menuAccessCatalog().filter((opt) => {
-      if (!opt.grupoAdminOnly) return true
-      return form.role === 'admin'
-    })
+    const catalog = menuAccessCatalogForRole(form.role)
     const map = new Map<string, typeof catalog>()
     for (const opt of catalog) {
       const list = map.get(opt.group) ?? []
@@ -394,6 +396,21 @@ export function UsuarioFormPage() {
     }
     return [...map.entries()]
   }, [form.role])
+
+  // Remove marcações inválidas quando o papel muda (ex.: rascunho antigo).
+  useEffect(() => {
+    if (form.role === 'super_admin') return
+    setForm((prev) => {
+      const pruned = pruneMenuKeysForRole(prev.role, prev.menu_keys)
+      if (
+        pruned.length === prev.menu_keys.length &&
+        pruned.every((k, i) => k === prev.menu_keys[i])
+      ) {
+        return prev
+      }
+      return { ...prev, menu_keys: pruned }
+    })
+  }, [form.role, setForm])
 
   if (!empresaId) {
     return (
@@ -705,7 +722,7 @@ export function UsuarioFormPage() {
               <p className="muted">
                 {isAssociadoForm
                   ? 'Login por registro (associado) usa um menu fixo: Dashboard, Portal, Conquistas e Atividades.'
-                  : 'Marque os menus que este usuário poderá ver e abrir. O papel continua limitando o que ele pode alterar.'}
+                  : 'Marque apenas os menus permitidos para este papel. O papel continua limitando o que ele pode alterar.'}
               </p>
             </div>
             {!isAssociadoForm ? (
