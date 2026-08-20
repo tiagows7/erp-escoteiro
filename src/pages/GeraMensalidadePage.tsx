@@ -449,16 +449,6 @@ export function GeraMensalidadePage() {
               disabled={generating}
               required
             />
-            <p className="field-hint">
-              Vencimento:{' '}
-              {vencimentoCompetencia(competencia, diaVencimento)
-                ?.split('-')
-                .reverse()
-                .join('/') ?? '—'}
-              {diaVencimento != null
-                ? ` (dia ${diaVencimento} do mês)`
-                : ' (último dia do mês — configure em Grupo escoteiro)'}
-            </p>
           </div>
           <div className="field">
             <label htmlFor="tipoFiltro">Tipo de mensalidade</label>
@@ -478,6 +468,18 @@ export function GeraMensalidadePage() {
             </select>
           </div>
         </div>
+        <p className="field-hint" style={{ marginTop: '0.35rem' }}>
+          Vencimento das mensalidades:{' '}
+          <strong>
+            {vencimentoCompetencia(competencia, diaVencimento)
+              ?.split('-')
+              .reverse()
+              .join('/') ?? '—'}
+          </strong>
+          {diaVencimento != null
+            ? ` (dia ${diaVencimento})`
+            : ' (último dia do mês — configure em Grupo escoteiro)'}
+        </p>
 
         <div className="form-actions">
           <button
