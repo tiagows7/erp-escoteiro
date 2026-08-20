@@ -29,6 +29,8 @@ type ReceitaAbertaRow = {
     registro: number | null
     celular: string | null
     responsavel_fonecelular: string | null
+    secao: number | null
+    ramo: number | null
   } | null
 }
 
@@ -72,16 +74,34 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
   const [whatsIndex, setWhatsIndex] = useState(0)
   const [busyId, setBusyId] = useState<number | null>(null)
 
-  /** Usuário do grupo (sem ramo): pode baixar PIX direto no card. */
-  const podeBaixarPix = useMemo(() => {
+  const secaoScope = useMemo(() => {
+    const secao = profile?.codigo_secao
+    return secao != null && Number(secao) > 0 ? Number(secao) : null
+  }, [profile?.codigo_secao])
+
+  const ramoScope = useMemo(() => {
     const ramo = profile?.codigo_ramo
-    return ramo == null || Number(ramo) < 1 || Number(ramo) > 5
+    return ramo != null && Number(ramo) >= 1 && Number(ramo) <= 5
+      ? Number(ramo)
+      : null
   }, [profile?.codigo_ramo])
+
+  /** Com seção no perfil: só consulta — sem baixar PIX / WhatsApp. */
+  const somenteVisualizacao = secaoScope != null
+
+  /** Usuário do grupo (sem ramo e sem seção): pode baixar PIX. */
+  const podeBaixarPix = useMemo(() => {
+    if (somenteVisualizacao) return false
+    return ramoScope == null
+  }, [somenteVisualizacao, ramoScope])
+
+  const podeWhatsApp = !somenteVisualizacao
 
   const load = useCallback(async () => {
     setLoading(true)
 
-    const { data, error } = await supabase
+    // Mensalidades são conta do grupo (receita_secao null): filtra pela seção/ramo do associado.
+    let query = supabase
       .from('receitas')
       .select(
         `
@@ -92,11 +112,13 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
         receita_valor,
         receita_saldo,
         associado_id,
-        associados (
+        associados!inner (
           nome,
           registro,
           celular,
-          responsavel_fonecelular
+          responsavel_fonecelular,
+          secao,
+          ramo
         )
       `,
       )
@@ -109,6 +131,14 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
       .gt('receita_saldo', 0)
       .order('receita_vencimento', { ascending: true })
       .limit(5000)
+
+    if (secaoScope != null) {
+      query = query.eq('associados.secao', secaoScope)
+    } else if (ramoScope != null) {
+      query = query.eq('associados.ramo', ramoScope)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       setRows([])
@@ -175,7 +205,7 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
     )
     setRows(aggregated)
     setLoading(false)
-  }, [empresaId])
+  }, [empresaId, secaoScope, ramoScope])
 
   useEffect(() => {
     void load()
@@ -207,6 +237,7 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
   }
 
   function enviarWhats(row: AssociadoAberto) {
+    if (!podeWhatsApp) return
     if (!normalizeWhatsAppPhone(row.telefone)) {
       toast.error(
         'Sem telefone',
@@ -218,6 +249,7 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
   }
 
   async function iniciarFilaWhats() {
+    if (!podeWhatsApp) return
     if (comWhats.length === 0) {
       toast.error(
         'Sem telefone',
@@ -297,9 +329,11 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
         <div>
           <h3>Mensalidades em aberto</h3>
           <p className="muted">
-            {podeBaixarPix
-              ? 'Cobrança via WhatsApp ou pagar e baixar em PIX.'
-              : 'Mensalidades em aberto — cobrança via WhatsApp.'}
+            {somenteVisualizacao
+              ? 'Somente da sua seção — visualização (sem baixa ou cobrança).'
+              : podeBaixarPix
+                ? 'Cobrança via WhatsApp ou pagar e baixar em PIX.'
+                : 'Mensalidades em aberto — cobrança via WhatsApp.'}
           </p>
         </div>
       </div>
@@ -323,7 +357,7 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
               {showLista ? 'Ocultar lista' : 'Ver lista'}
             </button>
           ) : null}
-          {tituloCount > 0 ? (
+          {podeWhatsApp && tituloCount > 0 ? (
             <button
               type="button"
               className="btn btn-primary"
@@ -338,11 +372,13 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
 
       {tituloCount === 0 ? (
         <p className="muted" style={{ marginTop: '0.75rem' }}>
-          Nenhuma mensalidade em aberto no momento.
+          {somenteVisualizacao
+            ? 'Nenhuma mensalidade em aberto na sua seção.'
+            : 'Nenhuma mensalidade em aberto no momento.'}
         </p>
       ) : null}
 
-      {whatsQueue.length > 0 ? (
+      {podeWhatsApp && whatsQueue.length > 0 ? (
         <article className="associado-mensalidade-item" style={{ marginTop: '0.9rem' }}>
           <div>
             <h4>
@@ -404,29 +440,33 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
                 </p>
                 <p className="muted">Tel. {row.telefone || 'não cadastrado'}</p>
               </div>
-              <div className="associado-mensalidade-resumo-actions">
-                {podeBaixarPix ? (
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    disabled={busyId === row.associado_id}
-                    onClick={() => void baixarPix(row)}
-                  >
-                    {busyId === row.associado_id ? 'Baixando…' : 'Pagar PIX'}
-                  </button>
-                ) : null}
-                {normalizeWhatsAppPhone(row.telefone) ? (
-                  <button
-                    type="button"
-                    className="btn btn-accent"
-                    onClick={() => enviarWhats(row)}
-                  >
-                    WhatsApp
-                  </button>
-                ) : !podeBaixarPix ? (
-                  <span className="muted">Sem telefone</span>
-                ) : null}
-              </div>
+              {!somenteVisualizacao ? (
+                <div className="associado-mensalidade-resumo-actions">
+                  {podeBaixarPix ? (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={busyId === row.associado_id}
+                      onClick={() => void baixarPix(row)}
+                    >
+                      {busyId === row.associado_id ? 'Baixando…' : 'Pagar PIX'}
+                    </button>
+                  ) : null}
+                  {normalizeWhatsAppPhone(row.telefone) ? (
+                    <button
+                      type="button"
+                      className="btn btn-accent"
+                      onClick={() => enviarWhats(row)}
+                    >
+                      WhatsApp
+                    </button>
+                  ) : !podeBaixarPix ? (
+                    <span className="muted">Sem telefone</span>
+                  ) : null}
+                </div>
+              ) : (
+                <span className="muted">Somente visualização</span>
+              )}
             </article>
           ))}
         </div>
