@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
 
     const { error: updateError } = await adminClient.auth.admin.updateUserById(
       userId,
-      { password },
+      { password, email_confirm: true },
     )
 
     if (updateError) {

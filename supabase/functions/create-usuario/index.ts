@@ -140,6 +140,13 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Garante confirmação mesmo se o Auth ignorar email_confirm no create.
+    if (!createdUser.user.email_confirmed_at) {
+      await adminClient.auth.admin.updateUserById(createdUser.user.id, {
+        email_confirm: true,
+      })
+    }
+
     const { data: profile, error: profileError } = await adminClient
       .from('profiles')
       .insert({

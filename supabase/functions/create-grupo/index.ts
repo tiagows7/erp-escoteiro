@@ -165,6 +165,12 @@ Deno.serve(async (req) => {
       )
     }
 
+    if (!createdUser.user.email_confirmed_at) {
+      await adminClient.auth.admin.updateUserById(createdUser.user.id, {
+        email_confirm: true,
+      })
+    }
+
     const { error: profileError } = await adminClient.from('profiles').insert({
       id: createdUser.user.id,
       empresa_id: empresa.id,
