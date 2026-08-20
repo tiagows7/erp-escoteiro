@@ -127,35 +127,77 @@ async function createViaEdgeFunctionWithRetry(
   return last
 }
 
+/** Chama Edge Function com JWT fresco (evita "Failed to send a request…"). */
+async function invokeEdgeJson(
+  functionName: string,
+  body: Record<string, unknown>,
+): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; error: string }> {
+  const baseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  if (!baseUrl || !anonKey) {
+    return { ok: false, error: 'Configuração Supabase ausente.' }
+  }
+
+  const { data: refreshed } = await supabase.auth.refreshSession()
+  const accessToken =
+    refreshed.session?.access_token ??
+    (await supabase.auth.getSession()).data.session?.access_token
+  if (!accessToken) {
+    return { ok: false, error: 'Sessão não encontrada. Faça login novamente.' }
+  }
+
+  try {
+    const res = await fetch(`${baseUrl}/functions/v1/${functionName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        apikey: anonKey,
+      },
+      body: JSON.stringify(body),
+    })
+    const text = await res.text()
+    let data: Record<string, unknown> | null = null
+    try {
+      data = text ? (JSON.parse(text) as Record<string, unknown>) : null
+    } catch {
+      data = null
+    }
+    if (!res.ok) {
+      return {
+        ok: false,
+        error:
+          (data?.error != null ? String(data.error) : null) ||
+          text ||
+          `HTTP ${res.status}`,
+      }
+    }
+    if (data?.error) {
+      return { ok: false, error: String(data.error) }
+    }
+    return { ok: true, data: data ?? {} }
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        e instanceof Error
+          ? e.message || 'Failed to send a request to the Edge Function'
+          : 'Failed to send a request to the Edge Function',
+    }
+  }
+}
+
 async function createViaEdgeFunction(
   input: CreateUsuarioInput,
 ): Promise<CreateUsuarioResult> {
-  const { data, error } = await supabase.functions.invoke('create-usuario', {
-    body: input,
-  })
-
-  if (error) {
-    // Tenta extrair mensagem do body da function (ex.: 400 com { error })
-    const fromBody = await readFunctionsError(error)
-    return { ok: false, error: fromBody || error.message }
+  const result = await invokeEdgeJson('create-usuario', { ...input })
+  if (!result.ok) {
+    return { ok: false, error: result.error }
   }
-  if (data?.error) {
-    return { ok: false, error: String(data.error) }
+  return {
+    ok: true,
+    profile: result.data.profile as CreateUsuarioResult['profile'],
   }
-
-  return { ok: true, profile: data.profile }
-}
-
-async function readFunctionsError(error: unknown): Promise<string | null> {
-  const ctx = (error as { context?: Response })?.context
-  if (!ctx || typeof ctx.json !== 'function') return null
-  try {
-    const body = await ctx.json()
-    if (body?.error) return String(body.error)
-  } catch {
-    /* ignore */
-  }
-  return null
 }
 
 async function createViaSignUpFallback(
@@ -265,21 +307,13 @@ export async function updateUsuarioSenha(
   userId: string,
   password: string,
 ): Promise<UpdateUsuarioSenhaResult> {
-  const { data, error } = await supabase.functions.invoke(
-    'update-usuario-senha',
-    {
-      body: { user_id: userId, password },
-    },
-  )
-
-  if (error) {
-    const fromBody = await readFunctionsError(error)
-    return { ok: false, error: fromBody || error.message }
+  const result = await invokeEdgeJson('update-usuario-senha', {
+    user_id: userId,
+    password,
+  })
+  if (!result.ok) {
+    return { ok: false, error: result.error }
   }
-  if (data?.error) {
-    return { ok: false, error: String(data.error) }
-  }
-
   return { ok: true }
 }
 
@@ -292,18 +326,12 @@ export type ExcluirUsuarioResult = {
 export async function excluirUsuario(
   userId: string,
 ): Promise<ExcluirUsuarioResult> {
-  const { data, error } = await supabase.functions.invoke('excluir-usuario', {
-    body: { user_id: userId },
+  const result = await invokeEdgeJson('excluir-usuario', {
+    user_id: userId,
   })
-
-  if (error) {
-    const fromBody = await readFunctionsError(error)
-    return { ok: false, error: fromBody || error.message }
+  if (!result.ok) {
+    return { ok: false, error: result.error }
   }
-  if (data?.error) {
-    return { ok: false, error: String(data.error) }
-  }
-
   return { ok: true }
 }
 

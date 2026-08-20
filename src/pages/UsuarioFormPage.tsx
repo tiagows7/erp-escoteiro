@@ -255,8 +255,8 @@ export function UsuarioFormPage() {
     }
 
     const wantsPasswordChange =
-      form.password.length > 0 || form.passwordConfirm.length > 0
-    if (wantsPasswordChange) {
+      form.password.length >= 6 && form.passwordConfirm.length > 0
+    if (form.password.length > 0 || form.passwordConfirm.length > 0) {
       if (form.password.length < 6) {
         setSaving(false)
         setError('A nova senha deve ter pelo menos 6 caracteres.')
