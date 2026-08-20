@@ -28,6 +28,11 @@ import {
 } from '@/lib/contaBancariaFields'
 import { PORTAL_CAIXAS } from '@/lib/portal'
 import { formatMoney } from '@/lib/despesas'
+import {
+  RECEITA_ORIGEM,
+  TITULO_SITUACAO,
+  vencimentoCompetencia,
+} from '@/lib/receitas'
 import { loadCidades, loadEstados } from '@/lib/brasilLocalidades'
 import type { Ramo } from '@/types/database'
 
@@ -47,6 +52,44 @@ function slugify(value: string): string {
     .slice(0, 60)
 }
 
+/** Atualiza o vencimento das mensalidades em aberto conforme o dia do grupo. */
+async function syncMensalidadesVencimento(
+  empresaId: number,
+  diaVencimento: number | null,
+) {
+  const { data, error } = await supabase
+    .from('receitas')
+    .select('receita_id, receita_competencia')
+    .eq('empresa_id', empresaId)
+    .eq('receita_origem', RECEITA_ORIGEM.MENSALIDADE)
+    .in('receita_situacao', [TITULO_SITUACAO.ABERTO, TITULO_SITUACAO.PARCIAL])
+    .gt('receita_saldo', 0)
+    .limit(5000)
+
+  if (error || !data?.length) return
+
+  const updates = new Map<string, number[]>()
+  for (const row of data) {
+    const competencia = String(row.receita_competencia ?? '').slice(0, 10)
+    const venc = vencimentoCompetencia(competencia, diaVencimento)
+    if (!venc) continue
+    const list = updates.get(venc) ?? []
+    list.push(Number(row.receita_id))
+    updates.set(venc, list)
+  }
+
+  for (const [vencimento, ids] of updates) {
+    const chunkSize = 200
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize)
+      await supabase
+        .from('receitas')
+        .update({ receita_vencimento: vencimento })
+        .in('receita_id', chunk)
+    }
+  }
+}
+
 const emptyForm = {
   nome: '',
   slug: '',
@@ -60,6 +103,7 @@ const emptyForm = {
   plataforma_plano_id: '',
   plataforma_isento: false,
   plataforma_dia_vencimento: '',
+  dia_vencimento_mensalidade: '',
   logo_url: '' as string | null,
   adminNome: '',
   adminEmail: '',
@@ -169,7 +213,7 @@ export function GrupoFormPage() {
         supabase
           .from('empresa')
           .select(
-            'id, nome, cnpj, email, slug, telefone, estado, cidade, logo_url, ativo, portal_transparencia, plataforma_plano_id, plataforma_isento, plataforma_dia_vencimento',
+            'id, nome, cnpj, email, slug, telefone, estado, cidade, logo_url, ativo, portal_transparencia, plataforma_plano_id, plataforma_isento, plataforma_dia_vencimento, dia_vencimento_mensalidade',
           )
           .eq('id', Number(id))
           .maybeSingle(),
@@ -223,6 +267,10 @@ export function GrupoFormPage() {
         plataforma_dia_vencimento:
           data.plataforma_dia_vencimento != null
             ? String(data.plataforma_dia_vencimento)
+            : '',
+        dia_vencimento_mensalidade:
+          data.dia_vencimento_mensalidade != null
+            ? String(data.dia_vencimento_mensalidade)
             : '',
         logo_url: data.logo_url,
       })
@@ -369,6 +417,9 @@ export function GrupoFormPage() {
             plataforma_dia_vencimento: form.plataforma_dia_vencimento
               ? Number(form.plataforma_dia_vencimento)
               : null,
+            dia_vencimento_mensalidade: form.dia_vencimento_mensalidade
+              ? Number(form.dia_vencimento_mensalidade)
+              : null,
           })
           .eq('id', result.empresa.id)
 
@@ -411,6 +462,9 @@ export function GrupoFormPage() {
           cidade: form.cidade.trim() ? Number(form.cidade) : null,
           ativo: form.ativo,
           portal_transparencia: form.portal_transparencia,
+          dia_vencimento_mensalidade: form.dia_vencimento_mensalidade
+            ? Number(form.dia_vencimento_mensalidade)
+            : null,
           ...(isSuperAdmin
             ? {
                 plataforma_plano_id: form.plataforma_plano_id
@@ -429,6 +483,14 @@ export function GrupoFormPage() {
         setError(mapEmpresaError(updateError.message, slug))
         return
       }
+
+      // Reaplica o dia de vencimento nas mensalidades em aberto.
+      await syncMensalidadesVencimento(
+        empresaId,
+        form.dia_vencimento_mensalidade
+          ? Number(form.dia_vencimento_mensalidade)
+          : null,
+      )
 
       if (logoFile) {
         const logoOk = await uploadGrupoLogo(empresaId, logoFile)
@@ -846,6 +908,37 @@ export function GrupoFormPage() {
           />
           Portal da transparência público
         </label>
+
+        <div className="form-grid" style={{ marginBottom: '1rem' }}>
+          <div className="field">
+            <label htmlFor="dia_vencimento_mensalidade">
+              Dia do vencimento das mensalidades
+            </label>
+            <select
+              id="dia_vencimento_mensalidade"
+              className="select"
+              value={form.dia_vencimento_mensalidade}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  dia_vencimento_mensalidade: e.target.value,
+                }))
+              }
+              disabled={disabled}
+            >
+              <option value="">Último dia do mês</option>
+              {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                <option key={d} value={d}>
+                  Dia {d}
+                </option>
+              ))}
+            </select>
+            <p className="field-hint">
+              Usado ao gerar mensalidades dos associados. Títulos em aberto são
+              atualizados ao salvar. Sem dia = último dia da competência.
+            </p>
+          </div>
+        </div>
 
         {isSuperAdmin ? (
           <div

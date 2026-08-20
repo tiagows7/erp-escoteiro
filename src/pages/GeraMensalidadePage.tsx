@@ -10,9 +10,9 @@ import {
   currentCompetenciaInput,
   formatCompetencia,
   formatMoney,
-  lastDayOfCompetencia,
   RECEITA_ORIGEM,
   TITULO_SITUACAO,
+  vencimentoCompetencia,
 } from '@/lib/receitas'
 import { isRamoFinanceiroScoped } from '@/lib/roles'
 import {
@@ -58,6 +58,7 @@ export function GeraMensalidadePage() {
   const [info, setInfo] = useState<string | null>(null)
   const [whatsQueue, setWhatsQueue] = useState<PreviewRow[]>([])
   const [whatsIndex, setWhatsIndex] = useState(0)
+  const [diaVencimento, setDiaVencimento] = useState<number | null>(null)
 
   useEffect(() => {
     if (!empresaId) return
@@ -67,6 +68,18 @@ export function GeraMensalidadePage() {
       .eq('empresa_id', empresaId)
       .order('nome')
       .then(({ data }) => setTipos((data as TipoMensalidade[]) ?? []))
+
+    void supabase
+      .from('empresa')
+      .select('dia_vencimento_mensalidade')
+      .eq('id', empresaId)
+      .maybeSingle()
+      .then(({ data }) => {
+        const dia = data?.dia_vencimento_mensalidade
+        setDiaVencimento(
+          dia != null && Number.isFinite(Number(dia)) ? Number(dia) : null,
+        )
+      })
   }, [empresaId])
 
   const aGerar = useMemo(
@@ -179,7 +192,7 @@ export function GeraMensalidadePage() {
     event.preventDefault()
     if (!canWrite || !empresaId) return
     const compDate = competenciaToDate(competencia)
-    const vencimento = lastDayOfCompetencia(competencia)
+    const vencimento = vencimentoCompetencia(competencia, diaVencimento)
     if (!compDate || !vencimento) {
       setError('Competência inválida.')
       return
@@ -436,6 +449,16 @@ export function GeraMensalidadePage() {
               disabled={generating}
               required
             />
+            <p className="field-hint">
+              Vencimento:{' '}
+              {vencimentoCompetencia(competencia, diaVencimento)
+                ?.split('-')
+                .reverse()
+                .join('/') ?? '—'}
+              {diaVencimento != null
+                ? ` (dia ${diaVencimento} do mês)`
+                : ' (último dia do mês — configure em Grupo escoteiro)'}
+            </p>
           </div>
           <div className="field">
             <label htmlFor="tipoFiltro">Tipo de mensalidade</label>

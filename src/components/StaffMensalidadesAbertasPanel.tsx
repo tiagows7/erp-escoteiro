@@ -5,6 +5,7 @@ import { useToast } from '@/contexts/ToastContext'
 import {
   formatCompetencia,
   formatMoney,
+  isTituloEmAtraso,
   RECEITA_ORIGEM,
   TITULO_SITUACAO,
 } from '@/lib/receitas'
@@ -44,6 +45,7 @@ type AssociadoAberto = {
   telefone: string | null
   qtd: number
   total: number
+  qtdAtraso: number
   detalhes: string[]
   titulos: TituloAberto[]
 }
@@ -127,12 +129,14 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
         assoc?.responsavel_fonecelular || assoc?.celular || null
       const saldo = Number(item.receita_saldo ?? 0)
       const valor = Number(item.receita_valor ?? 0)
+      const emAtraso = isTituloEmAtraso(item)
       const detalhe = [
         formatCompetencia(item.receita_competencia),
         formatMoney(saldo),
         item.receita_vencimento
           ? `venc. ${formatDate(item.receita_vencimento)}`
           : null,
+        emAtraso ? 'EM ATRASO' : null,
       ]
         .filter(Boolean)
         .join(' · ')
@@ -147,6 +151,7 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
       if (existing) {
         existing.qtd += 1
         existing.total += saldo
+        if (emAtraso) existing.qtdAtraso += 1
         existing.detalhes.push(detalhe)
         existing.titulos.push(titulo)
         if (!existing.telefone && telefone) existing.telefone = telefone
@@ -158,6 +163,7 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
           telefone,
           qtd: 1,
           total: saldo,
+          qtdAtraso: emAtraso ? 1 : 0,
           detalhes: [detalhe],
           titulos: [titulo],
         })
@@ -177,6 +183,10 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
 
   const totalSaldo = useMemo(
     () => rows.reduce((acc, row) => acc + row.total, 0),
+    [rows],
+  )
+  const totalAtraso = useMemo(
+    () => rows.reduce((acc, row) => acc + row.qtdAtraso, 0),
     [rows],
   )
 
@@ -300,6 +310,7 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
           <strong>{tituloCount}</strong>
           <p className="muted">
             {rows.length} associado(s) · Total {formatMoney(totalSaldo)}
+            {totalAtraso > 0 ? ` · ${totalAtraso} em atraso` : null}
           </p>
         </div>
         <div className="associado-mensalidade-resumo-actions">
@@ -382,6 +393,14 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
                 <p className="muted">
                   Reg. {row.registro ?? '—'} · {row.qtd} mensalidade(s) ·{' '}
                   {formatMoney(row.total)}
+                  {row.qtdAtraso > 0 ? (
+                    <>
+                      {' '}
+                      <span className="badge badge-danger">
+                        {row.qtdAtraso} em atraso
+                      </span>
+                    </>
+                  ) : null}
                 </p>
                 <p className="muted">Tel. {row.telefone || 'não cadastrado'}</p>
               </div>

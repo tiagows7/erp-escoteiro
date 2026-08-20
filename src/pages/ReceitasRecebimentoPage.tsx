@@ -6,6 +6,7 @@ import { AlertMessage } from '@/components/AlertMessage'
 import {
   formatCompetencia,
   formatMoney,
+  isTituloEmAtraso,
   RECEITA_ORIGEM,
   situacaoTituloLabel,
   TITULO_SITUACAO,
@@ -451,7 +452,15 @@ function ReceitasRelatorioTabela({
                     <td>{formatMoney(row.receita_saldo)}</td>
                   </>
                 ) : null}
-                <td>{situacaoTituloLabel(row.receita_situacao)}</td>
+                <td>
+                  {situacaoTituloLabel(row.receita_situacao)}
+                  {isTituloEmAtraso(row) ? (
+                    <>
+                      {' '}
+                      <span className="badge badge-danger">Em atraso</span>
+                    </>
+                  ) : null}
+                </td>
               </tr>
             ))}
           </tbody>

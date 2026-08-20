@@ -8,6 +8,7 @@ import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 import {
   formatCompetencia,
   formatMoney,
+  isTituloEmAtraso,
   RECEITA_ORIGEM,
   situacaoTituloLabel,
   TITULO_SITUACAO,
@@ -260,7 +261,15 @@ export function ReceitasInclusaoPage() {
                     <td>{formatCompetencia(row.receita_competencia)}</td>
                     <td>{formatMoney(row.receita_valor)}</td>
                     <td>{formatMoney(row.receita_saldo)}</td>
-                    <td>{situacaoTituloLabel(row.receita_situacao)}</td>
+                    <td>
+                      {situacaoTituloLabel(row.receita_situacao)}
+                      {isTituloEmAtraso(row) ? (
+                        <>
+                          {' '}
+                          <span className="badge badge-danger">Em atraso</span>
+                        </>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>

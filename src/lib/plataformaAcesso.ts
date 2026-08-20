@@ -1,5 +1,5 @@
 import { TITULO_SITUACAO, type PlataformaCobranca } from '@/lib/plataforma'
-import { lastDayOfCompetencia } from '@/lib/receitas'
+import { vencimentoCompetencia } from '@/lib/receitas'
 
 /** Aviso quando a cobrança está aberta e faltam até N dias para o vencimento. */
 export const PLATAFORMA_AVISO_DIAS = 5
@@ -38,16 +38,7 @@ export function vencimentoPlataformaCompetencia(
   competencia: string,
   diaVencimento: number | null | undefined,
 ): string | null {
-  const ym = competencia.slice(0, 7)
-  if (!/^\d{4}-\d{2}$/.test(ym)) return null
-  if (diaVencimento == null || !Number.isFinite(diaVencimento)) {
-    return lastDayOfCompetencia(ym)
-  }
-  const dia = Math.min(28, Math.max(1, Math.trunc(diaVencimento)))
-  const [y, m] = ym.split('-').map(Number)
-  const ultimo = new Date(y, m, 0).getDate()
-  const d = Math.min(dia, ultimo)
-  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  return vencimentoCompetencia(competencia, diaVencimento)
 }
 
 function cobrancaEmAberto(c: PlataformaCobranca): boolean {

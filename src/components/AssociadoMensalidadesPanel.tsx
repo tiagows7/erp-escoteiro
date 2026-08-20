@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import {
   formatCompetencia,
   formatMoney,
+  isTituloEmAtraso,
   RECEITA_ORIGEM,
   TITULO_SITUACAO,
 } from '@/lib/receitas'
@@ -128,6 +129,10 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
     () => items.reduce((acc, row) => acc + row.receita_saldo, 0),
     [items],
   )
+  const qtdAtraso = useMemo(
+    () => items.filter((item) => isTituloEmAtraso(item)).length,
+    [items],
+  )
 
   function pagarUma(item: MensalidadeAberta) {
     setPixTitle(`Mensalidade ${formatCompetencia(item.receita_competencia)}`)
@@ -190,7 +195,12 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
             <div>
               <span>Em aberto</span>
               <strong>{items.length}</strong>
-              <p className="muted">Total {formatMoney(totalSaldo)}</p>
+              <p className="muted">
+                Total {formatMoney(totalSaldo)}
+                {qtdAtraso > 0
+                  ? ` · ${qtdAtraso} em atraso`
+                  : null}
+              </p>
             </div>
             <div className="associado-mensalidade-resumo-actions">
               {items.length > 0 ? (
@@ -236,6 +246,12 @@ export function AssociadoMensalidadesPanel({ empresaId, registro }: Props) {
                   <p className="muted">
                     Competência {formatCompetencia(item.receita_competencia)} ·
                     Venc. {formatDate(item.receita_vencimento)}
+                    {isTituloEmAtraso(item) ? (
+                      <>
+                        {' '}
+                        <span className="badge badge-danger">Em atraso</span>
+                      </>
+                    ) : null}
                   </p>
                   <p className="associado-atividade-valor">
                     {formatMoney(item.receita_saldo)}
