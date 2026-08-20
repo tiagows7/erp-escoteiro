@@ -91,6 +91,19 @@ export function GeraMensalidadePage() {
     [aGerar],
   )
 
+  function excluirDaPrevia(associadoId: number) {
+    setPreview((rows) => {
+      const next = rows.filter((r) => r.associado_id !== associadoId)
+      const novas = next.filter((r) => !r.already).length
+      const existentes = next.filter((r) => r.already).length
+      setInfo(
+        `${novas} a gerar · ${existentes} já existente(s)` +
+          (rows.length > next.length ? ' · 1 excluída da prévia' : ''),
+      )
+      return next
+    })
+  }
+
   async function carregarPreview() {
     if (!empresaId) return
     const compDate = competenciaToDate(competencia)
@@ -509,6 +522,9 @@ export function GeraMensalidadePage() {
           <>
             <p className="field-hint" style={{ marginTop: '1rem' }}>
               Total a gerar: <strong>{formatMoney(totalValor)}</strong>
+              {' · '}
+              Use <strong>Excluir</strong> para tirar um título desta geração
+              (não apaga cadastro; recarregue a prévia para trazê-lo de volta).
             </p>
             <div className="table-wrap">
               <table className="data">
@@ -535,18 +551,31 @@ export function GeraMensalidadePage() {
                         )}
                       </td>
                       <td>
-                        {normalizeWhatsAppPhone(phoneOf(row)) ? (
-                          <button
-                            type="button"
-                            className="btn btn-soft"
-                            disabled={generating}
-                            onClick={() => enviarWhatsLinha(row)}
-                          >
-                            WhatsApp
-                          </button>
-                        ) : (
-                          <span className="muted">—</span>
-                        )}
+                        <div className="table-row-actions">
+                          {!row.already ? (
+                            <button
+                              type="button"
+                              className="btn btn-soft"
+                              disabled={generating}
+                              onClick={() => excluirDaPrevia(row.associado_id)}
+                              title="Não gerar mensalidade para este associado"
+                            >
+                              Excluir
+                            </button>
+                          ) : null}
+                          {normalizeWhatsAppPhone(phoneOf(row)) ? (
+                            <button
+                              type="button"
+                              className="btn btn-soft"
+                              disabled={generating}
+                              onClick={() => enviarWhatsLinha(row)}
+                            >
+                              WhatsApp
+                            </button>
+                          ) : !row.already ? null : (
+                            <span className="muted">—</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
