@@ -143,6 +143,16 @@ export function pathMatchesMenuKey(pathname: string, menuKey: string): boolean {
       pathname.startsWith('/transparencia/')
     )
   }
+  // Relatório/inclusão de receitas também liberam registrar recebimento
+  // (rota irmã /receitas/recebimento/:id — não é filha do menu).
+  if (menuKey === '/receitas/relatorio' || menuKey === '/receitas/inclusao') {
+    if (
+      pathname === '/receitas/recebimento' ||
+      pathname.startsWith('/receitas/recebimento/')
+    ) {
+      return true
+    }
+  }
   return pathname === menuKey || pathname.startsWith(`${menuKey}/`)
 }
 
