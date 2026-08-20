@@ -130,6 +130,8 @@ export const ALWAYS_VISIBLE_MENU_KEYS = [
   '/calendario',
   '/vendas/eventos',
   '/vendas/loja-online',
+  // Admin do grupo: editar o próprio grupo (item só entra no nav se role=admin).
+  '/grupos/meu',
   '/mensalidade-plataforma',
   '/sugestoes-melhoria',
 ] as const

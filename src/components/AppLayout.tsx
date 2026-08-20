@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import {
   navItemsForProfile,
   type NavGroupItem,
+  type NavItem,
   type NavLinkItem,
 } from '@/config/navigation'
 import {
@@ -69,29 +70,65 @@ export function AppLayout() {
 
   const allItems = useMemo(() => {
     const base = navItemsForProfile(profile)
-    // Associado: navItemsForProfile já aplica menu_keys (+ Projetos).
-    if (isAssociadoLogin(profile) || !profileUsesMenuKeys(profile)) return base
+    let result: NavItem[]
 
-    const filtered = filterNavItemsByMenuKeys(base, profile?.menu_keys)
-    // Equipe (e-mail): Cadastros fica disponível conforme o papel, mesmo se
-    // menu_keys omitir esses itens.
-    const cadastros = base.find(
-      (item) => item.type === 'group' && item.id === 'cadastros',
-    )
-    if (!cadastros || cadastros.type !== 'group') return filtered
-    const idx = filtered.findIndex(
-      (item) => item.type === 'group' && item.id === 'cadastros',
-    )
-    if (idx >= 0) {
-      return filtered.map((item, i) =>
-        i === idx ? { ...cadastros, children: cadastros.children } : item,
+    // Associado: navItemsForProfile já aplica menu_keys (+ Projetos).
+    if (isAssociadoLogin(profile) || !profileUsesMenuKeys(profile)) {
+      result = base
+    } else {
+      const filtered = filterNavItemsByMenuKeys(base, profile?.menu_keys)
+      // Equipe (e-mail): Cadastros fica disponível conforme o papel, mesmo se
+      // menu_keys omitir esses itens.
+      const cadastros = base.find(
+        (item) => item.type === 'group' && item.id === 'cadastros',
       )
+      if (!cadastros || cadastros.type !== 'group') {
+        result = filtered
+      } else {
+        const idx = filtered.findIndex(
+          (item) => item.type === 'group' && item.id === 'cadastros',
+        )
+        if (idx >= 0) {
+          result = filtered.map((item, i) =>
+            i === idx ? { ...cadastros, children: cadastros.children } : item,
+          )
+        } else {
+          const after = filtered.findIndex(
+            (item) => item.type === 'link' && item.to === '/conquistas',
+          )
+          const pos = after >= 0 ? after + 1 : filtered.length
+          result = [...filtered.slice(0, pos), cadastros, ...filtered.slice(pos)]
+        }
+      }
     }
-    const after = filtered.findIndex(
-      (item) => item.type === 'link' && item.to === '/conquistas',
-    )
-    const pos = after >= 0 ? after + 1 : filtered.length
-    return [...filtered.slice(0, pos), cadastros, ...filtered.slice(pos)]
+
+    // Admin do grupo: sempre exibe "Grupo escoteiro" (editar o próprio grupo),
+    // mesmo com menu_keys personalizado que omita o item.
+    if (profile?.role === 'admin') {
+      const already = result.some(
+        (item) => item.type === 'link' && item.to === '/grupos/meu',
+      )
+      if (!already) {
+        const grupoMeu: NavItem =
+          base.find(
+            (item) => item.type === 'link' && item.to === '/grupos/meu',
+          ) ?? {
+            type: 'link',
+            to: '/grupos/meu',
+            label: 'Grupo escoteiro',
+            permission: 'grupos.view',
+          }
+        const audIdx = result.findIndex(
+          (item) => item.type === 'link' && item.to === '/auditoria',
+        )
+        result =
+          audIdx >= 0
+            ? [...result.slice(0, audIdx), grupoMeu, ...result.slice(audIdx)]
+            : [...result, grupoMeu]
+      }
+    }
+
+    return result
   }, [profile])
 
   const items = useMemo(() => {

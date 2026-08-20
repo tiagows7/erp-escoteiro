@@ -436,7 +436,10 @@ export function navItemsForProfile(
     if (item.to === '/grupos' || item.to === '/backup') {
       return profile?.role === 'super_admin'
     }
-    if (item.to === '/grupos/meu') return profile?.role === 'admin'
+    // Admin do grupo (não super_admin da plataforma).
+    if (item.to === '/grupos/meu') {
+      return profile?.role === 'admin'
+    }
     // Só o super admin vê "Mensalidade do sistema" (com grupo em contexto).
     if (item.to === '/mensalidade-plataforma') {
       return profile?.role === 'super_admin'
