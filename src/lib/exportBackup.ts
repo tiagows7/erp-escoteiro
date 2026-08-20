@@ -21,30 +21,77 @@ export type ExportBackupResult = {
 export async function exportBackup(
   input: ExportBackupInput = {},
 ): Promise<ExportBackupResult> {
-  const { data, error } = await supabase.functions.invoke('export-backup', {
-    body: {
-      empresa_id: input.empresaId ?? null,
-      include_lookups: input.includeLookups !== false,
-    },
-  })
+  const baseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
-  if (error) {
-    return { ok: false, error: error.message }
+  if (!baseUrl || !anonKey) {
+    return { ok: false, error: 'Configuração Supabase ausente.' }
   }
 
-  if (data?.error) {
-    return { ok: false, error: String(data.error) }
+  // Garante JWT fresco (evita falha no gateway / sessão expirada).
+  const { data: refreshed } = await supabase.auth.refreshSession()
+  const accessToken =
+    refreshed.session?.access_token ??
+    (await supabase.auth.getSession()).data.session?.access_token
+
+  if (!accessToken) {
+    return { ok: false, error: 'Sessão não encontrada. Faça login novamente.' }
   }
 
-  return {
-    ok: true,
-    path: data.path as string | undefined,
-    downloadUrl: data.download_url as string | undefined,
-    expiresInSeconds: data.expires_in_seconds as number | undefined,
-    generatedAt: data.generated_at as string | undefined,
-    sizeBytes: data.size_bytes as number | undefined,
-    counts: data.counts as Record<string, number> | undefined,
-    warnings: (data.warnings as string[] | undefined) ?? [],
+  try {
+    const res = await fetch(`${baseUrl}/functions/v1/export-backup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        apikey: anonKey,
+      },
+      body: JSON.stringify({
+        empresa_id: input.empresaId ?? null,
+        include_lookups: input.includeLookups !== false,
+      }),
+    })
+
+    const text = await res.text()
+    let data: Record<string, unknown> | null = null
+    try {
+      data = text ? (JSON.parse(text) as Record<string, unknown>) : null
+    } catch {
+      data = null
+    }
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        error:
+          (data?.error != null ? String(data.error) : null) ||
+          text ||
+          `HTTP ${res.status}`,
+      }
+    }
+
+    if (data?.error) {
+      return { ok: false, error: String(data.error) }
+    }
+
+    return {
+      ok: true,
+      path: data?.path as string | undefined,
+      downloadUrl: data?.download_url as string | undefined,
+      expiresInSeconds: data?.expires_in_seconds as number | undefined,
+      generatedAt: data?.generated_at as string | undefined,
+      sizeBytes: data?.size_bytes as number | undefined,
+      counts: data?.counts as Record<string, number> | undefined,
+      warnings: (data?.warnings as string[] | undefined) ?? [],
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error:
+        e instanceof Error
+          ? e.message || 'Failed to send a request to the Edge Function'
+          : 'Failed to send a request to the Edge Function',
+    }
   }
 }
 
