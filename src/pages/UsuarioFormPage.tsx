@@ -254,15 +254,16 @@ export function UsuarioFormPage() {
       return
     }
 
-    const wantsPasswordChange =
-      form.password.length >= 6 && form.passwordConfirm.length > 0
-    if (form.password.length > 0 || form.passwordConfirm.length > 0) {
-      if (form.password.length < 6) {
+    const pwd = form.password.trim()
+    const pwd2 = form.passwordConfirm.trim()
+    const wantsPasswordChange = pwd.length > 0 || pwd2.length > 0
+    if (wantsPasswordChange) {
+      if (pwd.length < 6) {
         setSaving(false)
         setError('A nova senha deve ter pelo menos 6 caracteres.')
         return
       }
-      if (form.password !== form.passwordConfirm) {
+      if (pwd !== pwd2) {
         setSaving(false)
         setError('A confirmação de senha não confere.')
         return
@@ -293,12 +294,12 @@ export function UsuarioFormPage() {
     }
 
     if (wantsPasswordChange && id) {
-      const pwdResult = await updateUsuarioSenha(id, form.password)
+      const pwdResult = await updateUsuarioSenha(id, pwd)
       if (!pwdResult.ok) {
         setSaving(false)
         setError(
           pwdResult.error ??
-            'Perfil salvo, mas não foi possível alterar a senha.',
+            'Perfil e menus salvos, mas não foi possível alterar a senha.',
         )
         return
       }
