@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
-import { PayIcon } from '@/components/PayIcon'
 import {
   DESPESA_SITUACAO,
   formatMoney,
@@ -425,12 +424,10 @@ function DespesasRelatorioTabela({
                     canWrite &&
                     Number(row.despesa_saldo ?? 0) > 0 ? (
                       <Link
-                        className="btn btn-primary btn-with-icon"
+                        className="btn btn-primary"
                         to={`/despesas/pagamento/${row.despesa_id}`}
                         title="Registrar pagamento"
-                        aria-label="Pagar"
                       >
-                        <PayIcon />
                         Pagar
                       </Link>
                     ) : null}

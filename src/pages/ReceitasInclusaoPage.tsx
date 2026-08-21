@@ -3,8 +3,6 @@ import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AddIcon } from '@/components/AddIcon'
-import { OpenIcon } from '@/components/OpenIcon'
-import { ReceiveIcon } from '@/components/ReceiveIcon'
 import { AlertMessage } from '@/components/AlertMessage'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 import {
@@ -254,22 +252,17 @@ export function ReceitasInclusaoPage() {
                     <td>
                       <div className="table-actions">
                         <Link
-                          className="btn btn-soft btn-with-icon"
+                          className="btn btn-soft"
                           to={`/receitas/inclusao/${row.receita_id}`}
-                          title="Abrir receita"
-                          aria-label="Abrir"
                         >
-                          <OpenIcon />
                           Abrir
                         </Link>
                         {canWrite && emAberto ? (
                           <Link
-                            className="btn btn-primary btn-with-icon"
+                            className="btn btn-primary"
                             to={`/receitas/recebimento/${row.receita_id}`}
                             title="Registrar recebimento"
-                            aria-label="Receber"
                           >
-                            <ReceiveIcon />
                             Receber
                           </Link>
                         ) : null}

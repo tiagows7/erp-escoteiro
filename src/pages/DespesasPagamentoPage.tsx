@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
-import { PayIcon } from '@/components/PayIcon'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 import {
   DESPESA_SITUACAO,
@@ -220,12 +219,10 @@ export function DespesasPagamentoPage() {
                     <td>
                       {canWrite ? (
                         <Link
-                          className="btn btn-primary btn-with-icon"
+                          className="btn btn-primary"
                           to={`/despesas/pagamento/${row.despesa_id}`}
                           title="Registrar pagamento"
-                          aria-label="Pagar"
                         >
-                          <PayIcon />
                           Pagar
                         </Link>
                       ) : (

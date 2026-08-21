@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AddIcon } from '@/components/AddIcon'
-import { PayIcon } from '@/components/PayIcon'
 import { AlertMessage } from '@/components/AlertMessage'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 import {
@@ -259,12 +258,10 @@ export function DespesasInclusaoPage() {
                         </Link>
                         {canWrite && emAberto ? (
                           <Link
-                            className="btn btn-primary btn-with-icon"
+                            className="btn btn-primary"
                             to={`/despesas/pagamento/${row.despesa_id}`}
                             title="Registrar pagamento"
-                            aria-label="Pagar"
                           >
-                            <PayIcon />
                             Pagar
                           </Link>
                         ) : null}
