@@ -258,10 +258,7 @@ export function PortalTransparenciaPage() {
                 <td>{formatMoney(row.despesa_saldo)}</td>
                 <td>{situacaoTituloLabel(row.despesa_situacao)}</td>
                 <td>
-                  <DocumentosLinks
-                    value={row.despesa_documento}
-                    hideLinks
-                  />
+                  <DocumentosLinks value={row.despesa_documento} />
                 </td>
               </tr>
             ))}
@@ -302,10 +299,7 @@ export function PortalTransparenciaPage() {
                 <td>{formatMoney(row.receita_saldo)}</td>
                 <td>{situacaoTituloLabel(row.receita_situacao)}</td>
                 <td>
-                  <DocumentosLinks
-                    value={row.receita_documento}
-                    hideLinks
-                  />
+                  <DocumentosLinks value={row.receita_documento} />
                 </td>
               </tr>
             ))}

@@ -7,7 +7,10 @@ import { documentLabel, parseDocumentUrls } from '@/lib/documentUrls'
 
 type Props = {
   value: string | null | undefined
-  /** Se true, não gera link (portal público). */
+  /**
+   * Se true, só indica que há anexo (sem link).
+   * No portal público use false para permitir ver o documento.
+   */
   hideLinks?: boolean
 }
 
