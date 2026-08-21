@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { PayIcon } from '@/components/PayIcon'
 import {
   DESPESA_SITUACAO,
   formatMoney,
@@ -56,7 +57,8 @@ function valorPago(row: DespesaRow): number {
 }
 
 export function DespesasRelatorioPage() {
-  const { empresa, profile } = useAuth()
+  const { empresa, profile, hasPermission } = useAuth()
+  const canWrite = hasPermission('financeiro.write')
   const empresaId = empresa?.id
   const scope = useMemo(() => resolveFinanceiroScope(profile), [profile])
 
@@ -408,12 +410,27 @@ function DespesasRelatorioTabela({
             {rows.map((row) => (
               <tr key={row.despesa_id}>
                 <td className="no-print">
-                  <Link
-                    className="btn btn-soft"
-                    to={`/despesas/inclusao/${row.despesa_id}`}
-                  >
-                    Abrir
-                  </Link>
+                  <div className="table-actions">
+                    <Link
+                      className="btn btn-soft"
+                      to={`/despesas/inclusao/${row.despesa_id}`}
+                    >
+                      Abrir
+                    </Link>
+                    {mode === 'aberto' &&
+                    canWrite &&
+                    Number(row.despesa_saldo ?? 0) > 0 ? (
+                      <Link
+                        className="btn btn-primary btn-with-icon"
+                        to={`/despesas/pagamento/${row.despesa_id}`}
+                        title="Registrar pagamento"
+                        aria-label="Pagar"
+                      >
+                        <PayIcon />
+                        Pagar
+                      </Link>
+                    ) : null}
+                  </div>
                 </td>
                 <td>{formatDate(row.despesa_emissao)}</td>
                 <td>{formatDate(row.despesa_vencimento)}</td>

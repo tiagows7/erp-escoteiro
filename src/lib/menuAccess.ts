@@ -153,6 +153,16 @@ export function pathMatchesMenuKey(pathname: string, menuKey: string): boolean {
       return true
     }
   }
+  // Inclusão/relatório de despesas também liberam pagar
+  // (rota irmã /despesas/pagamento/:id).
+  if (menuKey === '/despesas/inclusao' || menuKey === '/despesas/relatorio') {
+    if (
+      pathname === '/despesas/pagamento' ||
+      pathname.startsWith('/despesas/pagamento/')
+    ) {
+      return true
+    }
+  }
   return pathname === menuKey || pathname.startsWith(`${menuKey}/`)
 }
 

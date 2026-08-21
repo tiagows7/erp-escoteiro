@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AddIcon } from '@/components/AddIcon'
+import { PayIcon } from '@/components/PayIcon'
 import { AlertMessage } from '@/components/AlertMessage'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 import {
@@ -242,15 +243,32 @@ export function DespesasInclusaoPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => (
+                {filtered.map((row) => {
+                  const emAberto =
+                    Number(row.despesa_saldo ?? 0) > 0 &&
+                    row.despesa_situacao !== DESPESA_SITUACAO.PAGO
+                  return (
                   <tr key={row.despesa_id}>
                     <td>
-                      <Link
-                        className="btn btn-soft"
-                        to={`/despesas/inclusao/${row.despesa_id}`}
-                      >
-                        Abrir
-                      </Link>
+                      <div className="table-actions">
+                        <Link
+                          className="btn btn-soft"
+                          to={`/despesas/inclusao/${row.despesa_id}`}
+                        >
+                          Abrir
+                        </Link>
+                        {canWrite && emAberto ? (
+                          <Link
+                            className="btn btn-primary btn-with-icon"
+                            to={`/despesas/pagamento/${row.despesa_id}`}
+                            title="Registrar pagamento"
+                            aria-label="Pagar"
+                          >
+                            <PayIcon />
+                            Pagar
+                          </Link>
+                        ) : null}
+                      </div>
                     </td>
                     <td>{formatDate(row.despesa_vencimento)}</td>
                     <td>
@@ -266,7 +284,8 @@ export function DespesasInclusaoPage() {
                     <td>{formatMoney(row.despesa_saldo)}</td>
                     <td>{situacaoDespesaLabel(row.despesa_situacao)}</td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

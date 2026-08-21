@@ -243,15 +243,30 @@ export function ReceitasInclusaoPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => (
+                {filtered.map((row) => {
+                  const emAberto =
+                    Number(row.receita_saldo ?? 0) > 0 &&
+                    row.receita_situacao !== TITULO_SITUACAO.PAGO
+                  return (
                   <tr key={row.receita_id}>
                     <td>
-                      <Link
-                        className="btn btn-soft"
-                        to={`/receitas/inclusao/${row.receita_id}`}
-                      >
-                        Abrir
-                      </Link>
+                      <div className="table-actions">
+                        <Link
+                          className="btn btn-soft"
+                          to={`/receitas/inclusao/${row.receita_id}`}
+                        >
+                          Abrir
+                        </Link>
+                        {canWrite && emAberto ? (
+                          <Link
+                            className="btn btn-primary"
+                            to={`/receitas/recebimento/${row.receita_id}`}
+                            title="Registrar recebimento"
+                          >
+                            Receber
+                          </Link>
+                        ) : null}
+                      </div>
                     </td>
                     <td>{formatDate(row.receita_vencimento)}</td>
                     <td>{row.receita_descricao || '—'}</td>
@@ -271,7 +286,8 @@ export function ReceitasInclusaoPage() {
                       ) : null}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
