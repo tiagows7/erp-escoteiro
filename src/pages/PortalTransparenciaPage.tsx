@@ -386,8 +386,8 @@ export function PortalTransparenciaPage() {
               </select>
             </label>
             <p className="field-hint portal-hint">
-              Demonstrativo do período com saldo anterior, receitas, despesas e
-              saldo final.
+              Demonstrativo em regime de caixa: só valores já recebidos e pagos,
+              com saldo anterior/final e mensalidades em atraso.
               {profile?.codigo_ramo != null &&
               profile.codigo_ramo >= 1 &&
               profile.codigo_ramo <= 4
@@ -474,36 +474,57 @@ export function PortalTransparenciaPage() {
                     {formatMoney(resumo.saldo_anterior ?? 0)}
                   </strong>
                   <em className="stat-card-hint">
-                    Antes de {periodoLabel.toLowerCase()}
+                    Caixa antes de {periodoLabel.toLowerCase()}
                   </em>
                 </article>
                 <article className="stat-card">
                   <span>Receitas</span>
-                  <strong>{formatMoney(resumo.total_receitas)}</strong>
-                  <em className="stat-card-hint">
-                    Recebido: {formatMoney(resumo.receitas_recebidas)}
-                  </em>
+                  <strong>
+                    {formatMoney(
+                      resumo.receitas_recebidas ?? resumo.total_receitas,
+                    )}
+                  </strong>
+                  <em className="stat-card-hint">Somente valores recebidos</em>
                 </article>
                 <article className="stat-card">
                   <span>Despesas</span>
-                  <strong>{formatMoney(resumo.total_despesas)}</strong>
-                  <em className="stat-card-hint">
-                    Pago: {formatMoney(resumo.despesas_pagas)}
-                  </em>
+                  <strong>
+                    {formatMoney(
+                      resumo.despesas_pagas ?? resumo.total_despesas,
+                    )}
+                  </strong>
+                  <em className="stat-card-hint">Somente valores pagos</em>
                 </article>
                 <article className="stat-card stat-card-total">
                   <span>Saldo final</span>
                   <strong
                     className={
-                      Number(resumo.saldo_final ?? resumo.saldo_lancado) < 0
+                      Number(resumo.saldo_final ?? resumo.saldo_realizado) < 0
                         ? 'is-neg'
                         : undefined
                     }
                   >
-                    {formatMoney(resumo.saldo_final ?? resumo.saldo_lancado)}
+                    {formatMoney(
+                      resumo.saldo_final ?? resumo.saldo_realizado,
+                    )}
                   </strong>
                   <em className="stat-card-hint">
-                    Anterior + receitas − despesas
+                    Anterior + recebido − pago
+                  </em>
+                </article>
+                <article className="stat-card">
+                  <span>Mensalidades em atraso</span>
+                  <strong
+                    className={
+                      Number(resumo.mensalidades_atraso ?? 0) > 0
+                        ? 'is-neg'
+                        : undefined
+                    }
+                  >
+                    {formatMoney(resumo.mensalidades_atraso ?? 0)}
+                  </strong>
+                  <em className="stat-card-hint">
+                    Saldo vencido em aberto (hoje)
                   </em>
                 </article>
               </div>
