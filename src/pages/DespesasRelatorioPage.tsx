@@ -335,6 +335,7 @@ export function DespesasRelatorioPage() {
               rows={abertos}
               ramoMap={ramoMap}
               mode="aberto"
+              canWrite={canWrite}
               emptyMessage="Nenhuma despesa em aberto no período."
             />
           </section>
@@ -357,6 +358,7 @@ export function DespesasRelatorioPage() {
               rows={pagos}
               ramoMap={ramoMap}
               mode="pago"
+              canWrite={canWrite}
               emptyMessage="Nenhuma despesa paga no período."
             />
           </section>
@@ -370,11 +372,13 @@ function DespesasRelatorioTabela({
   rows,
   ramoMap,
   mode,
+  canWrite,
   emptyMessage,
 }: {
   rows: DespesaRow[]
   ramoMap: Map<number, string>
   mode: 'aberto' | 'pago'
+  canWrite: boolean
   emptyMessage: string
 }) {
   if (rows.length === 0) {
