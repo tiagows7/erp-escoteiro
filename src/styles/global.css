@@ -1841,6 +1841,15 @@ button {
   stroke: rgba(18, 63, 138, 0.1);
 }
 
+.dashboard-benef-legend-total {
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--line);
+}
+
+.dashboard-benef-legend-total .dashboard-benef-valor-btn {
+  margin-top: 0;
+}
+
 .benef-donut-pagantes {
   stroke: #247a3f;
 }

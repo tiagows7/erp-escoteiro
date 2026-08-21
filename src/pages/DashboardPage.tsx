@@ -156,13 +156,6 @@ const BENEF_MENSALIDADE_VAZIO: BeneficiarioMensalidadeStats = {
   geradoPorMes: Array.from({ length: 12 }, () => 0),
 }
 
-function percentuaisParte(a: number, b: number): [number, number] {
-  const t = a + b
-  if (t <= 0) return [0, 0]
-  const pa = Math.round((a / t) * 100)
-  return [pa, 100 - pa]
-}
-
 function parseValorMensalidade(raw: unknown): number {
   if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0
   if (raw == null) return 0
@@ -174,21 +167,72 @@ function parseValorMensalidade(raw: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
+const BENEF_DONUT_COLORS = [
+  '#247a3f',
+  '#1d6f8c',
+  '#5b4bb7',
+  '#c45c26',
+  '#2f7d62',
+  '#8b5a2b',
+  '#3d5a80',
+  '#6a994e',
+  '#b56576',
+  '#4a6fa5',
+]
+
+const BENEF_DONUT_ISENTO_COLOR = '#c9a227'
+
+type BenefDonutSlice = {
+  key: string
+  label: string
+  value: number
+  color: string
+}
+
+function buildBenefDonutSlices(
+  porTipo: MensalidadeTipoDetalhe[],
+  isentos: number,
+): BenefDonutSlice[] {
+  const slices: BenefDonutSlice[] = porTipo
+    .filter((t) => t.quantidade > 0)
+    .map((t, index) => ({
+      key: t.id != null ? `t-${t.id}` : `sem-${t.nome}`,
+      label: t.nome,
+      value: t.quantidade,
+      color: BENEF_DONUT_COLORS[index % BENEF_DONUT_COLORS.length],
+    }))
+  if (isentos > 0) {
+    slices.push({
+      key: 'isento',
+      label: 'Isento',
+      value: isentos,
+      color: BENEF_DONUT_ISENTO_COLOR,
+    })
+  }
+  return slices
+}
+
 function BeneficiariosDonut({
-  pagantes,
+  porTipo,
   isentos,
 }: {
-  pagantes: number
+  porTipo: MensalidadeTipoDetalhe[]
   isentos: number
 }) {
-  const total = pagantes + isentos
+  const slices = buildBenefDonutSlices(porTipo, isentos)
+  const total = slices.reduce((sum, s) => sum + s.value, 0)
   const size = 148
   const stroke = 20
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
-  const [pctPagantes] = percentuaisParte(pagantes, isentos)
-  const pagLen = total > 0 ? (pagantes / total) * c : 0
-  const isentoLen = total > 0 ? (isentos / total) * c : 0
+
+  let offset = c * 0.25
+  const arcs = slices.map((slice) => {
+    const len = total > 0 ? (slice.value / total) * c : 0
+    const arc = { ...slice, len, offset }
+    offset -= len
+    return arc
+  })
 
   return (
     <div className="benef-donut" aria-hidden="true">
@@ -201,40 +245,27 @@ function BeneficiariosDonut({
           fill="none"
           strokeWidth={stroke}
         />
-        {total > 0 ? (
-          <>
-            <circle
-              className="benef-donut-pagantes"
-              cx={size / 2}
-              cy={size / 2}
-              r={r}
-              fill="none"
-              strokeWidth={stroke}
-              strokeDasharray={`${pagLen} ${c - pagLen}`}
-              strokeDashoffset={c * 0.25}
-              strokeLinecap="butt"
-            />
-            <circle
-              className="benef-donut-isentos"
-              cx={size / 2}
-              cy={size / 2}
-              r={r}
-              fill="none"
-              strokeWidth={stroke}
-              strokeDasharray={`${isentoLen} ${c - isentoLen}`}
-              strokeDashoffset={c * 0.25 - pagLen}
-              strokeLinecap="butt"
-            />
-          </>
-        ) : null}
+        {total > 0
+          ? arcs.map((arc) => (
+              <circle
+                key={arc.key}
+                cx={size / 2}
+                cy={size / 2}
+                r={r}
+                fill="none"
+                stroke={arc.color}
+                strokeWidth={stroke}
+                strokeDasharray={`${arc.len} ${c - arc.len}`}
+                strokeDashoffset={arc.offset}
+                strokeLinecap="butt"
+              />
+            ))
+          : null}
       </svg>
       <div className="benef-donut-center">
         <strong>{total}</strong>
         <span>beneficiários</span>
       </div>
-      <span className="sr-only">
-        {pctPagantes}% pagam mensalidade
-      </span>
     </div>
   )
 }
@@ -1361,10 +1392,13 @@ export function DashboardPage() {
     [validadeRegistro],
   )
 
-  const [pctPagantes, pctIsentos] = useMemo(
+  const benefDonutSlices = useMemo(
     () =>
-      percentuaisParte(benefMensalidade.pagantes, benefMensalidade.isentos),
-    [benefMensalidade.pagantes, benefMensalidade.isentos],
+      buildBenefDonutSlices(
+        benefMensalidade.porTipo,
+        benefMensalidade.isentos,
+      ),
+    [benefMensalidade.porTipo, benefMensalidade.isentos],
   )
 
   return (
@@ -1463,7 +1497,7 @@ export function DashboardPage() {
             <div>
               <h3>Beneficiários — mensalidade</h3>
               <p className="muted">
-                Ativos do grupo · quem paga e quem é isento
+                Ativos do grupo · tipos de mensalidade e isentos
               </p>
             </div>
             <span className="badge">
@@ -1479,17 +1513,34 @@ export function DashboardPage() {
             <div className="dashboard-benef-charts">
               <div className="dashboard-benef-chart">
                 <BeneficiariosDonut
-                  pagantes={benefMensalidade.pagantes}
+                  porTipo={benefMensalidade.porTipo}
                   isentos={benefMensalidade.isentos}
                 />
                 <ul className="dashboard-benef-legend">
-                  <li>
-                    <span className="dashboard-benef-swatch is-pagantes" />
+                  {benefDonutSlices.map((slice) => {
+                    const pct =
+                      benefMensalidade.total > 0
+                        ? Math.round(
+                            (slice.value / benefMensalidade.total) * 100,
+                          )
+                        : 0
+                    return (
+                      <li key={slice.key}>
+                        <span
+                          className="dashboard-benef-swatch"
+                          style={{ background: slice.color }}
+                        />
+                        <div>
+                          <strong>{slice.label}</strong>
+                          <p>
+                            {slice.value} · {pct}%
+                          </p>
+                        </div>
+                      </li>
+                    )
+                  })}
+                  <li className="dashboard-benef-legend-total">
                     <div>
-                      <strong>Paga mensalidade</strong>
-                      <p>
-                        {benefMensalidade.pagantes} · {pctPagantes}%
-                      </p>
                       <button
                         type="button"
                         className="dashboard-benef-valor-btn"
@@ -1498,7 +1549,9 @@ export function DashboardPage() {
                       >
                         Total mensalidade:{' '}
                         {formatMoney(benefMensalidade.valorMensalidade)}
-                        <span>Ver por tipo</span>
+                        <span>
+                          {benefMensalidade.pagantes} pagantes · Ver detalhe
+                        </span>
                       </button>
                       {benefMensalidade.pagantes > 0 &&
                       benefMensalidade.valorMensalidade <= 0 ? (
@@ -1508,15 +1561,6 @@ export function DashboardPage() {
                           Mensalidade.
                         </p>
                       ) : null}
-                    </div>
-                  </li>
-                  <li>
-                    <span className="dashboard-benef-swatch is-isentos" />
-                    <div>
-                      <strong>Isento</strong>
-                      <p>
-                        {benefMensalidade.isentos} · {pctIsentos}%
-                      </p>
                     </div>
                   </li>
                 </ul>
