@@ -587,6 +587,33 @@ export function DespesaFormPage() {
       setError('Grupo escoteiro não carregado.')
       return
     }
+
+    // Título pago: só permite anexar documentos.
+    if (!isNew && situacao === DESPESA_SITUACAO.PAGO) {
+      if (notaFiles.length === 0) {
+        setError('Selecione ao menos um documento para anexar.')
+        return
+      }
+      setSaving(true)
+      setError(null)
+      const up = await uploadDespesaNotas(
+        empresaId,
+        Number(id),
+        notaFiles,
+        serializeDocumentUrls(documentoUrls),
+      )
+      setSaving(false)
+      if ('error' in up) {
+        setError(up.error)
+        return
+      }
+      clearDraft()
+      navigate('/despesas/inclusao', {
+        state: { flashSuccess: 'Documento(s) anexado(s) com sucesso!' },
+      })
+      return
+    }
+
     if (!form.despesa_finalidade.trim()) {
       setError('Informe a finalidade.')
       return
@@ -1161,8 +1188,20 @@ export function DespesaFormPage() {
                 </button>
               ) : null}
             </>
-          ) : isPaid ? (
-            <p className="muted">Despesa paga — edição bloqueada.</p>
+          ) : canWrite && isPaid ? (
+            <>
+              <button
+                className="btn btn-primary"
+                type="submit"
+                disabled={saving || notaFiles.length === 0}
+              >
+                {saving ? 'Enviando…' : 'Salvar documentos'}
+              </button>
+              <p className="muted" style={{ margin: 0 }}>
+                Despesa paga — demais campos bloqueados; você pode anexar
+                documentos.
+              </p>
+            </>
           ) : (
             <p className="muted">Modo leitura — sem permissão para salvar.</p>
           )}

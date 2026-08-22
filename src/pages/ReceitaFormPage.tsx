@@ -578,6 +578,40 @@ export function ReceitaFormPage() {
       setError('Grupo escoteiro não carregado.')
       return
     }
+
+    // Título pago (ou mensalidade já recebida): só permite anexar documentos.
+    const docsOnly =
+      !isNew &&
+      (situacao === TITULO_SITUACAO.PAGO ||
+        (origem === RECEITA_ORIGEM.MENSALIDADE &&
+          situacao != null &&
+          situacao !== TITULO_SITUACAO.ABERTO))
+
+    if (docsOnly) {
+      if (docFiles.length === 0) {
+        setError('Selecione ao menos um documento para anexar.')
+        return
+      }
+      setSaving(true)
+      setError(null)
+      const up = await uploadReceitaDocumentos(
+        empresaId,
+        Number(id),
+        docFiles,
+        serializeDocumentUrls(documentoUrls),
+      )
+      setSaving(false)
+      if ('error' in up) {
+        setError(up.error)
+        return
+      }
+      clearDraft()
+      navigate('/receitas/inclusao', {
+        state: { flashSuccess: 'Documento(s) anexado(s) com sucesso!' },
+      })
+      return
+    }
+
     if (!form.receita_descricao.trim()) {
       setError('Informe a descrição.')
       return
@@ -855,6 +889,12 @@ export function ReceitaFormPage() {
   const disabled = saving || !canWrite
   const isPaid = situacao === TITULO_SITUACAO.PAGO
   const isMensalidade = origem === RECEITA_ORIGEM.MENSALIDADE
+  const docsOnly =
+    !isNew &&
+    (isPaid ||
+      (isMensalidade &&
+        situacao != null &&
+        situacao !== TITULO_SITUACAO.ABERTO))
 
   return (
     <>
@@ -903,7 +943,7 @@ export function ReceitaFormPage() {
               className="input"
               value={form.receita_descricao}
               onChange={(e) => update('receita_descricao', e.target.value)}
-              disabled={disabled || isPaid}
+              disabled={disabled || docsOnly}
               required
               maxLength={120}
             />
@@ -916,7 +956,7 @@ export function ReceitaFormPage() {
               className="select"
               value={form.associado_id}
               onChange={(e) => update('associado_id', e.target.value)}
-              disabled={disabled || isPaid || isMensalidade}
+              disabled={disabled || docsOnly || isMensalidade}
             >
               <option value="">Nenhum</option>
               {associados.map((a) => (
@@ -947,7 +987,7 @@ export function ReceitaFormPage() {
                   update('receita_secao', '')
                   update('atividade_id', '')
                 }}
-                disabled={disabled || isPaid || !!scope || lockedByVinculo}
+                disabled={disabled || docsOnly || !!scope || lockedByVinculo}
               >
                 <option value="">
                   {lockedByVinculo ? 'Grupo todo' : 'Selecione'}
@@ -982,7 +1022,7 @@ export function ReceitaFormPage() {
               }}
               disabled={
                 disabled ||
-                isPaid ||
+                docsOnly ||
                 (scope != null && scope.secao != null) ||
                 lockedByVinculo
               }
@@ -1017,7 +1057,7 @@ export function ReceitaFormPage() {
                 if (ativ.ramo != null) update('receita_ramo', String(ativ.ramo))
                 if (ativ.secao != null) update('receita_secao', String(ativ.secao))
               }}
-              disabled={disabled || isPaid || lockedByVinculo}
+              disabled={disabled || docsOnly || lockedByVinculo}
             >
               <option value="">Nenhuma</option>
               {atividadesFiltradas.map((a) => (
@@ -1047,7 +1087,7 @@ export function ReceitaFormPage() {
                 if (proj.secao != null)
                   update('receita_secao', String(proj.secao))
               }}
-              disabled={disabled || isPaid || lockedByVinculo}
+              disabled={disabled || docsOnly || lockedByVinculo}
             >
               <option value="">Nenhum</option>
               {projetosFiltrados.map((p) => (
@@ -1074,7 +1114,7 @@ export function ReceitaFormPage() {
                 if (ev.ramo != null) update('receita_ramo', String(ev.ramo))
                 if (ev.secao != null) update('receita_secao', String(ev.secao))
               }}
-              disabled={disabled || isPaid || lockedByVinculo}
+              disabled={disabled || docsOnly || lockedByVinculo}
             >
               <option value="">Nenhum</option>
               {eventosFiltrados.map((e) => (
@@ -1101,7 +1141,7 @@ export function ReceitaFormPage() {
                 if (ac.ramo != null) update('receita_ramo', String(ac.ramo))
                 if (ac.secao != null) update('receita_secao', String(ac.secao))
               }}
-              disabled={disabled || isPaid || lockedByVinculo}
+              disabled={disabled || docsOnly || lockedByVinculo}
             >
               <option value="">Nenhuma</option>
               {acoesFiltradas.map((a) => (
@@ -1120,7 +1160,7 @@ export function ReceitaFormPage() {
               type="date"
               value={form.receita_emissao}
               onChange={(e) => update('receita_emissao', e.target.value)}
-              disabled={disabled || isPaid}
+              disabled={disabled || docsOnly}
             />
           </div>
 
@@ -1132,7 +1172,7 @@ export function ReceitaFormPage() {
               type="date"
               value={form.receita_vencimento}
               onChange={(e) => update('receita_vencimento', e.target.value)}
-              disabled={disabled || isPaid}
+              disabled={disabled || docsOnly}
             />
           </div>
 
@@ -1144,7 +1184,7 @@ export function ReceitaFormPage() {
               inputMode="decimal"
               value={form.receita_valor}
               onChange={(e) => update('receita_valor', e.target.value)}
-              disabled={disabled || isPaid}
+              disabled={disabled || docsOnly}
               required
             />
           </div>
@@ -1156,7 +1196,7 @@ export function ReceitaFormPage() {
               className="input"
               value={form.receita_observacao}
               onChange={(e) => update('receita_observacao', e.target.value)}
-              disabled={disabled || isPaid}
+              disabled={disabled || docsOnly}
               maxLength={200}
             />
           </div>
@@ -1273,7 +1313,7 @@ export function ReceitaFormPage() {
         </div>
 
         <div className="form-actions">
-          {canWrite && !isPaid ? (
+          {canWrite && !docsOnly ? (
             <>
               <button className="btn btn-primary" type="submit" disabled={saving}>
                 {saving
@@ -1293,8 +1333,20 @@ export function ReceitaFormPage() {
                 </button>
               ) : null}
             </>
-          ) : isPaid ? (
-            <p className="muted">Receita quitada — edição bloqueada.</p>
+          ) : canWrite && docsOnly ? (
+            <>
+              <button
+                className="btn btn-primary"
+                type="submit"
+                disabled={saving || docFiles.length === 0}
+              >
+                {saving ? 'Enviando…' : 'Salvar documentos'}
+              </button>
+              <p className="muted" style={{ margin: 0 }}>
+                Receita quitada — demais campos bloqueados; você pode anexar
+                documentos.
+              </p>
+            </>
           ) : (
             <p className="muted">Modo leitura — sem permissão para salvar.</p>
           )}
