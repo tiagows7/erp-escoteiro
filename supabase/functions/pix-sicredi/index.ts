@@ -584,12 +584,18 @@ function assertPemPair(cert: string, key: string) {
       'Certificado inválido: cole o conteúdo completo do .crt/.cer aprovado (com -----BEGIN CERTIFICATE-----).',
     )
   }
+  if (k.includes('ENCRYPTED PRIVATE KEY')) {
+    throw new Error(
+      'A chave privada está com senha (BEGIN ENCRYPTED PRIVATE KEY). O PIX Sicredi precisa da chave sem senha. Gere com: openssl pkcs8 -inform PEM -in sua.key -outform PEM -out chave-sem-senha.key -nocrypt — depois cole o arquivo em Cadastrar banco (Grupo).',
+    )
+  }
   if (
     !k.includes('BEGIN PRIVATE KEY') &&
-    !k.includes('BEGIN RSA PRIVATE KEY')
+    !k.includes('BEGIN RSA PRIVATE KEY') &&
+    !k.includes('BEGIN EC PRIVATE KEY')
   ) {
     throw new Error(
-      'Chave privada inválida: cole o conteúdo completo do .key (com -----BEGIN PRIVATE KEY-----).',
+      'Chave privada inválida: cole o conteúdo completo do .key sem senha (-----BEGIN PRIVATE KEY----- ou -----BEGIN RSA PRIVATE KEY-----). Se o arquivo tiver senha, converta antes com openssl pkcs8 … -nocrypt.',
     )
   }
 }

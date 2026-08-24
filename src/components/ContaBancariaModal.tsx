@@ -70,9 +70,17 @@ export function ContaBancariaModal({
     }
     if (fields.api_pix_ativo) {
       const cert = fields.api_pix_cert.trim()
+      const key = fields.api_pix_key.trim()
       const needsNewCert = !editing?.has_api_pix_cert && !cert
+      const needsNewKey = !editing?.has_api_pix_key && !key
       if (needsNewCert) {
         setError('Com PIX ativo, informe o certificado aprovado (.crt/.cer).')
+        return
+      }
+      if (needsNewKey) {
+        setError(
+          'Com PIX ativo, informe a chave privada (.key) sem senha.',
+        )
         return
       }
       if (cert.includes('BEGIN CERTIFICATE REQUEST')) {
@@ -84,6 +92,23 @@ export function ContaBancariaModal({
       if (cert && !cert.includes('BEGIN CERTIFICATE')) {
         setError(
           'Certificado PIX inválido. Cole o .crt/.cer aprovado com -----BEGIN CERTIFICATE-----.',
+        )
+        return
+      }
+      if (key.includes('ENCRYPTED PRIVATE KEY')) {
+        setError(
+          'A chave está com senha (ENCRYPTED). Converta para sem senha: openssl pkcs8 -inform PEM -in sua.key -outform PEM -out chave-sem-senha.key -nocrypt',
+        )
+        return
+      }
+      if (
+        key &&
+        !key.includes('BEGIN PRIVATE KEY') &&
+        !key.includes('BEGIN RSA PRIVATE KEY') &&
+        !key.includes('BEGIN EC PRIVATE KEY')
+      ) {
+        setError(
+          'Chave privada inválida. Cole o .key completo com -----BEGIN PRIVATE KEY----- (sem senha).',
         )
         return
       }

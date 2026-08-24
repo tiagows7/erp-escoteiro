@@ -218,9 +218,17 @@ export function ContaBancariaFieldsForm({
             />
             {value.has_api_pix_key ? (
               <span className="field-hint">
-                A chave privada atual não é exibida por segurança.
+                A chave privada atual não é exibida por segurança. Use chave{' '}
+                <strong>sem senha</strong> (BEGIN PRIVATE KEY). Se o arquivo
+                estiver com senha (ENCRYPTED), converta com openssl pkcs8 …
+                -nocrypt antes de colar.
               </span>
-            ) : null}
+            ) : (
+              <span className="field-hint">
+                Cole o .key <strong>sem senha</strong> (-----BEGIN PRIVATE
+                KEY-----). Arquivo ENCRYPTED não funciona no PIX Sicredi.
+              </span>
+            )}
           </div>
         </div>
       ) : null}
