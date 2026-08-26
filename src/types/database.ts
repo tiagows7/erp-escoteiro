@@ -34,6 +34,8 @@ export type Associado = {
   isento: boolean | null
   tipo_mensalidade: number | null
   validade_registro: string | null
+  /** true = provisório; false = definitivo */
+  registro_provisorio: boolean | null
   conquista_cruzeiro_do_sul: boolean | null
   conquista_lis_de_ouro: boolean | null
   conquista_escoteiro_patria: boolean | null

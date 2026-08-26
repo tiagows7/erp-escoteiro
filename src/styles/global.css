@@ -2521,6 +2521,12 @@ table.data .badge {
   color: var(--danger);
 }
 
+.badge-warning {
+  background: #fff3cd;
+  color: #8a6d1b;
+  border: 1px solid #e6d59a;
+}
+
 .badge-construction {
   background: #fff3cd;
   color: #8a6d1b;

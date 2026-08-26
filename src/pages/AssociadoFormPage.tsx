@@ -32,6 +32,7 @@ const emptyForm = {
   cpf: '',
   data_nascimento: '',
   validade_registro: '',
+  registro_provisorio: false,
   tipo_mensalidade: '',
   ativo: true,
   isento: false,
@@ -231,6 +232,7 @@ export function AssociadoFormPage() {
         cpf: data.cpf ?? '',
         data_nascimento: data.data_nascimento ?? '',
         validade_registro: data.validade_registro ?? '',
+        registro_provisorio: data.registro_provisorio === true,
         tipo_mensalidade: data.tipo_mensalidade?.toString() ?? '',
         ativo: data.ativo ?? true,
         isento: data.isento ?? false,
@@ -339,6 +341,7 @@ export function AssociadoFormPage() {
       cpf: strOrNull(form.cpf),
       data_nascimento: strOrNull(form.data_nascimento),
       validade_registro: strOrNull(form.validade_registro),
+      registro_provisorio: form.registro_provisorio === true,
       tipo_mensalidade: numOrNull(form.tipo_mensalidade),
       ativo: form.ativo,
       isento: form.isento,
@@ -555,6 +558,21 @@ export function AssociadoFormPage() {
                 onChange={(e) => update('validade_registro', e.target.value)}
                 disabled={disabled}
               />
+            </div>
+            <div className="field">
+              <label htmlFor="registro_tipo">Tipo de registro</label>
+              <select
+                id="registro_tipo"
+                className="select"
+                value={form.registro_provisorio ? 'provisorio' : 'definitivo'}
+                onChange={(e) =>
+                  update('registro_provisorio', e.target.value === 'provisorio')
+                }
+                disabled={disabled}
+              >
+                <option value="definitivo">Definitivo</option>
+                <option value="provisorio">Provisório</option>
+              </select>
             </div>
             <div className="field field-span-2">
               <label htmlFor="nome">Nome</label>

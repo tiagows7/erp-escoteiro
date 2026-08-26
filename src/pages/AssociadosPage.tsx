@@ -143,7 +143,7 @@ export function AssociadosPage() {
         let query = supabase
           .from('associados')
           .select(
-            'associado_id, registro, registro_identificador, nome, data_nascimento, celular, responsavel_fonecelular, email, ativo, ramo, secao, patrulha_matilha, empresa_id',
+            'associado_id, registro, registro_identificador, nome, data_nascimento, celular, responsavel_fonecelular, email, ativo, registro_provisorio, ramo, secao, patrulha_matilha, empresa_id',
           )
           .eq('empresa_id', empresaId)
           .order('nome')
@@ -487,6 +487,7 @@ export function AssociadosPage() {
                     <th></th>
                     <th>Registro</th>
                     <th>Nome</th>
+                    <th>Tipo</th>
                     <th>Idade</th>
                     <th>Ramo</th>
                     <th>Seção</th>
@@ -516,6 +517,15 @@ export function AssociadosPage() {
                         {row.ativo === false ? (
                           <span className="badge">Inativo</span>
                         ) : null}
+                      </td>
+                      <td>
+                        {row.registro_provisorio ? (
+                          <span className="badge badge-warning">
+                            Provisório
+                          </span>
+                        ) : (
+                          <span className="muted">Definitivo</span>
+                        )}
                       </td>
                       <td>{idadeFromNascimento(row.data_nascimento)}</td>
                       <td>{(row.ramo && ramoMap.get(row.ramo)) || '—'}</td>
