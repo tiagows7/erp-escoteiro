@@ -85,6 +85,28 @@ function formatDate(value: string | null) {
   return `${d}/${m}/${y}`
 }
 
+/** Primeiro e último dia do mês corrente (YYYY-MM-DD). */
+function monthRangeIso(date = new Date()): { first: string; last: string } {
+  const y = date.getFullYear()
+  const m = date.getMonth()
+  const mm = String(m + 1).padStart(2, '0')
+  const lastDay = new Date(y, m + 1, 0).getDate()
+  return {
+    first: `${y}-${mm}-01`,
+    last: `${y}-${mm}-${String(lastDay).padStart(2, '0')}`,
+  }
+}
+
+type RegistroVencendoMes = {
+  associado_id: number
+  nome: string
+  registro: number | null
+  validade_registro: string
+  ramo_nome: string | null
+  secao_nome: string | null
+  registro_provisorio: boolean
+}
+
 function statusValidadeRegistro(isoDate: string | null | undefined): {
   label: string
   tone: 'ok' | 'warn' | 'danger' | 'empty'
@@ -523,10 +545,26 @@ export function DashboardPage() {
   const [listaLoading, setListaLoading] = useState(false)
   const [listaError, setListaError] = useState<string | null>(null)
   const [aniversarioOpen, setAniversarioOpen] = useState(false)
+  const [registrosVencendo, setRegistrosVencendo] = useState<
+    RegistroVencendoMes[]
+  >([])
+  const [registrosVencendoOpen, setRegistrosVencendoOpen] = useState(false)
 
   const mesAtual = MESES[new Date().getMonth()]
   const totalAniversariantes = aniversariantes.length
   const aniversariantesHoje = aniversariantes.filter((a) => a.eh_hoje).length
+  const totalRegistrosVencendo = registrosVencendo.length
+  const registrosJaVencidos = useMemo(() => {
+    const hoje = new Date()
+    hoje.setHours(0, 0, 0, 0)
+    return registrosVencendo.filter((r) => {
+      const [y, m, d] = r.validade_registro.slice(0, 10).split('-').map(Number)
+      if (!y || !m || !d) return false
+      const venc = new Date(y, m - 1, d)
+      venc.setHours(0, 0, 0, 0)
+      return venc.getTime() < hoje.getTime()
+    }).length
+  }, [registrosVencendo])
 
   useEffect(() => {
     let mounted = true
@@ -535,6 +573,7 @@ export function DashboardPage() {
       setLoading(true)
 
       if (associadoView) {
+        setRegistrosVencendo([])
         const anivers = await supabase.rpc('dashboard_aniversariantes_mes')
         if (!mounted) return
         if (anivers.error) {
@@ -593,6 +632,7 @@ export function DashboardPage() {
         setRamos([])
         setPassagens([])
         setAniversariantes([])
+        setRegistrosVencendo([])
         setTotalAtivos(0)
         setBenefMensalidade(BENEF_MENSALIDADE_VAZIO)
       } else {
@@ -762,6 +802,79 @@ export function DashboardPage() {
           })),
         )
         setTotalAtivos(totalRes.count ?? 0)
+
+        // Registros com validade no mês corrente (grupo = todos; ramo/seção = filtro).
+        if (empresaId) {
+          const { first, last } = monthRangeIso()
+          let vencQ = supabase
+            .from('associados')
+            .select(
+              'associado_id, nome, registro, validade_registro, registro_provisorio, ramo, secao',
+            )
+            .eq('empresa_id', empresaId)
+            .eq('ativo', true)
+            .not('validade_registro', 'is', null)
+            .gte('validade_registro', first)
+            .lte('validade_registro', last)
+            .order('validade_registro', { ascending: true })
+            .order('nome', { ascending: true })
+            .limit(2000)
+
+          if (ramoFiltro != null) vencQ = vencQ.eq('ramo', ramoFiltro)
+          if (secaoFiltro != null) vencQ = vencQ.eq('secao', secaoFiltro)
+
+          const [vencRes, ramosLookup, secoesLookup] = await Promise.all([
+            vencQ,
+            supabase.from('ramos').select('ramo_id, nome').order('ramo_id'),
+            supabase
+              .from('secao')
+              .select('secao_id, nome')
+              .eq('empresa_id', empresaId),
+          ])
+
+          if (!mounted) return
+
+          if (vencRes.error) {
+            setRegistrosVencendo([])
+          } else {
+            const ramoNome = new Map(
+              ((ramosLookup.data ?? []) as { ramo_id: number; nome: string }[]).map(
+                (r) => [r.ramo_id, r.nome],
+              ),
+            )
+            const secaoNome = new Map(
+              (
+                (secoesLookup.data ?? []) as { secao_id: number; nome: string }[]
+              ).map((s) => [s.secao_id, s.nome]),
+            )
+            type VencRow = {
+              associado_id: number
+              nome: string
+              registro: number | null
+              validade_registro: string | null
+              registro_provisorio: boolean | null
+              ramo: number | null
+              secao: number | null
+            }
+            setRegistrosVencendo(
+              ((vencRes.data as VencRow[] | null) ?? [])
+                .filter((a) => !!a.validade_registro)
+                .map((a) => ({
+                  associado_id: a.associado_id,
+                  nome: a.nome,
+                  registro: a.registro,
+                  validade_registro: String(a.validade_registro).slice(0, 10),
+                  ramo_nome:
+                    a.ramo != null ? (ramoNome.get(a.ramo) ?? null) : null,
+                  secao_nome:
+                    a.secao != null ? (secaoNome.get(a.secao) ?? null) : null,
+                  registro_provisorio: a.registro_provisorio === true,
+                })),
+            )
+          }
+        } else {
+          setRegistrosVencendo([])
+        }
 
         // Card de mensalidade dos beneficiários: só usuários do grupo (sem ramo).
         if (empresaId && ramoFiltro == null) {
@@ -1635,7 +1748,7 @@ export function DashboardPage() {
       ) : null}
 
       <section
-        className={`dashboard-destaques${associadoView ? ' dashboard-destaques-solo' : ''}`}
+        className={`dashboard-destaques${associadoView ? ' dashboard-destaques-solo' : ' dashboard-destaques-staff'}`}
       >
         <div className="panel passagem-panel aniversario-panel">
           <div className="passagem-header">
@@ -1675,6 +1788,53 @@ export function DashboardPage() {
             </article>
           )}
         </div>
+
+        {!associadoView ? (
+          <div className="panel passagem-panel aniversario-panel">
+            <div className="passagem-header">
+              <div>
+                <h3>Registros vencendo</h3>
+                <p className="muted">
+                  {mesAtual}
+                  {ramoFiltro != null
+                    ? secaoFiltro != null
+                      ? ' · seu ramo/seção'
+                      : ' · seu ramo'
+                    : ' · grupo'}
+                </p>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="loading">Carregando…</div>
+            ) : (
+              <article className="aniversario-card registros-vencendo-card">
+                <div className="aniversario-card-body">
+                  <div className="aniversario-card-row">
+                    <strong className="aniversario-card-count">
+                      {totalRegistrosVencendo}
+                    </strong>
+                    <button
+                      type="button"
+                      className="btn btn-soft"
+                      disabled={totalRegistrosVencendo === 0}
+                      onClick={() => setRegistrosVencendoOpen(true)}
+                    >
+                      Ver
+                    </button>
+                  </div>
+                  <p className="aniversario-card-meta">
+                    {totalRegistrosVencendo === 0
+                      ? 'Nenhum neste mês'
+                      : registrosJaVencidos > 0
+                        ? `${registrosJaVencidos} já vencido(s)`
+                        : 'validade neste mês'}
+                  </p>
+                </div>
+              </article>
+            )}
+          </div>
+        ) : null}
 
         {!associadoView ? (
           <div className="panel passagem-panel">
@@ -1820,6 +1980,111 @@ export function DashboardPage() {
                       <td>{row.secao_nome ?? '—'}</td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {registrosVencendoOpen ? (
+        <div
+          className="confirm-overlay"
+          role="presentation"
+          onClick={() => setRegistrosVencendoOpen(false)}
+        >
+          <div
+            className="passagem-dialog aniversario-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="registros-vencendo-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="passagem-dialog-header">
+              <div>
+                <h3 id="registros-vencendo-title">
+                  Registros vencendo em {mesAtual}{' '}
+                  <span className="muted">({totalRegistrosVencendo})</span>
+                </h3>
+                <p className="muted">
+                  Associados ativos com validade do registro neste mês
+                  {ramoFiltro != null
+                    ? secaoFiltro != null
+                      ? ' (seu ramo/seção)'
+                      : ' (seu ramo)'
+                    : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-soft"
+                onClick={() => setRegistrosVencendoOpen(false)}
+              >
+                Fechar
+              </button>
+            </header>
+
+            <div className="table-wrap">
+              <table className="data-table aniversario-table">
+                <thead>
+                  <tr>
+                    {canOpenAssociado ? <th></th> : null}
+                    <th>Validade</th>
+                    <th>Registro</th>
+                    <th>Nome</th>
+                    <th>Situação</th>
+                    <th>Ramo</th>
+                    <th>Seção</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {registrosVencendo.map((row) => {
+                    const status = statusValidadeRegistro(row.validade_registro)
+                    return (
+                      <tr
+                        key={row.associado_id}
+                        className={
+                          status.tone === 'danger'
+                            ? 'aniversario-hoje'
+                            : undefined
+                        }
+                      >
+                        {canOpenAssociado ? (
+                          <td>
+                            <Link
+                              className="btn btn-soft"
+                              to={`/associados/${row.associado_id}`}
+                            >
+                              Abrir
+                            </Link>
+                          </td>
+                        ) : null}
+                        <td>{formatDate(row.validade_registro)}</td>
+                        <td>{row.registro ?? '—'}</td>
+                        <td>
+                          {row.nome}{' '}
+                          <RegistroProvisorioBadge
+                            provisorio={row.registro_provisorio}
+                          />
+                        </td>
+                        <td>
+                          <span
+                            className={
+                              status.tone === 'danger'
+                                ? 'badge badge-danger'
+                                : status.tone === 'warn'
+                                  ? 'badge badge-warning'
+                                  : 'badge'
+                            }
+                          >
+                            {status.label}
+                          </span>
+                        </td>
+                        <td>{row.ramo_nome ?? '—'}</td>
+                        <td>{row.secao_nome ?? '—'}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

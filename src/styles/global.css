@@ -1516,6 +1516,10 @@ button {
   margin-bottom: 0.25rem;
 }
 
+.dashboard-destaques-staff {
+  grid-template-columns: minmax(150px, 190px) minmax(150px, 190px) 1fr;
+}
+
 .dashboard-benef-panel {
   margin: 0 0 1rem;
 }
@@ -2231,6 +2235,11 @@ button {
   color: var(--ink-muted);
 }
 
+.registros-vencendo-card {
+  min-height: 5.5rem;
+  justify-content: center;
+}
+
 .aniversario-card-row .btn {
   padding: 0.25rem 0.55rem;
   font-size: 0.78rem;
@@ -2284,7 +2293,8 @@ button {
 }
 
 @media (max-width: 900px) {
-  .dashboard-destaques {
+  .dashboard-destaques,
+  .dashboard-destaques-staff {
     grid-template-columns: 1fr;
   }
 
