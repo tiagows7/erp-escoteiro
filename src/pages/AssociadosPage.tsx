@@ -226,6 +226,9 @@ export function AssociadosPage() {
       setImportResult(result)
       setReloadToken((n) => n + 1)
       const extra = [
+        result.updated > 0
+          ? `${result.updated} validade(s) atualizada(s)`
+          : '',
         result.skipped > 0
           ? `${result.skipped} já cadastrado(s) ignorado(s)`
           : '',
@@ -246,6 +249,10 @@ export function AssociadosPage() {
         toast.success(
           'Importação concluída',
           `${result.inserted} novo(s)${
+            result.updated > 0
+              ? `, ${result.updated} validade(s) atualizada(s)`
+              : ''
+          }${
             result.skipped > 0
               ? `, ${result.skipped} já cadastrado(s) ignorado(s)`
               : ''
@@ -421,6 +428,9 @@ export function AssociadosPage() {
           >
             <p>
               {importResult.inserted} novo(s)
+              {importResult.updated
+                ? `, ${importResult.updated} validade(s) do registro atualizada(s)`
+                : ''}
               {importResult.skipped
                 ? `, ${importResult.skipped} já cadastrado(s) ignorado(s)`
                 : ''}

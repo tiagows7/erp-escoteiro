@@ -423,7 +423,7 @@ export async function importAssociadosFromPaxtuExcel(
 
   const { data: existentesRows, error: existentesError } = await client
     .from('associados')
-    .select('registro')
+    .select('associado_id, registro')
     .eq('empresa_id', empresaId)
     .not('registro', 'is', null)
 
@@ -433,10 +433,14 @@ export async function importAssociadosFromPaxtuExcel(
     )
   }
 
-  const registrosExistentes = new Set<number>()
+  /** registro → associado_id */
+  const existentesByRegistro = new Map<number, number>()
   for (const row of existentesRows ?? []) {
     const n = Number((row as { registro: number | null }).registro)
-    if (Number.isFinite(n) && n > 0) registrosExistentes.add(n)
+    const id = Number((row as { associado_id: number }).associado_id)
+    if (Number.isFinite(n) && n > 0 && Number.isFinite(id) && id > 0) {
+      existentesByRegistro.set(n, id)
+    }
   }
 
   const portalMenus = associadoPortalMenuKeys()
@@ -476,8 +480,20 @@ export async function importAssociadosFromPaxtuExcel(
         throw new Error('Registro ou nome inválido')
       }
 
-      if (registrosExistentes.has(reg.registro)) {
-        result.skipped += 1
+      if (existentesByRegistro.has(reg.registro)) {
+        const associadoId = existentesByRegistro.get(reg.registro)!
+        const validade = parseDate(row[21])
+        if (validade) {
+          const { error: updError } = await client
+            .from('associados')
+            .update({ validade_registro: validade })
+            .eq('associado_id', associadoId)
+            .eq('empresa_id', empresaId)
+          if (updError) throw new Error(updError.message)
+          result.updated += 1
+        } else {
+          result.skipped += 1
+        }
         const ramoExistente = await resolveRamo(row[6])
         const secaoExistente = await resolveSecao(row[12], ramoExistente)
         queueLogin({
@@ -561,10 +577,17 @@ export async function importAssociadosFromPaxtuExcel(
         ativo: true,
       }
 
-      const { error } = await client.from('associados').insert(payload)
+      const { data: inserted, error } = await client
+        .from('associados')
+        .insert(payload)
+        .select('associado_id')
+        .single()
       if (error) throw new Error(error.message)
       result.inserted += 1
-      registrosExistentes.add(reg.registro)
+      const newId = Number(inserted?.associado_id)
+      if (Number.isFinite(newId) && newId > 0) {
+        existentesByRegistro.set(reg.registro, newId)
+      }
 
       queueLogin({
         nome,
