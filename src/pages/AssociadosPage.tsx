@@ -8,6 +8,7 @@ import {
 } from '@/lib/importAssociadosPaxtu'
 import { AddIcon } from '@/components/AddIcon'
 import { AlertMessage } from '@/components/AlertMessage'
+import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import { useToast } from '@/contexts/ToastContext'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
@@ -520,9 +521,7 @@ export function AssociadosPage() {
                       </td>
                       <td>
                         {row.registro_provisorio ? (
-                          <span className="badge badge-warning">
-                            Provisório
-                          </span>
+                          <RegistroProvisorioBadge provisorio />
                         ) : (
                           <span className="muted">Definitivo</span>
                         )}

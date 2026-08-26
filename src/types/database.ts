@@ -165,6 +165,7 @@ export type DashboardDetalhePassagem = {
   data_nascimento: string | null
   anos: number
   meses: number
+  registro_provisorio?: boolean | null
 }
 
 export type DashboardDetalheRamo = {
@@ -176,6 +177,7 @@ export type DashboardDetalheRamo = {
   meses: number
   secao_id?: number | null
   secao_nome: string | null
+  registro_provisorio?: boolean | null
 }
 
 export type DashboardAniversariante = {
@@ -188,6 +190,7 @@ export type DashboardAniversariante = {
   ramo_nome: string | null
   secao_nome: string | null
   eh_hoje: boolean
+  registro_provisorio?: boolean | null
 }
 
 export type Atividade = {

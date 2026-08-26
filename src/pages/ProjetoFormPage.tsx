@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   formDraftKey,
@@ -27,7 +28,7 @@ type ReceitaRow = {
   receita_saldo: number | null
   receita_situacao: number | null
   receita_documento: string | null
-  associados: { nome: string | null } | null
+  associados: { nome: string | null; registro_provisorio?: boolean | null } | null
 }
 
 type DespesaRow = {
@@ -207,7 +208,7 @@ export function ProjetoFormPage() {
         supabase
           .from('receitas')
           .select(
-            'receita_id, receita_descricao, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, receita_documento, associados(nome)',
+            'receita_id, receita_descricao, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, receita_documento, associados(nome, registro_provisorio)',
           )
           .eq('empresa_id', empresaId)
           .eq('projeto_id', proj.projeto_id)
@@ -527,7 +528,12 @@ export function ProjetoFormPage() {
                           row.receita_descricao || '—'
                         )}
                       </td>
-                      <td>{row.associados?.nome || '—'}</td>
+                      <td>
+                        {row.associados?.nome || '—'}{' '}
+                        <RegistroProvisorioBadge
+                          provisorio={row.associados?.registro_provisorio}
+                        />
+                      </td>
                       <td>{formatMoney(row.receita_valor)}</td>
                       <td>{formatMoney(row.receita_saldo)}</td>
                       <td>{situacaoTituloLabel(row.receita_situacao)}</td>

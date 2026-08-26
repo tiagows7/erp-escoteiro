@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { formatMoney, situacaoDespesaLabel } from '@/lib/despesas'
 import { situacaoTituloLabel } from '@/lib/receitas'
 import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
@@ -20,7 +21,7 @@ type ReceitaRow = {
   receita_valor: number | null
   receita_saldo: number | null
   receita_situacao: number | null
-  associados: { nome: string | null } | null
+  associados: { nome: string | null; registro_provisorio?: boolean | null } | null
 }
 
 type DespesaRow = {
@@ -100,7 +101,7 @@ export function AtividadeContasPage() {
         supabase
           .from('receitas')
           .select(
-            'receita_id, receita_descricao, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, associados(nome)',
+            'receita_id, receita_descricao, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, associados(nome, registro_provisorio)',
           )
           .eq('empresa_id', empresaId)
           .eq('atividade_id', atividadeId)
@@ -358,7 +359,12 @@ export function AtividadeContasPage() {
                         </Link>
                       )}
                     </td>
-                    <td>{row.associados?.nome || '—'}</td>
+                    <td>
+                      {row.associados?.nome || '—'}{' '}
+                      <RegistroProvisorioBadge
+                        provisorio={row.associados?.registro_provisorio}
+                      />
+                    </td>
                     <td>{formatMoney(row.receita_valor)}</td>
                     <td>{formatMoney(row.receita_saldo)}</td>
                     <td>{situacaoTituloLabel(row.receita_situacao)}</td>

@@ -12,15 +12,18 @@ import {
   type AssociadoAtividadeCtx,
 } from '@/lib/atividadeVisibilidade'
 import type { Atividade } from '@/types/database'
+import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 
 type AssociadoRow = AssociadoAtividadeCtx & {
   associado_id: number
   nome: string
+  registro_provisorio: boolean
 }
 
 type Pessoa = {
   associado_id: number
   nome: string
+  registro_provisorio: boolean
 }
 
 type AtividadeResumo = Atividade & {
@@ -124,7 +127,7 @@ export function StaffAtividadesPanel({
         .eq('empresa_id', empresaId),
       supabase
         .from('associados')
-        .select('associado_id, nome, ramo, secao, patrulha_matilha')
+        .select('associado_id, nome, ramo, secao, patrulha_matilha, registro_provisorio')
         .eq('empresa_id', empresaId)
         .eq('ativo', true)
         .order('nome', { ascending: true }),
@@ -173,10 +176,14 @@ export function StaffAtividadesPanel({
       ramo: a.ramo ?? null,
       secao: a.secao ?? null,
       patrulha_matilha: a.patrulha_matilha ?? null,
+      registro_provisorio: a.registro_provisorio === true,
     }))
     setAssociados(assocList)
 
     const nomeById = new Map(assocList.map((a) => [a.associado_id, a.nome]))
+    const provisorioById = new Map(
+      assocList.map((a) => [a.associado_id, a.registro_provisorio]),
+    )
 
     type ConfRow = { atividade_id: number; associado_id: number }
     type PagRow = { atividade_id: number; associado_id: number; valor: number }
@@ -187,6 +194,7 @@ export function StaffAtividadesPanel({
       list.push({
         associado_id: row.associado_id,
         nome: nomeById.get(row.associado_id) ?? `Associado #${row.associado_id}`,
+        registro_provisorio: provisorioById.get(row.associado_id) === true,
       })
       confByAtiv.set(row.atividade_id, list)
     }
@@ -200,6 +208,7 @@ export function StaffAtividadesPanel({
       cur.pessoas.push({
         associado_id: row.associado_id,
         nome: nomeById.get(row.associado_id) ?? `Associado #${row.associado_id}`,
+        registro_provisorio: provisorioById.get(row.associado_id) === true,
       })
       cur.total += Number(row.valor ?? 0)
       pagByAtiv.set(row.atividade_id, cur)
@@ -269,6 +278,7 @@ export function StaffAtividadesPanel({
           ramo: null,
           secao: null,
           patrulha_matilha: null,
+          registro_provisorio: p.registro_provisorio,
           confirmado: true,
           pago: pagoIds.has(p.associado_id),
         }))
@@ -563,7 +573,12 @@ export function StaffAtividadesPanel({
                       .join(' ')}
                   >
                     <div className="staff-pessoa-info">
-                      <span className="staff-pessoa-nome">{p.nome}</span>
+                      <span className="staff-pessoa-nome">
+                        {p.nome}{' '}
+                        <RegistroProvisorioBadge
+                          provisorio={p.registro_provisorio}
+                        />
+                      </span>
                       <span className="staff-pessoa-tags">
                         {p.confirmado ? (
                           <span className="staff-pessoa-chip is-confirmado">

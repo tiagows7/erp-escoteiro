@@ -7,10 +7,12 @@ import { AlertMessage } from '@/components/AlertMessage'
 import { AniversarioIllustration } from '@/components/AniversarioIllustration'
 import { AssociadoAtividadesPanel } from '@/components/AssociadoAtividadesPanel'
 import { AssociadoMensalidadesPanel } from '@/components/AssociadoMensalidadesPanel'
+import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { StaffAtividadesPanel } from '@/components/StaffAtividadesPanel'
 import { StaffMensalidadesAbertasPanel } from '@/components/StaffMensalidadesAbertasPanel'
 import { formatMoney } from '@/lib/despesas'
 import { RECEITA_ORIGEM } from '@/lib/receitas'
+import { mapRegistroProvisorio } from '@/lib/registroProvisorio'
 import { isAssociadoLogin } from '@/lib/roles'
 import type {
   DashboardAniversariante,
@@ -540,8 +542,17 @@ export function DashboardPage() {
           setAniversariantes([])
         } else {
           setError(null)
+          const base =
+            (anivers.data as DashboardAniversariante[]) ?? []
+          const provMap = await mapRegistroProvisorio(
+            base.map((a) => a.associado_id),
+          )
+          if (!mounted) return
           setAniversariantes(
-            (anivers.data as DashboardAniversariante[]) ?? [],
+            base.map((a) => ({
+              ...a,
+              registro_provisorio: provMap.get(a.associado_id) === true,
+            })),
           )
         }
         setLoading(false)
@@ -738,8 +749,17 @@ export function DashboardPage() {
           )
         }
 
+        const aniversBase =
+          (anivers.data as DashboardAniversariante[]) ?? []
+        const aniversProv = await mapRegistroProvisorio(
+          aniversBase.map((a) => a.associado_id),
+        )
+        if (!mounted) return
         setAniversariantes(
-          (anivers.data as DashboardAniversariante[]) ?? [],
+          aniversBase.map((a) => ({
+            ...a,
+            registro_provisorio: aniversProv.get(a.associado_id) === true,
+          })),
         )
         setTotalAtivos(totalRes.count ?? 0)
 
@@ -1055,7 +1075,7 @@ export function DashboardPage() {
       let assocQ = supabase
         .from('associados')
         .select(
-          'associado_id, nome, registro, data_nascimento, categoria, secao',
+          'associado_id, nome, registro, registro_provisorio, data_nascimento, categoria, secao',
         )
         .eq('empresa_id', empresaId!)
         .eq('ramo', ramoFiltro)
@@ -1101,6 +1121,7 @@ export function DashboardPage() {
         associado_id: number
         nome: string
         registro: number | null
+        registro_provisorio: boolean | null
         data_nascimento: string | null
         categoria: number | null
         secao: number | null
@@ -1121,6 +1142,7 @@ export function DashboardPage() {
             associado_id: a.associado_id,
             nome: a.nome,
             registro: a.registro,
+            registro_provisorio: a.registro_provisorio === true,
             data_nascimento: a.data_nascimento,
             anos: idade?.anos ?? 0,
             meses: idade?.meses ?? 0,
@@ -1143,7 +1165,7 @@ export function DashboardPage() {
       let assocQ = supabase
         .from('associados')
         .select(
-          'associado_id, nome, registro, data_nascimento, categoria, secao',
+          'associado_id, nome, registro, registro_provisorio, data_nascimento, categoria, secao',
         )
         .eq('empresa_id', empresaId!)
         .eq('ramo', item.ramo_id)
@@ -1189,6 +1211,7 @@ export function DashboardPage() {
         associado_id: number
         nome: string
         registro: number | null
+        registro_provisorio: boolean | null
         data_nascimento: string | null
         categoria: number | null
         secao: number | null
@@ -1208,6 +1231,7 @@ export function DashboardPage() {
             associado_id: a.associado_id,
             nome: a.nome,
             registro: a.registro,
+            registro_provisorio: a.registro_provisorio === true,
             data_nascimento: a.data_nascimento,
             anos: idade?.anos ?? 0,
             meses: idade?.meses ?? 0,
@@ -1233,7 +1257,16 @@ export function DashboardPage() {
       return
     }
 
-    apresentarDetalhe((data as DashboardDetalheRamo[]) ?? [])
+    const rpcRows = (data as DashboardDetalheRamo[]) ?? []
+    const provMap = await mapRegistroProvisorio(
+      rpcRows.map((r) => r.associado_id),
+    )
+    apresentarDetalhe(
+      rpcRows.map((r) => ({
+        ...r,
+        registro_provisorio: provMap.get(r.associado_id) === true,
+      })),
+    )
   }
 
   function abrirListaSecao(card: ListaSecaoCard) {
@@ -1273,7 +1306,9 @@ export function DashboardPage() {
         supabase.from('categoria').select('categoria_id, nome'),
         supabase
           .from('associados')
-          .select('associado_id, nome, data_nascimento, categoria')
+          .select(
+            'associado_id, nome, data_nascimento, categoria, registro_provisorio',
+          )
           .eq('empresa_id', empresaId!)
           .eq('ramo', item.ramo_id)
           .eq('secao', secaoFiltro)
@@ -1283,7 +1318,9 @@ export function DashboardPage() {
         item.ramo_id > 1
           ? supabase
               .from('associados')
-              .select('associado_id, nome, data_nascimento, categoria')
+              .select(
+                'associado_id, nome, data_nascimento, categoria, registro_provisorio',
+              )
               .eq('empresa_id', empresaId!)
               .eq('ramo', item.ramo_id - 1)
               .eq('ativo', true)
@@ -1315,6 +1352,7 @@ export function DashboardPage() {
         nome: string
         data_nascimento: string | null
         categoria: number | null
+        registro_provisorio: boolean | null
       }
 
       const toRow = (
@@ -1342,6 +1380,7 @@ export function DashboardPage() {
           data_nascimento: a.data_nascimento,
           anos: idade?.anos ?? 0,
           meses: idade?.meses ?? 0,
+          registro_provisorio: a.registro_provisorio === true,
         }
       }
 
@@ -1368,7 +1407,16 @@ export function DashboardPage() {
       setDetalheError(rpcError.message)
       setDetalheRows([])
     } else {
-      setDetalheRows((data as DashboardDetalhePassagem[]) ?? [])
+      const rpcPass = (data as DashboardDetalhePassagem[]) ?? []
+      const passProv = await mapRegistroProvisorio(
+        rpcPass.map((r) => r.associado_id),
+      )
+      setDetalheRows(
+        rpcPass.map((r) => ({
+          ...r,
+          registro_provisorio: passProv.get(r.associado_id) === true,
+        })),
+      )
     }
     setDetalheLoading(false)
   }
@@ -1761,7 +1809,12 @@ export function DashboardPage() {
                           <span className="aniversario-hoje-badge">Hoje</span>
                         ) : null}
                       </td>
-                      <td>{row.nome}</td>
+                      <td>
+                        {row.nome}{' '}
+                        <RegistroProvisorioBadge
+                          provisorio={row.registro_provisorio}
+                        />
+                      </td>
                       <td>{row.idade} anos</td>
                       <td>{row.ramo_nome ?? '—'}</td>
                       <td>{row.secao_nome ?? '—'}</td>
@@ -1985,7 +2038,12 @@ export function DashboardPage() {
                           </Link>
                         </td>
                         <td>{row.registro ?? '—'}</td>
-                        <td>{row.nome}</td>
+                        <td>
+                          {row.nome}{' '}
+                          <RegistroProvisorioBadge
+                            provisorio={row.registro_provisorio}
+                          />
+                        </td>
                         {!listaSecaoAtiva ? (
                           <td>{row.secao_nome || '—'}</td>
                         ) : null}
@@ -2067,7 +2125,12 @@ export function DashboardPage() {
                         <tbody>
                           {chegadas.map((row) => (
                             <tr key={`c-${row.associado_id}`}>
-                              <td>{row.nome}</td>
+                              <td>
+                                {row.nome}{' '}
+                                <RegistroProvisorioBadge
+                                  provisorio={row.registro_provisorio}
+                                />
+                              </td>
                               <td>{formatDate(row.data_nascimento)}</td>
                               <td>
                                 {row.anos}a {row.meses}m
@@ -2108,7 +2171,12 @@ export function DashboardPage() {
                         <tbody>
                           {saidas.map((row) => (
                             <tr key={`s-${row.associado_id}`}>
-                              <td>{row.nome}</td>
+                              <td>
+                                {row.nome}{' '}
+                                <RegistroProvisorioBadge
+                                  provisorio={row.registro_provisorio}
+                                />
+                              </td>
                               <td>{formatDate(row.data_nascimento)}</td>
                               <td>
                                 {row.anos}a {row.meses}m

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { AcaoSorteioModal } from '@/components/AcaoSorteioModal'
 import {
   AcaoNumerosImpressos,
@@ -48,11 +49,13 @@ function labelFormaPagamento(
 
 type VendaRow = AcaoEntreAmigosVenda & {
   associado_nome?: string | null
+  registro_provisorio?: boolean
 }
 
 type StaffFaixaRow = AcaoEntreAmigosFaixa & {
   associado_nome: string
   associado_registro: number | null
+  registro_provisorio: boolean
   associado_ramo: number | null
   associado_secao: number | null
   secao_nome: string | null
@@ -164,7 +167,7 @@ export function AcaoEntreAmigosVendaPage() {
               .from('acao_entre_amigos_faixa')
               .select(
                 `faixa_id, empresa_id, acao_id, associado_id, numero_inicial, numero_final, link_token, created_at,
-                 associados(nome, registro, ramo, secao)`,
+                 associados(nome, registro, registro_provisorio, ramo, secao)`,
               )
               .eq('acao_id', acaoId)
               .eq('empresa_id', empresaId)
@@ -179,7 +182,7 @@ export function AcaoEntreAmigosVendaPage() {
         supabase
           .from('acao_entre_amigos_venda')
           .select(
-            'venda_id, empresa_id, acao_id, numero, comprador_nome, comprador_telefone, valor, forma_pagamento, associado_vendedor_id, vendido_por, vendido_em, created_at, associados!associado_vendedor_id(nome)',
+            'venda_id, empresa_id, acao_id, numero, comprador_nome, comprador_telefone, valor, forma_pagamento, associado_vendedor_id, vendido_por, vendido_em, created_at, associados!associado_vendedor_id(nome, registro_provisorio)',
           )
           .eq('acao_id', acaoId)
           .eq('empresa_id', empresaId)
@@ -219,11 +222,15 @@ export function AcaoEntreAmigosVendaPage() {
 
     const vendasRows = ((vendasRes.data ?? []) as unknown as Array<
       AcaoEntreAmigosVenda & {
-        associados: { nome: string | null } | null
+        associados: {
+          nome: string | null
+          registro_provisorio?: boolean | null
+        } | null
       }
     >).map((row) => ({
       ...row,
       associado_nome: row.associados?.nome ?? null,
+      registro_provisorio: row.associados?.registro_provisorio === true,
     }))
 
     if (!associadoLogin) {
@@ -246,6 +253,7 @@ export function AcaoEntreAmigosVendaPage() {
             associados: {
               nome: string | null
               registro: number | null
+              registro_provisorio?: boolean | null
               ramo: number | null
               secao: number | null
             } | null
@@ -263,6 +271,7 @@ export function AcaoEntreAmigosVendaPage() {
           associado_nome:
             assoc?.nome ?? `Associado #${row.associado_id}`,
           associado_registro: assoc?.registro ?? null,
+          registro_provisorio: assoc?.registro_provisorio === true,
           associado_ramo: assoc?.ramo ?? null,
           associado_secao: assoc?.secao ?? null,
           secao_nome:
@@ -749,7 +758,12 @@ export function AcaoEntreAmigosVendaPage() {
                     <tbody>
                       {staffFaixas.map((f) => (
                         <tr key={f.faixa_id}>
-                          <td>{f.associado_nome}</td>
+                          <td>
+                            {f.associado_nome}{' '}
+                            <RegistroProvisorioBadge
+                              provisorio={f.registro_provisorio}
+                            />
+                          </td>
                           <td>{f.associado_registro ?? '—'}</td>
                           <td>{f.secao_nome ?? '—'}</td>
                           <td>
@@ -1018,7 +1032,12 @@ export function AcaoEntreAmigosVendaPage() {
                         <td>{formatMoney(v.valor)}</td>
                         <td>{labelFormaPagamento(v.forma_pagamento)}</td>
                         {!associadoLogin ? (
-                          <td>{v.associado_nome || '—'}</td>
+                          <td>
+                            {v.associado_nome || '—'}{' '}
+                            <RegistroProvisorioBadge
+                              provisorio={v.registro_provisorio}
+                            />
+                          </td>
                         ) : null}
                       </tr>
                     ))}

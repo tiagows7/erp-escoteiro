@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   competenciaToDate,
@@ -31,6 +32,7 @@ type PreviewRow = {
   associado_id: number
   nome: string
   registro: number | null
+  registro_provisorio: boolean
   ramo: number | null
   tipomensalidade_id: number
   tipo_nome: string
@@ -119,7 +121,7 @@ export function GeraMensalidadePage() {
     let associadosQuery = supabase
       .from('associados')
       .select(
-        'associado_id, nome, registro, ramo, tipo_mensalidade, isento, ativo, celular, responsavel_fonecelular',
+        'associado_id, nome, registro, registro_provisorio, ramo, tipo_mensalidade, isento, ativo, celular, responsavel_fonecelular',
       )
       .eq('empresa_id', empresaId)
       .eq('ativo', true)
@@ -183,6 +185,7 @@ export function GeraMensalidadePage() {
         associado_id: a.associado_id as number,
         nome: a.nome as string,
         registro: (a.registro as number | null) ?? null,
+        registro_provisorio: a.registro_provisorio === true,
         ramo: (a.ramo as number | null) ?? null,
         tipomensalidade_id: tipoId,
         tipo_nome: tipo.nome,
@@ -408,7 +411,12 @@ export function GeraMensalidadePage() {
           </div>
           <article className="associado-mensalidade-item">
             <div>
-              <h4>{whatsQueue[whatsIndex]?.nome}</h4>
+              <h4>
+                {whatsQueue[whatsIndex]?.nome}{' '}
+                <RegistroProvisorioBadge
+                  provisorio={whatsQueue[whatsIndex]?.registro_provisorio}
+                />
+              </h4>
               <p className="muted">
                 Reg. {whatsQueue[whatsIndex]?.registro ?? '—'} ·{' '}
                 {whatsQueue[whatsIndex]?.tipo_nome} ·{' '}
@@ -540,7 +548,12 @@ export function GeraMensalidadePage() {
                 <tbody>
                   {preview.map((row) => (
                     <tr key={row.associado_id}>
-                      <td>{row.nome}</td>
+                      <td>
+                        {row.nome}{' '}
+                        <RegistroProvisorioBadge
+                          provisorio={row.registro_provisorio}
+                        />
+                      </td>
                       <td>{row.tipo_nome}</td>
                       <td>{formatMoney(row.valor)}</td>
                       <td>

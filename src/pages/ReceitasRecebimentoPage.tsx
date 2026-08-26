@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import {
   formatCompetencia,
   formatMoney,
@@ -27,7 +28,7 @@ type ReceitaRow = {
   receita_saldo: number | null
   receita_situacao: number | null
   receita_ramo: number | null
-  associados: { nome: string | null } | null
+  associados: { nome: string | null; registro_provisorio?: boolean | null } | null
   atividades: { descricao: string | null } | null
 }
 
@@ -106,7 +107,7 @@ export function ReceitasRecebimentoPage() {
       let query = supabase
         .from('receitas')
         .select(
-          'receita_id, receita_descricao, receita_origem, receita_emissao, receita_vencimento, receita_competencia, receita_valor, receita_saldo, receita_situacao, receita_ramo, associados(nome), atividades(descricao)',
+          'receita_id, receita_descricao, receita_origem, receita_emissao, receita_vencimento, receita_competencia, receita_valor, receita_saldo, receita_situacao, receita_ramo, associados(nome, registro_provisorio), atividades(descricao)',
         )
         .eq('empresa_id', empresaId)
         .order('receita_emissao', { ascending: false })
@@ -439,7 +440,12 @@ function ReceitasRelatorioTabela({
                 <td>{formatDate(row.receita_emissao)}</td>
                 <td>{formatDate(row.receita_vencimento)}</td>
                 <td>{row.receita_descricao || '—'}</td>
-                <td>{row.associados?.nome || '—'}</td>
+                <td>
+                  {row.associados?.nome || '—'}{' '}
+                  <RegistroProvisorioBadge
+                    provisorio={row.associados?.registro_provisorio}
+                  />
+                </td>
                 <td>{origemLabel(row.receita_origem)}</td>
                 <td>{formatCompetencia(row.receita_competencia)}</td>
                 <td>

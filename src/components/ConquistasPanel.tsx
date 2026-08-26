@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
+import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 
 type ConquistaPessoa = {
   associado_id: number
   nome: string
   registro: number | null
+  registro_provisorio: boolean
   secaoNome: string | null
   data: string | null
 }
@@ -94,7 +96,7 @@ export function ConquistasPanel({ empresaId, alwaysOpen = false }: Props) {
       supabase
         .from('associados')
         .select(
-          `associado_id, nome, registro, secao,
+          `associado_id, nome, registro, registro_provisorio, secao,
            conquista_cruzeiro_do_sul, conquista_lis_de_ouro,
            conquista_escoteiro_patria, conquista_insignia_bp,
            conquista_insignia_madeira,
@@ -141,6 +143,7 @@ export function ConquistasPanel({ empresaId, alwaysOpen = false }: Props) {
           associado_id: row.associado_id as number,
           nome: (row.nome as string) ?? `Associado #${row.associado_id}`,
           registro: (row.registro as number | null) ?? null,
+          registro_provisorio: row.registro_provisorio === true,
           secaoNome,
           data: (row[col.dateField] as string | null) ?? null,
         })
@@ -252,7 +255,10 @@ export function ConquistasPanel({ empresaId, alwaysOpen = false }: Props) {
                             )}
                             {pessoa.registro != null ? (
                               <span className="muted"> · {pessoa.registro}</span>
-                            ) : null}
+                            ) : null}{' '}
+                            <RegistroProvisorioBadge
+                              provisorio={pessoa.registro_provisorio}
+                            />
                           </div>
                           <span className="conquistas-lista-secao muted">
                             {pessoa.secaoNome ?? 'Sem seção'}

@@ -15,6 +15,7 @@ import {
   normalizeWhatsAppPhone,
   openWhatsApp,
 } from '@/lib/whatsapp'
+import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 
 type ReceitaAbertaRow = {
   receita_id: number
@@ -27,6 +28,7 @@ type ReceitaAbertaRow = {
   associados: {
     nome: string | null
     registro: number | null
+    registro_provisorio: boolean | null
     celular: string | null
     responsavel_fonecelular: string | null
     secao: number | null
@@ -44,6 +46,7 @@ type AssociadoAberto = {
   associado_id: number
   nome: string
   registro: number | null
+  registro_provisorio: boolean
   telefone: string | null
   qtd: number
   total: number
@@ -115,6 +118,7 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
         associados!inner (
           nome,
           registro,
+          registro_provisorio,
           celular,
           responsavel_fonecelular,
           secao,
@@ -190,6 +194,7 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
           associado_id: item.associado_id,
           nome,
           registro: assoc?.registro ?? null,
+          registro_provisorio: assoc?.registro_provisorio === true,
           telefone,
           qtd: 1,
           total: saldo,
@@ -384,7 +389,12 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
             <h4>
               Fila WhatsApp · {whatsIndex + 1}/{whatsQueue.length}
             </h4>
-            <p className="muted">{whatsQueue[whatsIndex]?.nome}</p>
+            <p className="muted">
+              {whatsQueue[whatsIndex]?.nome}{' '}
+              <RegistroProvisorioBadge
+                provisorio={whatsQueue[whatsIndex]?.registro_provisorio}
+              />
+            </p>
             <p className="muted">
               {whatsQueue[whatsIndex]?.qtd} título(s) ·{' '}
               {formatMoney(whatsQueue[whatsIndex]?.total)} · Tel.{' '}
@@ -425,7 +435,12 @@ export function StaffMensalidadesAbertasPanel({ empresaId }: Props) {
           {rows.map((row) => (
             <article key={row.associado_id} className="associado-mensalidade-item">
               <div>
-                <h4>{row.nome}</h4>
+                <h4>
+                  {row.nome}{' '}
+                  <RegistroProvisorioBadge
+                    provisorio={row.registro_provisorio}
+                  />
+                </h4>
                 <p className="muted">
                   Reg. {row.registro ?? '—'} · {row.qtd} mensalidade(s) ·{' '}
                   {formatMoney(row.total)}

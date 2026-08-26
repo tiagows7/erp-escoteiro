@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   formatMoney,
@@ -63,6 +64,7 @@ export function ReceitaRecebimentoFormPage() {
     receita_ramo: number | null
     receita_secao: number | null
     associado_nome: string | null
+    registro_provisorio: boolean
   } | null>(null)
   const [historico, setHistorico] = useState<PagamentoRow[]>([])
   const [tipos, setTipos] = useState<TipoPagamento[]>([])
@@ -85,7 +87,7 @@ export function ReceitaRecebimentoFormPage() {
       let receitaQuery = supabase
         .from('receitas')
         .select(
-          'receita_id, receita_descricao, receita_valor, receita_saldo, receita_situacao, receita_vencimento, receita_ramo, receita_secao, atividade_id, associados(nome)',
+          'receita_id, receita_descricao, receita_valor, receita_saldo, receita_situacao, receita_vencimento, receita_ramo, receita_secao, atividade_id, associados(nome, registro_provisorio)',
         )
         .eq('receita_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -155,6 +157,12 @@ export function ReceitaRecebimentoFormPage() {
         receita_ramo: row.receita_ramo,
         receita_secao: row.receita_secao,
         associado_nome: row.associados?.nome ?? null,
+        registro_provisorio:
+          (
+            row.associados as {
+              registro_provisorio?: boolean | null
+            } | null
+          )?.registro_provisorio === true,
       })
       setAtividadeId(row.atividade_id?.toString() ?? '')
       setValorPago(saldo > 0 ? String(saldo) : '')
@@ -297,7 +305,10 @@ export function ReceitaRecebimentoFormPage() {
           <div className="field">
             <label>Associado</label>
             <p className="muted" style={{ margin: 0 }}>
-              {receita.associado_nome || '—'}
+              {receita.associado_nome || '—'}{' '}
+              <RegistroProvisorioBadge
+                provisorio={receita.registro_provisorio}
+              />
             </p>
           </div>
           <div className="field">

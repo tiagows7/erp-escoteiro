@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   formDraftKey,
@@ -47,7 +48,7 @@ type ReceitaRow = {
   receita_saldo: number | null
   receita_situacao: number | null
   receita_documento: string | null
-  associados: { nome: string | null } | null
+  associados: { nome: string | null; registro_provisorio?: boolean | null } | null
 }
 
 type DespesaRow = {
@@ -86,6 +87,7 @@ type AssociadoOpt = {
 }
 type FaixaRow = AcaoEntreAmigosFaixa & {
   associado_nome: string
+  registro_provisorio: boolean
   vendidos: number
 }
 
@@ -239,7 +241,7 @@ export function AcaoEntreAmigosFormPage() {
       supabase
         .from('acao_entre_amigos_faixa')
         .select(
-          'faixa_id, empresa_id, acao_id, associado_id, numero_inicial, numero_final, created_at, associados(nome)',
+          'faixa_id, empresa_id, acao_id, associado_id, numero_inicial, numero_final, created_at, associados(nome, registro_provisorio)',
         )
         .eq('acao_id', acaoId)
         .eq('empresa_id', empresaId!)
@@ -267,7 +269,12 @@ export function AcaoEntreAmigosFormPage() {
 
     setFaixas(
       ((faixasRes.data ?? []) as unknown as Array<
-        AcaoEntreAmigosFaixa & { associados: { nome: string | null } | null }
+        AcaoEntreAmigosFaixa & {
+          associados: {
+            nome: string | null
+            registro_provisorio?: boolean | null
+          } | null
+        }
       >).map((row) => {
         let vendidos = 0
         for (let n = row.numero_inicial; n <= row.numero_final; n += 1) {
@@ -277,6 +284,7 @@ export function AcaoEntreAmigosFormPage() {
           ...row,
           associado_nome:
             row.associados?.nome ?? `Associado #${row.associado_id}`,
+          registro_provisorio: row.associados?.registro_provisorio === true,
           vendidos,
         }
       }),
@@ -385,7 +393,7 @@ export function AcaoEntreAmigosFormPage() {
         supabase
           .from('receitas')
           .select(
-            'receita_id, receita_descricao, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, receita_documento, associados(nome)',
+            'receita_id, receita_descricao, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, receita_documento, associados(nome, registro_provisorio)',
           )
           .eq('empresa_id', empresaId)
           .eq('acao_id', data.acao_id)
@@ -1322,7 +1330,12 @@ export function AcaoEntreAmigosFormPage() {
                 <tbody>
                   {faixas.map((f) => (
                     <tr key={f.faixa_id}>
-                      <td>{f.associado_nome}</td>
+                      <td>
+                        {f.associado_nome}{' '}
+                        <RegistroProvisorioBadge
+                          provisorio={f.registro_provisorio}
+                        />
+                      </td>
                       <td>
                         {f.numero_inicial} – {f.numero_final}
                       </td>
@@ -1410,7 +1423,12 @@ export function AcaoEntreAmigosFormPage() {
                             row.receita_descricao || '—'
                           )}
                         </td>
-                        <td>{row.associados?.nome || '—'}</td>
+                        <td>
+                          {row.associados?.nome || '—'}{' '}
+                          <RegistroProvisorioBadge
+                            provisorio={row.associados?.registro_provisorio}
+                          />
+                        </td>
                         <td>{formatMoney(row.receita_valor)}</td>
                         <td>{formatMoney(row.receita_saldo)}</td>
                         <td>{situacaoTituloLabel(row.receita_situacao)}</td>
