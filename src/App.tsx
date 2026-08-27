@@ -62,6 +62,7 @@ import { GrupoMeuRedirectPage } from '@/pages/GrupoMeuRedirectPage'
 import { BackupPage } from '@/pages/BackupPage'
 import { AuditoriaPage } from '@/pages/AuditoriaPage'
 import { ConquistasPage } from '@/pages/ConquistasPage'
+import { ConquistaFormPage } from '@/pages/ConquistaFormPage'
 import { PlataformaPlanosPage } from '@/pages/PlataformaPlanosPage'
 import { PlataformaCobrancasPage } from '@/pages/PlataformaCobrancasPage'
 import { GeraCobrancaPlataformaPage } from '@/pages/GeraCobrancaPlataformaPage'
@@ -629,6 +630,14 @@ export default function App() {
               element={
                 <RequirePermission permission="dashboard.view">
                   <ConquistasPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="conquistas/:id"
+              element={
+                <RequirePermission permission="dashboard.view">
+                  <ConquistaFormPage />
                 </RequirePermission>
               }
             />

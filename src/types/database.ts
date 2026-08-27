@@ -233,6 +233,26 @@ export type Projeto = {
   created_at: string | null
 }
 
+export type ConquistaTipo =
+  | 'cruzeiro_do_sul'
+  | 'lis_de_ouro'
+  | 'escoteiro_patria'
+  | 'insignia_bp'
+  | 'insignia_madeira'
+
+export type Conquista = {
+  conquista_id: number
+  empresa_id: number
+  associado_id: number
+  ramo: number | null
+  secao: number | null
+  patrulha_matilha: number | null
+  tipo: ConquistaTipo
+  data_conquista: string | null
+  observacao: string | null
+  created_at: string | null
+}
+
 export type AcaoEntreAmigos = {
   acao_id: number
   empresa_id: number

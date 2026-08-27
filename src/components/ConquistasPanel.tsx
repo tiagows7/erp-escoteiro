@@ -3,13 +3,21 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
+import {
+  CONQUISTA_COLUNAS,
+  CONQUISTA_TIPO_LABEL,
+  type ConquistaTipo,
+} from '@/lib/conquistas'
+import { isAssociadoLogin } from '@/lib/roles'
 
 type ConquistaPessoa = {
+  conquista_id: number
   associado_id: number
   nome: string
   registro: number | null
   registro_provisorio: boolean
   secaoNome: string | null
+  patrulhaNome: string | null
   data: string | null
 }
 
@@ -17,50 +25,9 @@ type Props = {
   empresaId: number
   /** Na página dedicada, já mostra as colunas abertas. */
   alwaysOpen?: boolean
+  /** Incrementar para recarregar após cadastro. */
+  reloadToken?: number
 }
-
-const COLUNAS = [
-  {
-    id: 'lobinho',
-    titulo: 'Lobinho',
-    conquista: 'Cruzeiro do Sul',
-    field: 'conquista_cruzeiro_do_sul' as const,
-    dateField: 'conquista_cruzeiro_do_sul_data' as const,
-    className: 'stat-card-lobinho',
-  },
-  {
-    id: 'escoteiro',
-    titulo: 'Escoteiro',
-    conquista: 'Lis de Ouro',
-    field: 'conquista_lis_de_ouro' as const,
-    dateField: 'conquista_lis_de_ouro_data' as const,
-    className: 'stat-card-escoteiro',
-  },
-  {
-    id: 'senior',
-    titulo: 'Sênior',
-    conquista: 'Escoteiro da Pátria',
-    field: 'conquista_escoteiro_patria' as const,
-    dateField: 'conquista_escoteiro_patria_data' as const,
-    className: 'stat-card-senior',
-  },
-  {
-    id: 'pioneiro',
-    titulo: 'Pioneiro',
-    conquista: 'Insígnia de B.P.',
-    field: 'conquista_insignia_bp' as const,
-    dateField: 'conquista_insignia_bp_data' as const,
-    className: 'stat-card-pioneiro',
-  },
-  {
-    id: 'madeira',
-    titulo: 'Insígnia da Madeira',
-    conquista: 'Insígnia da Madeira',
-    field: 'conquista_insignia_madeira' as const,
-    dateField: 'conquista_insignia_madeira_data' as const,
-    className: 'stat-card-diretoria',
-  },
-] as const
 
 function formatDate(value: string | null | undefined) {
   if (!value) return null
@@ -78,46 +45,55 @@ function sortByDataDesc(a: ConquistaPessoa, b: ConquistaPessoa) {
   return a.nome.localeCompare(b.nome, 'pt-BR')
 }
 
-export function ConquistasPanel({ empresaId, alwaysOpen = false }: Props) {
-  const { hasPermission } = useAuth()
-  const canOpenAssociado = hasPermission('associados.view')
+export function ConquistasPanel({
+  empresaId,
+  alwaysOpen = false,
+  reloadToken = 0,
+}: Props) {
+  const { hasPermission, profile } = useAuth()
+  const associadoLogin = isAssociadoLogin(profile)
+  const canOpenAssociado =
+    !associadoLogin && hasPermission('associados.view')
+  const canEdit =
+    !associadoLogin && hasPermission('associados.write')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showLista, setShowLista] = useState(alwaysOpen)
   const [porColuna, setPorColuna] = useState<
     Record<string, ConquistaPessoa[]>
-  >(() => Object.fromEntries(COLUNAS.map((c) => [c.id, []])))
+  >(() => Object.fromEntries(CONQUISTA_COLUNAS.map((c) => [c.id, []])))
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
 
-    const [assocRes, secoesRes] = await Promise.all([
+    const [conqRes, secoesRes, patrRes] = await Promise.all([
       supabase
-        .from('associados')
+        .from('conquistas')
         .select(
-          `associado_id, nome, registro, registro_provisorio, secao,
-           conquista_cruzeiro_do_sul, conquista_lis_de_ouro,
-           conquista_escoteiro_patria, conquista_insignia_bp,
-           conquista_insignia_madeira,
-           conquista_cruzeiro_do_sul_data, conquista_lis_de_ouro_data,
-           conquista_escoteiro_patria_data, conquista_insignia_bp_data,
-           conquista_insignia_madeira_data`,
+          `
+          conquista_id, associado_id, tipo, data_conquista, secao, patrulha_matilha,
+          associados!inner (
+            nome, registro, registro_provisorio, ativo
+          )
+        `,
         )
         .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .or(
-          'conquista_cruzeiro_do_sul.eq.true,conquista_lis_de_ouro.eq.true,conquista_escoteiro_patria.eq.true,conquista_insignia_bp.eq.true,conquista_insignia_madeira.eq.true',
-        ),
+        .eq('associados.ativo', true)
+        .order('data_conquista', { ascending: false }),
       supabase
         .from('secao')
         .select('secao_id, nome')
         .eq('empresa_id', empresaId),
+      supabase
+        .from('secao_nome')
+        .select('secaonome_id, nome')
+        .eq('empresa_id', empresaId),
     ])
 
-    if (assocRes.error) {
-      setError(assocRes.error.message)
-      setPorColuna(Object.fromEntries(COLUNAS.map((c) => [c.id, []])))
+    if (conqRes.error) {
+      setError(conqRes.error.message)
+      setPorColuna(Object.fromEntries(CONQUISTA_COLUNAS.map((c) => [c.id, []])))
       setLoading(false)
       return
     }
@@ -128,29 +104,57 @@ export function ConquistasPanel({ empresaId, alwaysOpen = false }: Props) {
         (s.nome as string) ?? `Seção ${s.secao_id}`,
       ]),
     )
-
-    const next: Record<string, ConquistaPessoa[]> = Object.fromEntries(
-      COLUNAS.map((c) => [c.id, []]),
+    const patrulhaMap = new Map(
+      (patrRes.data ?? []).map((p) => [
+        p.secaonome_id as number,
+        (p.nome as string) ?? `Patrulha ${p.secaonome_id}`,
+      ]),
     )
 
-    for (const row of assocRes.data ?? []) {
-      const secaoId = (row.secao as number | null) ?? null
-      const secaoNome =
-        secaoId != null ? (secaoMap.get(secaoId) ?? `Seção ${secaoId}`) : null
-      for (const col of COLUNAS) {
-        if (row[col.field] !== true) continue
-        next[col.id].push({
-          associado_id: row.associado_id as number,
-          nome: (row.nome as string) ?? `Associado #${row.associado_id}`,
-          registro: (row.registro as number | null) ?? null,
-          registro_provisorio: row.registro_provisorio === true,
-          secaoNome,
-          data: (row[col.dateField] as string | null) ?? null,
-        })
-      }
+    const next: Record<string, ConquistaPessoa[]> = Object.fromEntries(
+      CONQUISTA_COLUNAS.map((c) => [c.id, []]),
+    )
+
+    type Row = {
+      conquista_id: number
+      associado_id: number
+      tipo: string
+      data_conquista: string | null
+      secao: number | null
+      patrulha_matilha: number | null
+      associados: {
+        nome: string | null
+        registro: number | null
+        registro_provisorio: boolean | null
+        ativo: boolean | null
+      } | null
     }
 
-    for (const col of COLUNAS) {
+    for (const row of (conqRes.data as unknown as Row[]) ?? []) {
+      const col = CONQUISTA_COLUNAS.find((c) => c.tipo === row.tipo)
+      if (!col) continue
+      const assoc = row.associados
+      const secaoId = row.secao
+      const patrId = row.patrulha_matilha
+      next[col.id].push({
+        conquista_id: row.conquista_id,
+        associado_id: row.associado_id,
+        nome: assoc?.nome?.trim() || `Associado #${row.associado_id}`,
+        registro: assoc?.registro ?? null,
+        registro_provisorio: assoc?.registro_provisorio === true,
+        secaoNome:
+          secaoId != null
+            ? (secaoMap.get(secaoId) ?? `Seção ${secaoId}`)
+            : null,
+        patrulhaNome:
+          patrId != null
+            ? (patrulhaMap.get(patrId) ?? null)
+            : null,
+        data: row.data_conquista,
+      })
+    }
+
+    for (const col of CONQUISTA_COLUNAS) {
       next[col.id].sort(sortByDataDesc)
     }
 
@@ -160,10 +164,14 @@ export function ConquistasPanel({ empresaId, alwaysOpen = false }: Props) {
 
   useEffect(() => {
     void load()
-  }, [load])
+  }, [load, reloadToken])
 
   const total = useMemo(
-    () => COLUNAS.reduce((acc, col) => acc + (porColuna[col.id]?.length ?? 0), 0),
+    () =>
+      CONQUISTA_COLUNAS.reduce(
+        (acc, col) => acc + (porColuna[col.id]?.length ?? 0),
+        0,
+      ),
     [porColuna],
   )
 
@@ -191,7 +199,7 @@ export function ConquistasPanel({ empresaId, alwaysOpen = false }: Props) {
             <div>
               <h3>Painel de conquistas</h3>
               <p className="muted">
-                Conquistas máximas marcadas no cadastro dos associados.
+                Conquistas máximas cadastradas no grupo.
               </p>
             </div>
           </div>
@@ -200,7 +208,7 @@ export function ConquistasPanel({ empresaId, alwaysOpen = false }: Props) {
             <div>
               <span>Conquistas</span>
               <strong>{total}</strong>
-              <p className="muted">Marcações ativas no grupo</p>
+              <p className="muted">Cadastros ativos no grupo</p>
             </div>
             <div className="associado-mensalidade-resumo-actions">
               <button
@@ -215,14 +223,14 @@ export function ConquistasPanel({ empresaId, alwaysOpen = false }: Props) {
         </>
       ) : (
         <p className="muted" style={{ marginTop: 0 }}>
-          {total} marcação(ões) ativa(s) no grupo · ordenado pela data (mais
-          recente primeiro).
+          {total} conquista(s) cadastrada(s) · ordenado pela data (mais recente
+          primeiro).
         </p>
       )}
 
       {showLista || alwaysOpen ? (
         <div className="conquistas-grid">
-          {COLUNAS.map((col) => {
+          {CONQUISTA_COLUNAS.map((col) => {
             const list = porColuna[col.id] ?? []
             return (
               <article
@@ -231,16 +239,22 @@ export function ConquistasPanel({ empresaId, alwaysOpen = false }: Props) {
               >
                 <span>{col.titulo}</span>
                 <strong>{list.length}</strong>
-                <em className="stat-card-hint">{col.conquista}</em>
+                <em className="stat-card-hint">
+                  {CONQUISTA_TIPO_LABEL[col.tipo as ConquistaTipo]}
+                </em>
                 {list.length === 0 ? (
                   <p className="muted conquistas-empty">Nenhum associado</p>
                 ) : (
                   <ul className="conquistas-lista">
                     {list.map((pessoa) => {
                       const dataLabel = formatDate(pessoa.data)
+                      const local =
+                        [pessoa.secaoNome, pessoa.patrulhaNome]
+                          .filter(Boolean)
+                          .join(' · ') || 'Sem seção'
                       return (
                         <li
-                          key={`${col.id}-${pessoa.associado_id}`}
+                          key={`${col.id}-${pessoa.conquista_id}`}
                           className="conquista-pessoa-card"
                         >
                           <div className="conquistas-lista-item">
@@ -254,18 +268,34 @@ export function ConquistasPanel({ empresaId, alwaysOpen = false }: Props) {
                               </span>
                             )}
                             {pessoa.registro != null ? (
-                              <span className="muted"> · {pessoa.registro}</span>
+                              <span className="muted">
+                                {' '}
+                                · {pessoa.registro}
+                              </span>
                             ) : null}{' '}
                             <RegistroProvisorioBadge
                               provisorio={pessoa.registro_provisorio}
                             />
                           </div>
                           <span className="conquistas-lista-secao muted">
-                            {pessoa.secaoNome ?? 'Sem seção'}
+                            {local}
                           </span>
                           <span className="conquistas-lista-data muted">
                             {dataLabel ?? 'Sem data'}
                           </span>
+                          {canEdit ? (
+                            <Link
+                              className="btn btn-soft"
+                              style={{
+                                marginTop: '0.35rem',
+                                fontSize: '0.75rem',
+                                padding: '0.2rem 0.45rem',
+                              }}
+                              to={`/conquistas/${pessoa.conquista_id}`}
+                            >
+                              Editar
+                            </Link>
+                          ) : null}
                         </li>
                       )
                     })}

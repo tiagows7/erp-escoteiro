@@ -16,6 +16,7 @@ import {
   registrarConsentimentoLgpd,
   textoConsentimentoLgpd,
 } from '@/lib/lgpdConsent'
+import { syncConquistasFromAssociado } from '@/lib/conquistas'
 import type { Ramo } from '@/types/database'
 
 type Lookup = { id: number; nome: string }
@@ -406,6 +407,55 @@ export function AssociadoFormPage() {
     }
 
     const associadoId = Number(result.data?.associado_id)
+    if (Number.isFinite(associadoId) && associadoId > 0) {
+      const sync = await syncConquistasFromAssociado(supabase, {
+        empresaId,
+        associadoId,
+        ramo: numOrNull(form.ramo),
+        secao: numOrNull(form.secao),
+        patrulha_matilha: numOrNull(form.patrulha_matilha),
+        flags: {
+          cruzeiro_do_sul: {
+            marcado: form.conquista_cruzeiro_do_sul === true,
+            data: form.conquista_cruzeiro_do_sul
+              ? strOrNull(form.conquista_cruzeiro_do_sul_data)
+              : null,
+          },
+          lis_de_ouro: {
+            marcado: form.conquista_lis_de_ouro === true,
+            data: form.conquista_lis_de_ouro
+              ? strOrNull(form.conquista_lis_de_ouro_data)
+              : null,
+          },
+          escoteiro_patria: {
+            marcado: form.conquista_escoteiro_patria === true,
+            data: form.conquista_escoteiro_patria
+              ? strOrNull(form.conquista_escoteiro_patria_data)
+              : null,
+          },
+          insignia_bp: {
+            marcado: form.conquista_insignia_bp === true,
+            data: form.conquista_insignia_bp
+              ? strOrNull(form.conquista_insignia_bp_data)
+              : null,
+          },
+          insignia_madeira: {
+            marcado: form.conquista_insignia_madeira === true,
+            data: form.conquista_insignia_madeira
+              ? strOrNull(form.conquista_insignia_madeira_data)
+              : null,
+          },
+        },
+      })
+      if (!sync.ok) {
+        setSaving(false)
+        setError(
+          `Associado salvo, mas a tabela de conquistas não sincronizou: ${sync.error}`,
+        )
+        return
+      }
+    }
+
     if (lgpdAceite && Number.isFinite(associadoId) && associadoId > 0) {
       const consent = await registrarConsentimentoLgpd({
         associadoId,
