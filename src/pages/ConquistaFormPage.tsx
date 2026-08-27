@@ -360,7 +360,10 @@ export function ConquistaFormPage() {
 
   return (
     <>
-      <WaitingOverlay show={saving} detail="Salvando conquista…" />
+      <WaitingOverlay
+        open={saving}
+        message="Salvando conquista…"
+      />
       <header className="page-header">
         <div>
           <h2>{isNew ? 'Nova conquista' : 'Editar conquista'}</h2>
