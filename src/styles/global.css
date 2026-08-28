@@ -600,10 +600,21 @@ button {
   min-height: 10rem;
   align-self: start;
   height: auto;
+  padding: 0.85rem 0.9rem;
+}
+
+.conquistas-coluna > span {
+  font-size: 0.72rem;
+  margin-bottom: 0.3rem;
 }
 
 .conquistas-coluna > strong {
-  font-size: 1.35rem;
+  font-size: 1.15rem;
+}
+
+.conquistas-coluna > .stat-card-hint {
+  margin-top: 0.3rem;
+  font-size: 0.68rem;
 }
 
 .conquistas-lista-nome {
@@ -611,29 +622,29 @@ button {
 }
 
 .conquistas-empty {
-  margin: 0.65rem 0 0;
-  font-size: 0.85rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.72rem;
 }
 
 .conquistas-lista {
   list-style: none;
-  margin: 0.75rem 0 0;
+  margin: 0.55rem 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
   width: 100%;
   max-height: none;
   overflow: visible;
 }
 
 .conquista-pessoa-card {
-  font-size: 0.88rem;
-  line-height: 1.3;
+  font-size: 0.72rem;
+  line-height: 1.25;
   display: grid;
-  gap: 0.2rem;
-  padding: 0.55rem 0.65rem;
-  border-radius: 10px;
+  gap: 0.12rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 8px;
   border: 1px solid color-mix(in srgb, currentColor 18%, var(--line));
   background: color-mix(in srgb, #fff 72%, transparent);
 }
@@ -644,7 +655,7 @@ button {
 
 .conquistas-lista-secao,
 .conquistas-lista-data {
-  font-size: 0.8rem;
+  font-size: 0.66rem;
 }
 
 .conquistas-lista-secao {
