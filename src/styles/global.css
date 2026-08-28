@@ -603,18 +603,19 @@ button {
   padding: 0.7rem 0.75rem;
 }
 
+/* Cabeçalho do ramo (Lobinho, Escoteiro…): tamanho normal do stat-card */
 .conquistas-coluna > span {
-  font-size: 0.65rem;
-  margin-bottom: 0.25rem;
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
 }
 
 .conquistas-coluna > strong {
-  font-size: 1rem;
+  font-size: 1.15rem;
 }
 
 .conquistas-coluna > .stat-card-hint {
-  margin-top: 0.25rem;
-  font-size: 0.62rem;
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
 }
 
 .conquistas-lista-nome {
@@ -653,13 +654,17 @@ button {
   min-width: 0;
 }
 
-.conquistas-lista-secao {
-  font-size: 0.44rem;
+/* Precisa vencer `.stat-card span` (que força 0.85rem em todos os spans). */
+.stat-card.conquistas-coluna .conquista-pessoa-card .conquistas-lista-secao {
+  font-size: 0.5rem;
   font-weight: 600;
+  margin-bottom: 0;
 }
 
-.conquistas-lista-data {
+.stat-card.conquistas-coluna .conquista-pessoa-card .conquistas-lista-data {
   font-size: 0.58rem;
+  margin-bottom: 0;
+  font-weight: 400;
 }
 
 .conquistas-lista a {
