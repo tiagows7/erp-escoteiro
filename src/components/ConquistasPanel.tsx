@@ -16,7 +16,6 @@ type ConquistaPessoa = {
   nome: string
   registro: number | null
   registro_provisorio: boolean
-  ativo: boolean
   secaoNome: string | null
   patrulhaNome: string | null
   data: string | null
@@ -75,7 +74,7 @@ export function ConquistasPanel({
           `
           conquista_id, associado_id, tipo, data_conquista, secao, patrulha_matilha,
           associados!inner (
-            nome, registro, registro_provisorio, ativo
+            nome, registro, registro_provisorio
           )
         `,
         )
@@ -126,7 +125,6 @@ export function ConquistasPanel({
         nome: string | null
         registro: number | null
         registro_provisorio: boolean | null
-        ativo: boolean | null
       } | null
     }
 
@@ -142,7 +140,6 @@ export function ConquistasPanel({
         nome: assoc?.nome?.trim() || `Associado #${row.associado_id}`,
         registro: assoc?.registro ?? null,
         registro_provisorio: assoc?.registro_provisorio === true,
-        ativo: assoc?.ativo !== false,
         secaoNome:
           secaoId != null
             ? (secaoMap.get(secaoId) ?? `Seção ${secaoId}`)
@@ -277,12 +274,6 @@ export function ConquistasPanel({
                             <RegistroProvisorioBadge
                               provisorio={pessoa.registro_provisorio}
                             />
-                            {!pessoa.ativo ? (
-                              <span className="badge badge-warning">
-                                {' '}
-                                Inativo
-                              </span>
-                            ) : null}
                           </div>
                           <span className="conquistas-lista-secao muted">
                             {local}
