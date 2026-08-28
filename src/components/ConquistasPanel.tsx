@@ -16,6 +16,7 @@ type ConquistaPessoa = {
   nome: string
   registro: number | null
   registro_provisorio: boolean
+  ativo: boolean
   secaoNome: string | null
   patrulhaNome: string | null
   data: string | null
@@ -79,7 +80,6 @@ export function ConquistasPanel({
         `,
         )
         .eq('empresa_id', empresaId)
-        .eq('associados.ativo', true)
         .order('data_conquista', { ascending: false }),
       supabase
         .from('secao')
@@ -142,6 +142,7 @@ export function ConquistasPanel({
         nome: assoc?.nome?.trim() || `Associado #${row.associado_id}`,
         registro: assoc?.registro ?? null,
         registro_provisorio: assoc?.registro_provisorio === true,
+        ativo: assoc?.ativo !== false,
         secaoNome:
           secaoId != null
             ? (secaoMap.get(secaoId) ?? `Seção ${secaoId}`)
@@ -208,7 +209,7 @@ export function ConquistasPanel({
             <div>
               <span>Conquistas</span>
               <strong>{total}</strong>
-              <p className="muted">Cadastros ativos no grupo</p>
+              <p className="muted">Inclui associados ativos e inativos</p>
             </div>
             <div className="associado-mensalidade-resumo-actions">
               <button
@@ -276,6 +277,12 @@ export function ConquistasPanel({
                             <RegistroProvisorioBadge
                               provisorio={pessoa.registro_provisorio}
                             />
+                            {!pessoa.ativo ? (
+                              <span className="badge badge-warning">
+                                {' '}
+                                Inativo
+                              </span>
+                            ) : null}
                           </div>
                           <span className="conquistas-lista-secao muted">
                             {local}
