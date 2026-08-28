@@ -406,7 +406,7 @@ export function ConquistaFormPage() {
       ) : null}
 
       <form className="panel form-grid" onSubmit={onSubmit}>
-        <div className="field field-span-2">
+        <div className="field field-span-full">
           <label htmlFor="associado_id">Associado</label>
           <select
             id="associado_id"
@@ -425,14 +425,17 @@ export function ConquistaFormPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="field field-span-full">
           <label
-            className="field-hint"
             style={{
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '0.4rem',
-              marginTop: '0.45rem',
+              gap: '0.45rem',
+              margin: 0,
               cursor: disabled ? 'default' : 'pointer',
+              fontWeight: 500,
             }}
           >
             <input
