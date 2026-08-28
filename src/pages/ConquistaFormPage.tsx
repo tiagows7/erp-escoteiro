@@ -24,6 +24,7 @@ type AssociadoOpt = {
   ramo: number | null
   secao: number | null
   patrulha_matilha: number | null
+  ativo: boolean | null
 }
 
 const emptyForm = {
@@ -51,6 +52,7 @@ export function ConquistaFormPage() {
   const [secoes, setSecoes] = useState<Lookup[]>([])
   const [patrulhas, setPatrulhas] = useState<Lookup[]>([])
   const [associados, setAssociados] = useState<AssociadoOpt[]>([])
+  const [incluirInativos, setIncluirInativos] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
@@ -69,20 +71,23 @@ export function ConquistaFormPage() {
         .from('ramos')
         .select('ramo_id, nome, idade_inicio, idade_fim')
         .order('ramo_id'),
-      supabase
-        .from('associados')
-        .select(
-          'associado_id, nome, registro, ramo, secao, patrulha_matilha',
-        )
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome')
-        .limit(5000),
+      (() => {
+        let q = supabase
+          .from('associados')
+          .select(
+            'associado_id, nome, registro, ramo, secao, patrulha_matilha, ativo',
+          )
+          .eq('empresa_id', empresaId)
+          .order('nome')
+          .limit(5000)
+        if (!incluirInativos) q = q.eq('ativo', true)
+        return q
+      })(),
     ]).then(([r, a]) => {
       setRamos((r.data as Ramo[]) ?? [])
       setAssociados((a.data as AssociadoOpt[]) ?? [])
     })
-  }, [empresaId])
+  }, [empresaId, incluirInativos])
 
   useEffect(() => {
     if (!empresaId || !form.ramo) {
@@ -160,6 +165,18 @@ export function ConquistaFormPage() {
         data_conquista: row.data_conquista?.slice(0, 10) ?? '',
         observacao: row.observacao ?? '',
       })
+
+      // Se o associado da conquista estiver inativo, inclui inativos no select.
+      const { data: assocRow } = await supabase
+        .from('associados')
+        .select('ativo')
+        .eq('associado_id', row.associado_id)
+        .eq('empresa_id', empresaId)
+        .maybeSingle()
+      if (assocRow && assocRow.ativo === false) {
+        setIncluirInativos(true)
+      }
+
       setLoading(false)
     })()
 
@@ -404,9 +421,28 @@ export function ConquistaFormPage() {
               <option key={a.associado_id} value={a.associado_id}>
                 {a.nome}
                 {a.registro != null ? ` · Reg. ${a.registro}` : ''}
+                {a.ativo === false ? ' · inativo' : ''}
               </option>
             ))}
           </select>
+          <label
+            className="field-hint"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              marginTop: '0.45rem',
+              cursor: disabled ? 'default' : 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={incluirInativos}
+              disabled={disabled}
+              onChange={(e) => setIncluirInativos(e.target.checked)}
+            />
+            Incluir associados não ativos
+          </label>
         </div>
 
         <div className="field">
