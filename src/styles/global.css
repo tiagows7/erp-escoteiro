@@ -653,13 +653,13 @@ button {
   min-width: 0;
 }
 
-.conquistas-lista-secao,
-.conquistas-lista-data {
-  font-size: 0.58rem;
+.conquistas-lista-secao {
+  font-size: 0.5rem;
+  font-weight: 600;
 }
 
-.conquistas-lista-secao {
-  font-weight: 600;
+.conquistas-lista-data {
+  font-size: 0.58rem;
 }
 
 .conquistas-lista a {
