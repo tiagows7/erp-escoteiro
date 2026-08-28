@@ -287,9 +287,9 @@ export function ConquistasPanel({
                             <Link
                               className="btn btn-soft"
                               style={{
-                                marginTop: '0.35rem',
-                                fontSize: '0.75rem',
-                                padding: '0.2rem 0.45rem',
+                                marginTop: '0.25rem',
+                                fontSize: '0.62rem',
+                                padding: '0.15rem 0.35rem',
                               }}
                               to={`/conquistas/${pessoa.conquista_id}`}
                             >

@@ -597,24 +597,24 @@ button {
 }
 
 .conquistas-coluna {
-  min-height: 10rem;
+  min-height: 9rem;
   align-self: start;
   height: auto;
-  padding: 0.85rem 0.9rem;
+  padding: 0.7rem 0.75rem;
 }
 
 .conquistas-coluna > span {
-  font-size: 0.72rem;
-  margin-bottom: 0.3rem;
+  font-size: 0.65rem;
+  margin-bottom: 0.25rem;
 }
 
 .conquistas-coluna > strong {
-  font-size: 1.15rem;
+  font-size: 1rem;
 }
 
 .conquistas-coluna > .stat-card-hint {
-  margin-top: 0.3rem;
-  font-size: 0.68rem;
+  margin-top: 0.25rem;
+  font-size: 0.62rem;
 }
 
 .conquistas-lista-nome {
@@ -622,29 +622,29 @@ button {
 }
 
 .conquistas-empty {
-  margin: 0.5rem 0 0;
-  font-size: 0.72rem;
+  margin: 0.4rem 0 0;
+  font-size: 0.65rem;
 }
 
 .conquistas-lista {
   list-style: none;
-  margin: 0.55rem 0 0;
+  margin: 0.45rem 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.35rem;
   width: 100%;
   max-height: none;
   overflow: visible;
 }
 
 .conquista-pessoa-card {
-  font-size: 0.72rem;
-  line-height: 1.25;
+  font-size: 0.64rem;
+  line-height: 1.2;
   display: grid;
-  gap: 0.12rem;
-  padding: 0.4rem 0.5rem;
-  border-radius: 8px;
+  gap: 0.1rem;
+  padding: 0.32rem 0.42rem;
+  border-radius: 7px;
   border: 1px solid color-mix(in srgb, currentColor 18%, var(--line));
   background: color-mix(in srgb, #fff 72%, transparent);
 }
@@ -655,7 +655,7 @@ button {
 
 .conquistas-lista-secao,
 .conquistas-lista-data {
-  font-size: 0.66rem;
+  font-size: 0.58rem;
 }
 
 .conquistas-lista-secao {
