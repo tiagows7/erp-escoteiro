@@ -10,6 +10,8 @@ export type NavLinkItem = {
   permission?: Permission
   /** Só administrador do grupo (ou super_admin) */
   grupoAdminOnly?: boolean
+  /** Se definido, abre URL externa em nova aba (to = chave de menu). */
+  externalUrl?: string
 }
 
 export type NavGroupItem = {
@@ -53,10 +55,25 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'dashboard.view',
   },
   {
-    type: 'link',
-    to: '/regimento-interno',
-    label: 'Regimento interno',
-    permission: 'dashboard.view',
+    type: 'group',
+    id: 'documentos',
+    label: 'Documentos',
+    anyOf: ['dashboard.view'],
+    children: [
+      {
+        type: 'link',
+        to: '/regimento-interno',
+        label: 'Regimento interno',
+        permission: 'dashboard.view',
+      },
+      {
+        type: 'link',
+        to: '/documentos/por-online',
+        label: 'P.O.R online',
+        permission: 'dashboard.view',
+        externalUrl: 'https://www.guiadecola.com.br/por/',
+      },
+    ],
   },
   {
     type: 'group',
@@ -345,10 +362,25 @@ export function navItemsForProfile(
         permission: 'dashboard.view',
       },
       {
-        type: 'link',
-        to: '/regimento-interno',
-        label: 'Regimento interno',
-        permission: 'dashboard.view',
+        type: 'group',
+        id: 'documentos',
+        label: 'Documentos',
+        anyOf: ['dashboard.view'],
+        children: [
+          {
+            type: 'link',
+            to: '/regimento-interno',
+            label: 'Regimento interno',
+            permission: 'dashboard.view',
+          },
+          {
+            type: 'link',
+            to: '/documentos/por-online',
+            label: 'P.O.R online',
+            permission: 'dashboard.view',
+            externalUrl: 'https://www.guiadecola.com.br/por/',
+          },
+        ],
       },
       {
         type: 'link',
@@ -386,38 +418,62 @@ export function navItemsForProfile(
       const keySet = new Set(
         keys.map((k) => (k === '/' ? '/dashboard' : k)),
       )
-      const filtered = associadoMenus.filter(
-        (item) => item.type === 'link' && keySet.has(item.to),
-      )
-      // Projetos e Eventos/convites: sempre visíveis para associado.
-      // Ação entre amigos: só aparece se tiver faixa (filtrado no AppLayout).
-      for (const alwaysTo of [
+      const alwaysTo = [
         '/dashboard',
         '/calendario',
+        '/regimento-interno',
+        '/documentos/por-online',
         '/projetos',
         '/vendas/eventos',
         '/vendas/loja-online',
-      ] as const) {
-        if (
-          !filtered.some(
-            (item) => item.type === 'link' && item.to === alwaysTo,
-          )
-        ) {
-          const item = associadoMenus.find(
-            (entry) => entry.type === 'link' && entry.to === alwaysTo,
-          )
-          if (item) filtered.push(item)
+      ] as const
+
+      const filtered: NavItem[] = []
+      for (const item of associadoMenus) {
+        if (item.type === 'link') {
+          if (
+            keySet.has(item.to) ||
+            alwaysTo.includes(item.to as (typeof alwaysTo)[number])
+          ) {
+            filtered.push(item)
+          }
+          continue
+        }
+        const children = item.children.filter(
+          (child) =>
+            keySet.has(child.to) ||
+            alwaysTo.includes(child.to as (typeof alwaysTo)[number]),
+        )
+        if (children.length > 0) {
+          filtered.push({ ...item, children })
         }
       }
+
+      // Garante itens alwaysTo que ainda não entraram (links avulsos).
+      for (const to of alwaysTo) {
+        const already = filtered.some(
+          (item) =>
+            (item.type === 'link' && item.to === to) ||
+            (item.type === 'group' &&
+              item.children.some((c) => c.to === to)),
+        )
+        if (already) continue
+        const fromMenus = associadoMenus.find(
+          (entry) => entry.type === 'link' && entry.to === to,
+        )
+        if (fromMenus) filtered.push(fromMenus)
+      }
+
       // Ordem fixa: Dashboard → Calendário → demais.
       const ordemTopo = ['/dashboard', '/calendario'] as const
       filtered.sort((a, b) => {
-        if (a.type !== 'link' || b.type !== 'link') return 0
+        const toOf = (item: NavItem) =>
+          item.type === 'link' ? item.to : item.id
         const ia = ordemTopo.indexOf(
-          a.to as (typeof ordemTopo)[number],
+          toOf(a) as (typeof ordemTopo)[number],
         )
         const ib = ordemTopo.indexOf(
-          b.to as (typeof ordemTopo)[number],
+          toOf(b) as (typeof ordemTopo)[number],
         )
         if (ia === -1 && ib === -1) return 0
         if (ia === -1) return 1

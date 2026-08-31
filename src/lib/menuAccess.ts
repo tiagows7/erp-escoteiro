@@ -22,6 +22,7 @@ export const ASSOCIADO_PORTAL_MENU_KEYS = [
   '/portal-transparencia',
   '/conquistas',
   '/regimento-interno',
+  '/documentos/por-online',
   '/atividades',
   '/projetos',
   // Ação entre amigos: menu só se o associado tiver faixa (AppLayout).
@@ -171,6 +172,7 @@ export function pathMatchesMenuKey(pathname: string, menuKey: string): boolean {
 export const ALWAYS_VISIBLE_MENU_KEYS = [
   '/dashboard',
   '/regimento-interno',
+  '/documentos/por-online',
   // Admin do grupo: item só entra no nav se role=admin.
   '/grupos/meu',
   '/sugestoes-melhoria',
@@ -183,6 +185,7 @@ export const ALWAYS_VISIBLE_MENU_KEYS = [
 export const ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS = [
   '/calendario',
   '/regimento-interno',
+  '/documentos/por-online',
   '/projetos',
   '/vendas/eventos',
   '/vendas/loja-online',

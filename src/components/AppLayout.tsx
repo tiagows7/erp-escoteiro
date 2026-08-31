@@ -342,6 +342,19 @@ export function AppLayout() {
               <div className="nav-label">Menu</div>
               {items.map((item) => {
                 if (item.type === 'link') {
+                  if (item.externalUrl) {
+                    return (
+                      <a
+                        key={item.to}
+                        className="nav-link"
+                        href={item.externalUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {item.label}
+                      </a>
+                    )
+                  }
                   return (
                     <NavLink
                       key={item.to}
@@ -365,8 +378,14 @@ export function AppLayout() {
                 }
 
                 const open = !!openGroups[item.id]
-                const childActive = item.children.some((child) =>
-                  navLinkActive(location.pathname, location.search, child.to),
+                const childActive = item.children.some(
+                  (child) =>
+                    !child.externalUrl &&
+                    navLinkActive(
+                      location.pathname,
+                      location.search,
+                      child.to,
+                    ),
                 )
                 const visibleChildren = item.children.filter(
                   (child) =>
@@ -391,26 +410,38 @@ export function AppLayout() {
                     </button>
                     {open ? (
                       <div className="nav-submenu-items">
-                        {visibleChildren.map((child) => (
-                          <NavLink
-                            key={child.to}
-                            to={child.to}
-                            end={child.end}
-                            className={() =>
-                              `nav-link nav-sublink${
-                                navLinkActive(
-                                  location.pathname,
-                                  location.search,
-                                  child.to,
-                                )
-                                  ? ' active'
-                                  : ''
-                              }`
-                            }
-                          >
-                            {child.label}
-                          </NavLink>
-                        ))}
+                        {visibleChildren.map((child) =>
+                          child.externalUrl ? (
+                            <a
+                              key={child.to}
+                              className="nav-link nav-sublink"
+                              href={child.externalUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {child.label}
+                            </a>
+                          ) : (
+                            <NavLink
+                              key={child.to}
+                              to={child.to}
+                              end={child.end}
+                              className={() =>
+                                `nav-link nav-sublink${
+                                  navLinkActive(
+                                    location.pathname,
+                                    location.search,
+                                    child.to,
+                                  )
+                                    ? ' active'
+                                    : ''
+                                }`
+                              }
+                            >
+                              {child.label}
+                            </NavLink>
+                          ),
+                        )}
                       </div>
                     ) : null}
                   </div>
