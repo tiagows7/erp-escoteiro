@@ -11,6 +11,7 @@ import {
 } from '@/hooks/usePersistedFormState'
 import { StaffAtividadesPanel } from '@/components/StaffAtividadesPanel'
 import { formatMoney, parseMoneyInput } from '@/lib/despesas'
+import { empresaTemPixParaEscopo } from '@/lib/pixSicredi'
 import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
 import type { Ramo } from '@/types/database'
 
@@ -81,6 +82,7 @@ export function AtividadeFormPage() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
+  const [pixEscopoOk, setPixEscopoOk] = useState<boolean | null>(null)
 
   const ramoId = form.ramo ? Number(form.ramo) : null
   const secaoId = form.secao ? Number(form.secao) : null
@@ -104,6 +106,24 @@ export function AtividadeFormPage() {
     if (ramoScoped == null || !isNew) return
     setForm((prev) => ({ ...prev, ramo: String(ramoScoped) }))
   }, [ramoScoped, isNew])
+
+  useEffect(() => {
+    if (!empresaId) {
+      setPixEscopoOk(null)
+      return
+    }
+    let mounted = true
+    void empresaTemPixParaEscopo({
+      empresaId,
+      ramoId,
+      secaoId,
+    }).then((ok) => {
+      if (mounted) setPixEscopoOk(ok)
+    })
+    return () => {
+      mounted = false
+    }
+  }, [empresaId, ramoId, secaoId])
 
   useEffect(() => {
     if (!isNew || !dataFromQuery) return
@@ -402,6 +422,17 @@ export function AtividadeFormPage() {
                     </option>
                   ))}
               </select>
+              <span className="field-hint">
+                {ramoId != null
+                  ? pixEscopoOk === true
+                    ? 'PIX do pagamento usará a conta bancária deste ramo (Cadastrar banco).'
+                    : pixEscopoOk === false
+                      ? 'Este ramo ainda não tem PIX ativo no cadastro do banco — o pagamento pode falhar.'
+                      : 'Verificando PIX do ramo…'
+                  : pixEscopoOk === true
+                    ? 'Sem ramo: PIX usará a conta do grupo (mensalidades / caixa geral).'
+                    : 'Com ramo informado, o PIX usa a conta bancária daquele ramo, se estiver configurada.'}
+              </span>
             </div>
 
             <div className="field">

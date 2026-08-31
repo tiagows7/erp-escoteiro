@@ -402,15 +402,18 @@ async function resolveSicrediConfig(
   let ramoId = opts.ramoId ?? null
   let secaoId = opts.secaoId ?? null
 
-  if (opts.tipo === 'atividade' && ramoId == null && opts.atividadeId) {
+  // Atividade: sempre ler ramo/seção do cadastro (PIX da conta do ramo/seção).
+  if (opts.tipo === 'atividade' && opts.atividadeId) {
     const { data: ativ } = await admin
       .from('atividades')
       .select('ramo, secao')
       .eq('empresa_id', opts.empresaId)
       .eq('atividade_id', opts.atividadeId)
       .maybeSingle()
-    ramoId = (ativ?.ramo as number | null) ?? null
-    if (secaoId == null) secaoId = (ativ?.secao as number | null) ?? null
+    if (ativ) {
+      ramoId = (ativ.ramo as number | null) ?? null
+      secaoId = (ativ.secao as number | null) ?? null
+    }
   }
 
   if (ramoId == null && secaoId != null) {
@@ -2132,14 +2135,16 @@ Deno.serve(async (req) => {
         : null
 
       let ramoId: number | null = null
+      let secaoId: number | null = null
       if (tipo === 'atividade' && atividadeId) {
         const { data: ativ } = await admin
           .from('atividades')
-          .select('ramo')
+          .select('ramo, secao')
           .eq('empresa_id', empresaId)
           .eq('atividade_id', atividadeId)
           .maybeSingle()
         ramoId = (ativ?.ramo as number | null) ?? null
+        secaoId = (ativ?.secao as number | null) ?? null
       }
 
       const resolved = await resolveSicrediConfig(admin, {
@@ -2147,6 +2152,7 @@ Deno.serve(async (req) => {
         tipo,
         atividadeId,
         ramoId,
+        secaoId,
       })
 
       if (!resolved.cfg) {

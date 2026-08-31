@@ -53,6 +53,12 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'dashboard.view',
   },
   {
+    type: 'link',
+    to: '/regimento-interno',
+    label: 'Regimento interno',
+    permission: 'dashboard.view',
+  },
+  {
     type: 'group',
     id: 'cadastros',
     label: 'Cadastros',
@@ -336,6 +342,12 @@ export function navItemsForProfile(
         type: 'link',
         to: '/conquistas',
         label: 'Conquistas',
+        permission: 'dashboard.view',
+      },
+      {
+        type: 'link',
+        to: '/regimento-interno',
+        label: 'Regimento interno',
         permission: 'dashboard.view',
       },
       {

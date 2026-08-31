@@ -91,6 +91,8 @@ export type Empresa = {
   plataforma_dia_vencimento?: number | null
   /** Dia do mês (1–28) do vencimento das mensalidades dos associados. */
   dia_vencimento_mensalidade?: number | null
+  /** Regimento interno (texto livre; associados visualizam). */
+  regimento_interno?: string | null
   sicredi_pix_client_id?: string | null
   sicredi_pix_client_secret?: string | null
   sicredi_pix_chave?: string | null

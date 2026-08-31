@@ -21,6 +21,7 @@ export const ASSOCIADO_PORTAL_MENU_KEYS = [
   '/calendario',
   '/portal-transparencia',
   '/conquistas',
+  '/regimento-interno',
   '/atividades',
   '/projetos',
   // Ação entre amigos: menu só se o associado tiver faixa (AppLayout).
@@ -180,6 +181,7 @@ export const ALWAYS_VISIBLE_MENU_KEYS = [
  */
 export const ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS = [
   '/calendario',
+  '/regimento-interno',
   '/projetos',
   '/vendas/eventos',
   '/vendas/loja-online',

@@ -585,6 +585,14 @@ button {
   margin-bottom: 1rem;
 }
 
+.regimento-interno-texto {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+  font-size: 0.95rem;
+}
+
 .conquistas-panel {
   margin-bottom: 1rem;
 }
