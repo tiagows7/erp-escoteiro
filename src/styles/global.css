@@ -585,12 +585,20 @@ button {
   margin-bottom: 1rem;
 }
 
-.regimento-interno-texto {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.55;
-  font-size: 0.95rem;
+.regimento-pdf-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.regimento-pdf-frame {
+  display: block;
+  width: 100%;
+  min-height: min(75vh, 52rem);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7f8fa;
 }
 
 .conquistas-panel {

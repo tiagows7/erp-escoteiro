@@ -30,6 +30,7 @@ export function serializeDocumentUrls(urls: string[]): string | null {
 const PRIVATE_DOC_BUCKETS = new Set([
   'receita-comprovantes',
   'despesa-notas',
+  'empresa-regimento',
 ])
 
 /** Extrai bucket + path de URL pública/assinada ou ref `bucket:path`. */
