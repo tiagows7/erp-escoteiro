@@ -585,11 +585,36 @@ button {
   margin-bottom: 1rem;
 }
 
+.regimento-pdf-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-bottom: 0.85rem;
+}
+
+.regimento-pdf-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.regimento-pdf-card-info strong {
+  font-size: 1.05rem;
+}
+
+.regimento-pdf-card-info .muted {
+  margin: 0;
+}
+
 .regimento-pdf-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  margin-bottom: 0.85rem;
+}
+
+.regimento-pdf-toolbar .btn {
+  min-height: 2.75rem;
+  min-width: 8.5rem;
 }
 
 .regimento-pdf-frame {
@@ -599,6 +624,16 @@ button {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #f7f8fa;
+}
+
+@media (max-width: 900px) {
+  .regimento-pdf-toolbar {
+    flex-direction: column;
+  }
+
+  .regimento-pdf-toolbar .btn {
+    width: 100%;
+  }
 }
 
 .conquistas-panel {

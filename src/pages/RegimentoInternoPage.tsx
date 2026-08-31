@@ -15,6 +15,26 @@ function isStorageRef(value: string | null | undefined): boolean {
   return !!value?.startsWith('empresa-regimento:')
 }
 
+function prefersMobilePdfActions(): boolean {
+  if (typeof window === 'undefined') return false
+  const coarse = window.matchMedia('(pointer: coarse)').matches
+  const narrow = window.matchMedia('(max-width: 900px)').matches
+  const ua = navigator.userAgent || ''
+  const mobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(ua)
+  return coarse || narrow || mobileUa
+}
+
+async function fetchPdfBlob(signedUrl: string): Promise<Blob> {
+  const res = await fetch(signedUrl)
+  if (!res.ok) {
+    throw new Error('Não foi possível baixar o PDF.')
+  }
+  const blob = await res.blob()
+  // Alguns browsers no celular só abrem viewer com type PDF explícito.
+  if (blob.type === 'application/pdf') return blob
+  return new Blob([blob], { type: 'application/pdf' })
+}
+
 export function RegimentoInternoPage() {
   const { empresa, profile } = useAuth()
   const toast = useToast()
@@ -33,7 +53,18 @@ export function RegimentoInternoPage() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [mobileUi, setMobileUi] = useState(() => prefersMobilePdfActions())
+
+  useEffect(() => {
+    function sync() {
+      setMobileUi(prefersMobilePdfActions())
+    }
+    sync()
+    window.addEventListener('resize', sync)
+    return () => window.removeEventListener('resize', sync)
+  }, [])
 
   useEffect(() => {
     if (!empresaId) {
@@ -79,6 +110,65 @@ export function RegimentoInternoPage() {
       mounted = false
     }
   }, [empresaId])
+
+  async function freshSignedUrl(): Promise<string> {
+    if (!docRef) throw new Error('PDF não encontrado.')
+    const url = await resolveDocumentDisplayUrl(docRef)
+    setPdfUrl(url)
+    return url
+  }
+
+  async function onAbrirPdf() {
+    if (!docRef) return
+    setOpening(true)
+    setError(null)
+    try {
+      const signed = await freshSignedUrl()
+      const blob = await fetchPdfBlob(signed)
+      const blobUrl = URL.createObjectURL(blob)
+      const win = window.open(blobUrl, '_blank', 'noopener,noreferrer')
+      if (!win) {
+        // Pop-up bloqueado / PWA: força navegação na mesma aba.
+        window.location.assign(blobUrl)
+      } else {
+        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 120_000)
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Falha ao abrir o PDF.'
+      setError(message)
+      toast.error('Não foi possível abrir o PDF', message)
+    } finally {
+      setOpening(false)
+    }
+  }
+
+  async function onBaixarPdf() {
+    if (!docRef) return
+    setOpening(true)
+    setError(null)
+    try {
+      const signed = await freshSignedUrl()
+      const blob = await fetchPdfBlob(signed)
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = 'regimento-interno.pdf'
+      a.rel = 'noopener'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000)
+      toast.success('Download iniciado')
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Falha ao baixar o PDF.'
+      setError(message)
+      toast.error('Não foi possível baixar o PDF', message)
+    } finally {
+      setOpening(false)
+    }
+  }
 
   async function onFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -141,7 +231,10 @@ export function RegimentoInternoPage() {
 
   return (
     <>
-      <WaitingOverlay open={saving} message="Processando PDF…" />
+      <WaitingOverlay
+        open={saving || opening}
+        message={opening ? 'Preparando PDF…' : 'Processando PDF…'}
+      />
       <header className="page-header">
         <div>
           <h2>Regimento interno</h2>
@@ -161,7 +254,7 @@ export function RegimentoInternoPage() {
             <button
               type="button"
               className="btn btn-primary"
-              disabled={saving}
+              disabled={saving || opening}
               onClick={() => fileInputRef.current?.click()}
             >
               {docRef ? 'Substituir PDF' : 'Cadastrar PDF'}
@@ -170,7 +263,7 @@ export function RegimentoInternoPage() {
               <button
                 type="button"
                 className="btn btn-danger"
-                disabled={saving}
+                disabled={saving || opening}
                 onClick={() => void onRemove()}
               >
                 Remover
@@ -190,23 +283,44 @@ export function RegimentoInternoPage() {
         <section className="panel">
           <div className="loading">Carregando…</div>
         </section>
-      ) : pdfUrl ? (
+      ) : docRef && (pdfUrl || mobileUi) ? (
         <section className="panel">
-          <div className="regimento-pdf-toolbar">
-            <a
-              className="btn btn-soft"
-              href={pdfUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Abrir PDF em nova aba
-            </a>
+          <div className="regimento-pdf-card">
+            <div className="regimento-pdf-card-info">
+              <strong>Regimento interno (PDF)</strong>
+              <p className="muted">
+                {mobileUi
+                  ? 'No celular, use os botões abaixo para abrir ou baixar o arquivo.'
+                  : 'Visualize abaixo ou abra em outra aba.'}
+              </p>
+            </div>
+            <div className="regimento-pdf-toolbar">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={opening || saving}
+                onClick={() => void onAbrirPdf()}
+              >
+                Abrir PDF
+              </button>
+              <button
+                type="button"
+                className="btn btn-soft"
+                disabled={opening || saving}
+                onClick={() => void onBaixarPdf()}
+              >
+                Baixar PDF
+              </button>
+            </div>
           </div>
-          <iframe
-            className="regimento-pdf-frame"
-            title="Regimento interno"
-            src={pdfUrl}
-          />
+
+          {!mobileUi && pdfUrl ? (
+            <iframe
+              className="regimento-pdf-frame"
+              title="Regimento interno"
+              src={pdfUrl}
+            />
+          ) : null}
         </section>
       ) : (
         <section className="panel">
