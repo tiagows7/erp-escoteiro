@@ -6,6 +6,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
+  clearFormDraftsForResource,
   formDraftKey,
   usePersistedFormState,
 } from '@/hooks/usePersistedFormState'
@@ -112,12 +113,15 @@ export function ReceitaFormPage() {
     `receita${searchParams.toString() ? `?${searchParams.toString()}` : ''}`,
     id,
   )
+  // Nova receita: sem rascunho — evita reabrir a inclusão anterior.
+  const persistKey = isNew ? null : draftKey
+  const emptyNewForm = {
+    ...emptyForm,
+    receita_emissao: todayISO(),
+    receita_vencimento: todayISO(),
+  }
   const [form, setForm, { hydrateFromServer, clearDraft, restored }] =
-    usePersistedFormState(draftKey, {
-      ...emptyForm,
-      receita_emissao: todayISO(),
-      receita_vencimento: todayISO(),
-    })
+    usePersistedFormState(persistKey, emptyNewForm)
   const [origem, setOrigem] = useState<string>(RECEITA_ORIGEM.AVULSA)
   const [saldo, setSaldo] = useState<number | null>(null)
   const [situacao, setSituacao] = useState<number | null>(null)
@@ -143,6 +147,30 @@ export function ReceitaFormPage() {
   const [recibo, setRecibo] = useState<ReceitaReciboData | null>(null)
   const documentoHrefs = useSignedDocumentUrls(documentoUrls)
 
+  // Sempre começa limpo ao abrir "Nova receita" (e apaga rascunhos antigos).
+  useEffect(() => {
+    if (!isNew) return
+    if (empresaId != null) {
+      clearFormDraftsForResource(empresaId, 'receita', 'novo')
+    }
+    clearDraft({
+      ...emptyForm,
+      receita_emissao: todayISO(),
+      receita_vencimento: todayISO(),
+    })
+    setOrigem(RECEITA_ORIGEM.AVULSA)
+    setSaldo(null)
+    setSituacao(null)
+    setPaidAmount(0)
+    setError(null)
+    setDocumentoUrls([])
+    setDocFiles([])
+    setGerarRecibo(false)
+    setTipopagtoId('')
+    setDataPagamento(todayISO())
+    setRecibo(null)
+  }, [isNew, empresaId, clearDraft])
+
   useEffect(() => {
     if (!scope || !isNew || lockedByVinculo) return
     setForm((prev) => ({
@@ -151,7 +179,7 @@ export function ReceitaFormPage() {
       receita_secao:
         scope.secao != null ? String(scope.secao) : prev.receita_secao,
     }))
-  }, [scope, isNew, lockedByVinculo])
+  }, [scope, isNew, lockedByVinculo, setForm])
 
   useEffect(() => {
     if (!empresaId) return
@@ -729,6 +757,9 @@ export function ReceitaFormPage() {
           null
 
         setSaving(false)
+        if (empresaId != null) {
+          clearFormDraftsForResource(empresaId, 'receita', 'novo')
+        }
         clearDraft({
           ...emptyForm,
           receita_emissao: todayISO(),
@@ -822,6 +853,9 @@ export function ReceitaFormPage() {
     }
 
     setSaving(false)
+    if (empresaId != null) {
+      clearFormDraftsForResource(empresaId, 'receita', 'novo')
+    }
     clearDraft({
       ...emptyForm,
       receita_emissao: todayISO(),

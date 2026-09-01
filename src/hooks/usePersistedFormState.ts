@@ -35,6 +35,33 @@ function removeDraft(key: string) {
   }
 }
 
+/**
+ * Remove rascunhos de um recurso na empresa.
+ * Ex.: resourcePrefix "receita" apaga `1:receita:novo` e `1:receita?x=1:novo`.
+ */
+export function clearFormDraftsForResource(
+  empresaId: number,
+  resourcePrefix: string,
+  record: 'novo' | 'all' = 'novo',
+) {
+  try {
+    const toRemove: string[] = []
+    const recordPart = record === 'novo' ? 'novo' : '[^:]+'
+    const re = new RegExp(
+      `^${empresaId}:${resourcePrefix}(\\?[^:]*)?:${recordPart}$`,
+    )
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const full = sessionStorage.key(i)
+      if (!full?.startsWith(PREFIX)) continue
+      const key = full.slice(PREFIX.length)
+      if (re.test(key)) toRemove.push(full)
+    }
+    for (const full of toRemove) sessionStorage.removeItem(full)
+  } catch {
+    /* ignore */
+  }
+}
+
 export type PersistedFormApi<T> = {
   /** Aplica dados do servidor só se não houver rascunho local. */
   hydrateFromServer: (server: T) => void
@@ -51,6 +78,7 @@ export type PersistedFormApi<T> = {
 /**
  * Mantém o estado do formulário em sessionStorage enquanto a aba estiver aberta.
  * Só grava após alteração do usuário (não sobrescreve carga do servidor).
+ * Passe `storageKey = null` para desligar a persistência (ex.: formulário "novo").
  */
 export function usePersistedFormState<T>(
   storageKey: string | null,
