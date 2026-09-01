@@ -729,6 +729,16 @@ export function ReceitaFormPage() {
           null
 
         setSaving(false)
+        clearDraft({
+          ...emptyForm,
+          receita_emissao: todayISO(),
+          receita_vencimento: todayISO(),
+        })
+        setDocFiles([])
+        setDocumentoUrls([])
+        setGerarRecibo(false)
+        setTipopagtoId('')
+        setDataPagamento(todayISO())
         setRecibo({
           empresaNome: empresa?.nome ?? 'Grupo escoteiro',
           empresaLogoUrl: empresa?.logo_url ?? null,
@@ -812,7 +822,16 @@ export function ReceitaFormPage() {
     }
 
     setSaving(false)
-    clearDraft()
+    clearDraft({
+      ...emptyForm,
+      receita_emissao: todayISO(),
+      receita_vencimento: todayISO(),
+    })
+    setDocFiles([])
+    setDocumentoUrls([])
+    setGerarRecibo(false)
+    setTipopagtoId('')
+    setDataPagamento(todayISO())
     navigate('/receitas/inclusao', {
       state: { flashSuccess: 'Salvo com sucesso!' },
     })

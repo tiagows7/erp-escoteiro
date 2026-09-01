@@ -38,8 +38,12 @@ function removeDraft(key: string) {
 export type PersistedFormApi<T> = {
   /** Aplica dados do servidor só se não houver rascunho local. */
   hydrateFromServer: (server: T) => void
-  /** Remove o rascunho (chamar após salvar com sucesso). */
-  clearDraft: () => void
+  /**
+   * Remove o rascunho (chamar após salvar com sucesso).
+   * Se `next` for passado, também reseta o formulário sem marcar dirty
+   * (útil quando a tela permanece montada, ex.: recibo).
+   */
+  clearDraft: (next?: T) => void
   /** True se um rascunho foi restaurado ao montar. */
   restored: boolean
 }
@@ -72,6 +76,8 @@ export function usePersistedFormState<T>(
   useEffect(() => {
     if (!storageKey || !dirtyRef.current) return
     const timer = window.setTimeout(() => {
+      // Revalida: clearDraft pode ter rodado enquanto o timer estava pendente.
+      if (!dirtyRef.current || keyRef.current !== storageKey) return
       writeDraft(storageKey, form)
     }, 250)
     return () => window.clearTimeout(timer)
@@ -82,11 +88,14 @@ export function usePersistedFormState<T>(
     setFormState(server)
   }, [])
 
-  const clearDraft = useCallback(() => {
+  const clearDraft = useCallback((next?: T) => {
     const key = keyRef.current
     if (key) removeDraft(key)
     restoredRef.current = null
     dirtyRef.current = false
+    if (next !== undefined) {
+      setFormState(next)
+    }
   }, [])
 
   return [
