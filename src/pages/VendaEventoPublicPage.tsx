@@ -220,12 +220,18 @@ export function VendaEventoPublicPage() {
 
     if (!hasInfinite && !hasPix) {
       setError(
-        'Nenhuma forma de pagamento online configurada para este evento. Cadastre a tag InfinitePay ou o PIX Sicredi na conta bancária do grupo/ramo.',
+        'Nenhuma forma de pagamento online configurada para este evento. Cadastre o PIX Sicredi na conta bancária do grupo/ramo.',
       )
       return
     }
 
-    if (hasInfinite && (prefer === 'infinitepay' || !hasPix)) {
+    // Por enquanto: PIX Sicredi (ramo/grupo). InfinitePay só se for a única opção.
+    if (hasPix && (prefer === 'pix_sicredi' || !hasInfinite)) {
+      openPixSicredi(nomesLimpos, tipoIdsEnvio, fone, valor, descricao)
+      return
+    }
+
+    if (hasInfinite) {
       setPaying(true)
       const created = await createInfinitePayEventoCheckout({
         linkToken: token,
@@ -277,12 +283,11 @@ export function VendaEventoPublicPage() {
 
   const total = totalSelecionado
   const dataLabel = formatDateBr(info.data_evento)
-  const payLabel =
-    payConfig?.prefer === 'infinitepay'
+  const payLabel = payConfig?.pix_sicredi
+    ? 'Pagar com PIX'
+    : payConfig?.prefer === 'infinitepay'
       ? 'Pagar com InfinitePay'
-      : payConfig?.pix_sicredi
-        ? 'Pagar com PIX'
-        : 'Pagar'
+      : 'Pagar'
 
   return (
     <div className="public-rifa-page">
@@ -346,9 +351,11 @@ export function VendaEventoPublicPage() {
             <p className="muted" style={{ marginTop: 0 }}>
               {info.disponiveis} de {info.total} convite(s) disponível(is).
               {!info.encerrado
-                ? payConfig?.prefer === 'infinitepay'
-                  ? ' Informe a quantidade, os nomes e pague no checkout InfinitePay (Pix ou cartão).'
-                  : ' Informe a quantidade, os nomes e pague via PIX para confirmar.'
+                ? payConfig?.pix_sicredi
+                  ? ' Informe a quantidade, os nomes e pague via PIX para confirmar.'
+                  : payConfig?.prefer === 'infinitepay'
+                    ? ' Informe a quantidade, os nomes e pague no checkout InfinitePay (Pix ou cartão).'
+                    : ' Informe a quantidade, os nomes e pague via PIX para confirmar.'
                 : ''}
             </p>
 

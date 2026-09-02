@@ -11,6 +11,9 @@ const INFINITEPAY_LINKS_URL = 'https://api.checkout.infinitepay.io/links'
 const INFINITEPAY_CHECK_URL =
   'https://api.checkout.infinitepay.io/payment_check'
 
+/** Eventos: por enquanto só PIX Sicredi (ramo/grupo). InfinitePay fica desligado. */
+const EVENTOS_INFINITEPAY_ENABLED = false
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -530,24 +533,30 @@ Deno.serve(async (req) => {
         })
       }
 
+      const secaoId = (evento.secao as number | null) ?? null
       const ramoId = await resolveEventoRamo(admin, {
         empresa_id: evento.empresa_id as number,
         ramo: (evento.ramo as number | null) ?? null,
-        secao: (evento.secao as number | null) ?? null,
+        secao: secaoId,
       })
-      const handle = await resolveInfinitePayHandle(
-        admin,
-        evento.empresa_id as number,
-        ramoId,
-      )
+      const handle = EVENTOS_INFINITEPAY_ENABLED
+        ? await resolveInfinitePayHandle(
+            admin,
+            evento.empresa_id as number,
+            ramoId,
+          )
+        : null
 
-      // PIX Sicredi: conta com PIX ativo (mesma resolução da function pix-sicredi)
+      // PIX Sicredi: seção → ramo → grupo (mesma ordem da function pix-sicredi)
       const { data: contas } = await admin
         .from('empresa_conta_bancaria')
-        .select('ramo_id, api_pix_ativo, api_pix_chave, api_pix_cert, api_pix_key, api_client_id, api_client_secret')
+        .select(
+          'ramo_id, secao_id, api_pix_ativo, api_pix_chave, api_pix_cert, api_pix_key, api_client_id, api_client_secret',
+        )
         .eq('empresa_id', evento.empresa_id)
       const list = (contas ?? []) as {
         ramo_id: number | null
+        secao_id: number | null
         api_pix_ativo: boolean | null
         api_pix_chave: string | null
         api_pix_cert: string | null
@@ -555,14 +564,25 @@ Deno.serve(async (req) => {
         api_client_id: string | null
         api_client_secret: string | null
       }[]
-      const candidatos =
-        ramoId != null
-          ? [
-              ...list.filter((c) => c.ramo_id === ramoId),
-              ...list.filter((c) => c.ramo_id == null),
-            ]
-          : list.filter((c) => c.ramo_id == null)
-      const pixSicredi = candidatos.some(
+      const candidatos: typeof list = []
+      if (secaoId != null) {
+        candidatos.push(...list.filter((c) => c.secao_id === secaoId))
+      }
+      if (ramoId != null) {
+        candidatos.push(
+          ...list.filter((c) => c.ramo_id === ramoId && c.secao_id == null),
+        )
+      }
+      candidatos.push(
+        ...list.filter((c) => c.ramo_id == null && c.secao_id == null),
+      )
+
+      const escopo =
+        ramoId == null && secaoId == null
+          ? list.filter((c) => c.ramo_id == null && c.secao_id == null)
+          : candidatos
+
+      const pixSicredi = escopo.some(
         (c) =>
           c.api_pix_ativo === true &&
           !!(c.api_pix_chave ?? '').trim() &&
@@ -577,7 +597,11 @@ Deno.serve(async (req) => {
         encerrado: false,
         infinitepay: !!handle,
         pix_sicredi: pixSicredi,
-        prefer: handle ? 'infinitepay' : pixSicredi ? 'pix_sicredi' : 'nenhum',
+        prefer: pixSicredi
+          ? 'pix_sicredi'
+          : handle
+            ? 'infinitepay'
+            : 'nenhum',
       })
     }
 
@@ -654,16 +678,20 @@ Deno.serve(async (req) => {
         ramo: (evento.ramo as number | null) ?? null,
         secao: (evento.secao as number | null) ?? null,
       })
-      const handle = await resolveInfinitePayHandle(
-        admin,
-        evento.empresa_id as number,
-        ramoId,
-      )
+      const handle = EVENTOS_INFINITEPAY_ENABLED
+        ? await resolveInfinitePayHandle(
+            admin,
+            evento.empresa_id as number,
+            ramoId,
+          )
+        : null
 
       if (!handle) {
         return json(
           {
-            error: 'InfinitePay não configurado para este evento.',
+            error: EVENTOS_INFINITEPAY_ENABLED
+              ? 'InfinitePay não configurado para este evento.'
+              : 'Pagamento InfinitePay temporariamente desligado. Use PIX Sicredi.',
             use_pix: true,
             infinitepay: false,
           },

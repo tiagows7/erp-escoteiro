@@ -12,7 +12,6 @@ import { PixSicrediPublicCheckoutModal } from '@/components/PixSicrediPublicChec
 import { formatMoney } from '@/lib/despesas'
 import {
   checkInfinitePayPedidoStatus,
-  createInfinitePayEventoCheckout,
 } from '@/lib/infinitePayCheckout'
 import type { PixPublicEventoInput } from '@/lib/pixSicrediPublic'
 import {
@@ -352,37 +351,17 @@ export function VendaEventoVendaPage() {
       setUltimaNumeracao(null)
       setConvitesPagos([])
 
-      // Prefere InfinitePay (tag na conta bancária); senão PIX Sicredi.
-      setSaving(true)
-      const created = await createInfinitePayEventoCheckout({
+      // PIX Sicredi online (ramo/seção/grupo). InfinitePay desligado por enquanto.
+      setPixInput({
+        kind: 'evento',
         linkToken: evento.link_token,
         nomes: nomesLimpos,
         tipoIds: tipoIdsEnvio,
         compradorTelefone: fone,
         valor,
         descricao,
-        redirectUrl: `${window.location.origin}/vendas/eventos/${evento.evento_id}/vender`,
       })
-      setSaving(false)
-
-      if (created.ok) {
-        window.location.href = created.url
-        return
-      }
-      if (created.usePix) {
-        setPixInput({
-          kind: 'evento',
-          linkToken: evento.link_token,
-          nomes: nomesLimpos,
-          tipoIds: tipoIdsEnvio,
-          compradorTelefone: fone,
-          valor,
-          descricao,
-        })
-        setPixOpen(true)
-        return
-      }
-      setError(created.error)
+      setPixOpen(true)
       return
     }
 
@@ -696,9 +675,9 @@ export function VendaEventoVendaPage() {
                     }`}
                     disabled={saving || pixOpen}
                     onClick={() => setFormaPagamento('pix')}
-                    title="InfinitePay (se houver tag) ou PIX Sicredi"
+                    title="PIX Sicredi da conta do ramo ou do grupo"
                   >
-                    PIX / InfinitePay
+                    PIX online
                   </button>
                   <button
                     type="button"
@@ -715,9 +694,9 @@ export function VendaEventoVendaPage() {
                 </div>
                 {formaPagamento === 'pix' ? (
                   <p className="field-hint" style={{ marginBottom: 0 }}>
-                    Se a conta do ramo/grupo tiver tag InfinitePay, abre o
-                    checkout (Pix/cartão). Senão, usa o PIX Sicredi. Informe o
-                    telefone antes de continuar.
+                    Gera cobrança PIX Sicredi com a conta bancária do ramo (ou
+                    do grupo, se o evento for geral). Informe o telefone antes
+                    de continuar.
                   </p>
                 ) : null}
               </div>
@@ -736,7 +715,7 @@ export function VendaEventoVendaPage() {
                   {saving
                     ? 'Salvando…'
                     : formaPagamento === 'pix'
-                      ? 'Pagar online'
+                      ? 'Pagar com PIX'
                       : associadoLogin
                         ? quantidade === 1
                           ? 'Comprar 1 convite'

@@ -728,7 +728,8 @@ export function VendaEventoFormPage() {
                 ))}
             </select>
             <span className="field-hint">
-              Com ramo/seção, o PIX do link público usa a conta desse ramo.
+              Com ramo/seção, o PIX online usa a conta bancária desse ramo;
+              sem ramo, usa a conta do grupo.
             </span>
           </div>
 
