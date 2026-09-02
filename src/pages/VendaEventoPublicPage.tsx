@@ -299,11 +299,24 @@ export function VendaEventoPublicPage() {
             <span className="badge badge-danger">Encerrado</span>
           ) : null}
         </h1>
-        <p>
-          {tipos.map((t) => tipoOptionLabel(t)).join(' · ') ||
-            `${formatMoney(info.valor_convite)} por convite`}
-          {dataLabel ? ` · ${dataLabel}` : ''}
-        </p>
+        <div className="evento-tipos-precos">
+          {tipos.length > 0 ? (
+            tipos.map((t) => (
+              <p key={t.tipo_id} className="muted" style={{ margin: 0 }}>
+                {t.label} = {formatMoney(Number(t.valor ?? 0))}
+              </p>
+            ))
+          ) : (
+            <p className="muted" style={{ margin: 0 }}>
+              {formatMoney(info.valor_convite)} por convite
+            </p>
+          )}
+          {dataLabel ? (
+            <p className="muted" style={{ margin: '0.35rem 0 0' }}>
+              {dataLabel}
+            </p>
+          ) : null}
+        </div>
       </header>
 
       {error ? (

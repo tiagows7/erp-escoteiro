@@ -450,15 +450,21 @@ export function VendaEventoVendaPage() {
               <span className="badge badge-danger">Encerrado</span>
             ) : null}
           </h2>
-          <p>
+          <p style={{ marginBottom: tipos.length > 0 ? '0.35rem' : undefined }}>
             {evento.nome}
-            {tipos.length > 0
-              ? ` · ${tipos.map((t) => tipoOptionLabel(t)).join(' · ')}`
-              : ''}
             {evento.data_evento
               ? ` · ${formatDateBr(evento.data_evento)}`
               : ''}
           </p>
+          {tipos.length > 0 ? (
+            <div className="evento-tipos-precos">
+              {tipos.map((t) => (
+                <p key={t.tipo_id} className="muted" style={{ margin: 0 }}>
+                  {t.label} = {formatMoney(Number(t.valor ?? 0))}
+                </p>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className="page-header-actions actions-pair">
           {evento.link_token && !encerrado ? (

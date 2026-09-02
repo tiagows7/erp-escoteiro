@@ -4488,6 +4488,12 @@ table.data .badge {
   margin-bottom: 1rem;
 }
 
+.evento-tipos-precos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
 .public-rifa-header h1 {
   margin: 0.15rem 0 0.35rem;
   font-size: clamp(1.45rem, 4vw, 1.9rem);
