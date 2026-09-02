@@ -741,17 +741,16 @@ export function DespesaFormPage() {
 
   async function onDelete() {
     if (!canWrite || !empresaId || isNew) return
-    if (
+
+    const temPagamento =
       situacao === DESPESA_SITUACAO.PAGO ||
       situacao === DESPESA_SITUACAO.PARCIAL
-    ) {
-      setError('Não é possível excluir despesa com pagamento registrado.')
-      return
-    }
 
     const ok = await toast.confirm({
       title: 'Excluir despesa?',
-      message: `Tem certeza que deseja excluir "${form.despesa_finalidade}"?`,
+      message: temPagamento
+        ? `"${form.despesa_finalidade}" já possui pagamento. A exclusão remove o movimento e os pagamentos vinculados (útil se a data ou o lançamento estiver errado).`
+        : `Tem certeza que deseja excluir "${form.despesa_finalidade}"?`,
       confirmLabel: 'Sim, excluir',
       cancelLabel: 'Não',
       danger: true,
@@ -1197,9 +1196,19 @@ export function DespesaFormPage() {
               >
                 {saving ? 'Enviando…' : 'Salvar documentos'}
               </button>
+              {!isNew ? (
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  disabled={saving}
+                  onClick={() => void onDelete()}
+                >
+                  Excluir
+                </button>
+              ) : null}
               <p className="muted" style={{ margin: 0 }}>
                 Despesa paga — demais campos bloqueados; você pode anexar
-                documentos.
+                documentos ou excluir o movimento se estiver incorreto.
               </p>
             </>
           ) : (
