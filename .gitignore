@@ -13,6 +13,12 @@ dist-ssr
 *.local
 .env
 .env.local
+.env*.local
+_migrate_keys*.env
+_migrate_data.sql
+_count_src.sql
+_migrate_copy.mjs
+_migrate_storage.mjs
 
 # Editor
 .vscode/*
@@ -32,7 +38,7 @@ supabase/.temp/
 .vercel
 .env*.local
 
-# Credenciais PIX EfÌ locais (nunca versionar)
+# Credenciais PIX Efù locais (nunca versionar)
 certificado efy/
 *.p12
 *.pfx
