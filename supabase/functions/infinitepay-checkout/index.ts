@@ -223,12 +223,21 @@ async function baixarPedidoEvento(
   const empresaId = pedido.empresa_id as number
   const eventoId = pedido.evento_id as number
   const telefone = String(pedido.comprador_telefone ?? '').trim()
-  const nomes = Array.isArray(pedido.nomes)
-    ? (pedido.nomes as unknown[])
-        .map((n) => String(n ?? '').trim())
-        .filter(Boolean)
-        .map((n) => n.slice(0, 200))
+  const nomesRaw = Array.isArray(pedido.nomes) ? (pedido.nomes as unknown[]) : []
+  const restricoesRaw = Array.isArray(pedido.restricoes_alimentares)
+    ? (pedido.restricoes_alimentares as unknown[])
     : []
+  const pares = nomesRaw
+    .map((n, i) => {
+      const nome = String(n ?? '').trim().slice(0, 200)
+      const restricao = String(restricoesRaw[i] ?? '')
+        .trim()
+        .slice(0, 120)
+      return { nome, restricao: restricao || null }
+    })
+    .filter((p) => p.nome)
+  const nomes = pares.map((p) => p.nome)
+  const restricoes = pares.map((p) => p.restricao)
   const valorTotal = Number(pedido.valor)
 
   if (!eventoId || nomes.length === 0) {
@@ -354,6 +363,7 @@ async function baixarPedidoEvento(
       tipo_id: tipoId,
       valor_unitario: linha?.valor ?? 0,
       tipo_label: linha?.label ?? null,
+      restricao_alimentar: restricoes[i] ?? null,
     }
   })
 
@@ -608,10 +618,23 @@ Deno.serve(async (req) => {
     if (action === 'create_evento') {
       const token = String(body.link_token ?? '').trim()
       const fone = String(body.comprador_telefone ?? '').trim()
-      const nomesOrdered = (Array.isArray(body.nomes) ? body.nomes : [])
-        .map((n) => String(n ?? '').trim())
-        .filter(Boolean)
-        .map((n) => n.slice(0, 200))
+      const nomesRaw = Array.isArray(body.nomes) ? body.nomes : []
+      const restricoesRaw = Array.isArray(body.restricoes_alimentares)
+        ? body.restricoes_alimentares
+        : []
+      const pares = nomesRaw
+        .map((n: unknown, i: number) => {
+          const nome = String(n ?? '').trim().slice(0, 200)
+          const restricao = String(restricoesRaw[i] ?? '')
+            .trim()
+            .slice(0, 120)
+          return { nome, restricao }
+        })
+        .filter((p: { nome: string }) => p.nome)
+      const nomesOrdered = pares.map((p: { nome: string }) => p.nome)
+      const restricoesOrdered = pares.map(
+        (p: { restricao: string }) => p.restricao,
+      )
       const redirectUrl = String(body.redirect_url ?? '').trim()
       const siteOrigin = String(body.site_origin ?? '').trim()
 
@@ -723,6 +746,7 @@ Deno.serve(async (req) => {
           handle,
           nomes: nomesOrdered,
           tipo_ids: resolvedTipos.tipoIds,
+          restricoes_alimentares: restricoesOrdered,
           comprador_telefone: fone.slice(0, 40),
           comprador_nome: nomesOrdered[0] ?? null,
           valor,

@@ -15,12 +15,23 @@ export function totalConvitesEvento(
   return numeroFinal - numeroInicial + 1
 }
 
+/** Paralelo a nomes: texto da restrição ou '' se não houver. */
+export function normalizeRestricoesAlimentares(
+  temRestricao: boolean[],
+  textos: string[],
+): string[] {
+  return textos.map((t, i) =>
+    temRestricao[i] ? String(t ?? '').trim().slice(0, 120) : '',
+  )
+}
+
 export async function comprarConvitesEvento(input: {
   eventoId: number
   nomes: string[]
   compradorTelefone?: string
   formaPagamento: VendaEventoFormaPagamento
   tipoIds?: number[]
+  restricoes?: string[]
 }): Promise<{
   ok: boolean
   mensagem: string
@@ -33,6 +44,7 @@ export async function comprarConvitesEvento(input: {
     p_comprador_telefone: input.compradorTelefone?.trim() || null,
     p_forma_pagamento: input.formaPagamento,
     p_tipo_ids: input.tipoIds ?? null,
+    p_restricoes: input.restricoes ?? null,
   })
 
   if (error) {

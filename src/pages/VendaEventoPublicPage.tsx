@@ -14,6 +14,7 @@ import {
   type EventoPagamentoConfig,
 } from '@/lib/infinitePayCheckout'
 import type { PixPublicEventoInput } from '@/lib/pixSicrediPublic'
+import { normalizeRestricoesAlimentares } from '@/lib/vendaEventos'
 import {
   fetchEventoPublicInfo,
   type EventoPublicInfo,
@@ -43,6 +44,8 @@ export function VendaEventoPublicPage() {
   const [quantidade, setQuantidade] = useState(1)
   const [nomes, setNomes] = useState<string[]>([''])
   const [tipoIds, setTipoIds] = useState<number[]>([0])
+  const [temRestricao, setTemRestricao] = useState<boolean[]>([false])
+  const [restricoesTexto, setRestricoesTexto] = useState<string[]>([''])
   const [telefone, setTelefone] = useState('')
   const [pixOpen, setPixOpen] = useState(false)
   const [pixInput, setPixInput] = useState<PixPublicEventoInput | null>(null)
@@ -97,6 +100,12 @@ export function VendaEventoPublicPage() {
         (_, i) => prev[i] || fallback,
       )
     })
+    setTemRestricao((prev) =>
+      Array.from({ length: Math.max(1, quantidade) }, (_, i) => prev[i] ?? false),
+    )
+    setRestricoesTexto((prev) =>
+      Array.from({ length: Math.max(1, quantidade) }, (_, i) => prev[i] ?? ''),
+    )
   }, [quantidade, tipoPadraoId])
 
   // Retorno do checkout InfinitePay
@@ -153,6 +162,7 @@ export function VendaEventoPublicPage() {
   function openPixSicredi(
     nomesLimpos: string[],
     tipoIdsEnvio: number[] | undefined,
+    restricoesEnvio: string[],
     fone: string,
     valor: number,
     descricao: string,
@@ -163,6 +173,7 @@ export function VendaEventoPublicPage() {
       linkToken: token,
       nomes: nomesLimpos,
       tipoIds: tipoIdsEnvio,
+      restricoes: restricoesEnvio,
       compradorTelefone: fone,
       valor,
       descricao,
@@ -190,6 +201,14 @@ export function VendaEventoPublicPage() {
       setError('Preencha o nome de cada convite.')
       return
     }
+    for (let i = 0; i < quantidade; i += 1) {
+      if (temRestricao[i] && !restricoesTexto[i]?.trim()) {
+        setError(
+          `Informe a restrição alimentar do convite ${i + 1} (ex.: vegano, vegetariano).`,
+        )
+        return
+      }
+    }
     if (!telefone.trim()) {
       setError('Informe o seu telefone.')
       return
@@ -207,6 +226,10 @@ export function VendaEventoPublicPage() {
       tipoPadraoId > 0
         ? tipoIds.map((id) => id || tipoPadraoId)
         : undefined
+    const restricoesEnvio = normalizeRestricoesAlimentares(
+      temRestricao,
+      restricoesTexto,
+    )
     const descricao = `${info.evento_nome} · ${quantidade} convite(s)`
     const fone = telefone.trim()
 
@@ -227,7 +250,14 @@ export function VendaEventoPublicPage() {
 
     // Por enquanto: PIX Sicredi (ramo/grupo). InfinitePay só se for a única opção.
     if (hasPix && (prefer === 'pix_sicredi' || !hasInfinite)) {
-      openPixSicredi(nomesLimpos, tipoIdsEnvio, fone, valor, descricao)
+      openPixSicredi(
+        nomesLimpos,
+        tipoIdsEnvio,
+        restricoesEnvio,
+        fone,
+        valor,
+        descricao,
+      )
       return
     }
 
@@ -237,6 +267,7 @@ export function VendaEventoPublicPage() {
         linkToken: token,
         nomes: nomesLimpos,
         tipoIds: tipoIdsEnvio,
+        restricoes: restricoesEnvio,
         compradorTelefone: fone,
         valor,
         descricao,
@@ -248,14 +279,28 @@ export function VendaEventoPublicPage() {
         return
       }
       if (created.usePix && hasPix) {
-        openPixSicredi(nomesLimpos, tipoIdsEnvio, fone, valor, descricao)
+        openPixSicredi(
+          nomesLimpos,
+          tipoIdsEnvio,
+          restricoesEnvio,
+          fone,
+          valor,
+          descricao,
+        )
         return
       }
       setError(created.error)
       return
     }
 
-    openPixSicredi(nomesLimpos, tipoIdsEnvio, fone, valor, descricao)
+    openPixSicredi(
+      nomesLimpos,
+      tipoIdsEnvio,
+      restricoesEnvio,
+      fone,
+      valor,
+      descricao,
+    )
   }
 
   if (loading) {
@@ -458,6 +503,52 @@ export function VendaEventoPublicPage() {
                         </select>
                       </div>
                     </div>
+                    <div className="evento-convite-restricao">
+                      <label
+                        className="checkbox-label"
+                        htmlFor={`restricao_chk_${index}`}
+                      >
+                        <input
+                          id={`restricao_chk_${index}`}
+                          type="checkbox"
+                          checked={!!temRestricao[index]}
+                          onChange={(e) => {
+                            const checked = e.target.checked
+                            setTemRestricao((prev) =>
+                              prev.map((v, i) =>
+                                i === index ? checked : v,
+                              ),
+                            )
+                            if (!checked) {
+                              setRestricoesTexto((prev) =>
+                                prev.map((v, i) => (i === index ? '' : v)),
+                              )
+                            }
+                          }}
+                          disabled={pixOpen || paying}
+                        />
+                        <span>Restrição alimentar</span>
+                      </label>
+                      {temRestricao[index] ? (
+                        <input
+                          id={`restricao_${index}`}
+                          className="input"
+                          value={restricoesTexto[index] ?? ''}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            setRestricoesTexto((prev) =>
+                              prev.map((v, i) =>
+                                i === index ? value : v,
+                              ),
+                            )
+                          }}
+                          disabled={pixOpen || paying}
+                          required
+                          placeholder="Ex.: vegano, vegetariano, sem glúten"
+                          maxLength={120}
+                        />
+                      ) : null}
+                    </div>
                   </div>
                 ))}
 
@@ -510,6 +601,8 @@ export function VendaEventoPublicPage() {
           }
           setQuantidade(1)
           setNomes([''])
+          setTemRestricao([false])
+          setRestricoesTexto([''])
           setTelefone('')
           setPixOpen(false)
           setPixInput(null)

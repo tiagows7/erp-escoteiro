@@ -16,6 +16,7 @@ import {
 import type { PixPublicEventoInput } from '@/lib/pixSicrediPublic'
 import {
   comprarConvitesEvento,
+  normalizeRestricoesAlimentares,
   totalConvitesEvento,
 } from '@/lib/vendaEventos'
 import { isEncerrado } from '@/lib/encerrado'
@@ -57,6 +58,8 @@ export function VendaEventoVendaPage() {
   const [quantidade, setQuantidade] = useState(1)
   const [nomes, setNomes] = useState<string[]>([''])
   const [tipoIds, setTipoIds] = useState<number[]>([0])
+  const [temRestricao, setTemRestricao] = useState<boolean[]>([false])
+  const [restricoesTexto, setRestricoesTexto] = useState<string[]>([''])
   const [telefone, setTelefone] = useState('')
   const [formaPagamento, setFormaPagamento] =
     useState<VendaEventoFormaPagamento | null>(null)
@@ -81,6 +84,27 @@ export function VendaEventoVendaPage() {
     }, 0)
   }, [tipoIds, tipos])
 
+  const totaisLista = useMemo(() => {
+    const porTipo = new Map<string, number>()
+    const porRestricao = new Map<string, number>()
+    for (const c of convites) {
+      const tipo = (c.tipo_label ?? 'Sem tipo').trim() || 'Sem tipo'
+      porTipo.set(tipo, (porTipo.get(tipo) ?? 0) + 1)
+      const r = (c.restricao_alimentar ?? '').trim()
+      if (r) {
+        porRestricao.set(r, (porRestricao.get(r) ?? 0) + 1)
+      }
+    }
+    return {
+      total: convites.length,
+      porTipo: [...porTipo.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+      porRestricao: [...porRestricao.entries()].sort((a, b) =>
+        a[0].localeCompare(b[0]),
+      ),
+      comRestricao: [...porRestricao.values()].reduce((s, n) => s + n, 0),
+    }
+  }, [convites])
+
   async function reload() {
     if (!empresaId || !Number.isFinite(eventoId) || eventoId <= 0) return
     setLoading(true)
@@ -98,7 +122,7 @@ export function VendaEventoVendaPage() {
       supabase
         .from('venda_evento_convite')
         .select(
-          'convite_id, empresa_id, evento_id, compra_id, numero, nome, tipo_id, valor_unitario, tipo_label, created_at',
+          'convite_id, empresa_id, evento_id, compra_id, numero, nome, tipo_id, valor_unitario, tipo_label, restricao_alimentar, created_at',
         )
         .eq('evento_id', eventoId)
         .eq('empresa_id', empresaId)
@@ -187,6 +211,8 @@ export function VendaEventoVendaPage() {
         )
         setQuantidade(1)
         setNomes([''])
+        setTemRestricao([false])
+        setRestricoesTexto([''])
         setTelefone('')
         setFormaPagamento(null)
         await reload()
@@ -223,12 +249,20 @@ export function VendaEventoVendaPage() {
         (_, i) => prev[i] || fallback,
       )
     })
+    setTemRestricao((prev) =>
+      Array.from({ length: Math.max(1, quantidade) }, (_, i) => prev[i] ?? false),
+    )
+    setRestricoesTexto((prev) =>
+      Array.from({ length: Math.max(1, quantidade) }, (_, i) => prev[i] ?? ''),
+    )
   }, [quantidade, tipoPadraoId])
 
   function limparCompra() {
     setQuantidade(1)
     setNomes([''])
     setTipoIds([tipoPadraoId])
+    setTemRestricao([false])
+    setRestricoesTexto([''])
     setTelefone('')
     setFormaPagamento(null)
     setUltimaNumeracao(null)
@@ -316,6 +350,14 @@ export function VendaEventoVendaPage() {
       setError('Selecione o tipo de cada convite.')
       return
     }
+    for (let i = 0; i < quantidade; i += 1) {
+      if (temRestricao[i] && !restricoesTexto[i]?.trim()) {
+        setError(
+          `Informe a restrição alimentar do convite ${i + 1} (ex.: vegano, vegetariano).`,
+        )
+        return
+      }
+    }
     if (!formaPagamento) {
       setError(
         'Selecione a forma de pagamento: Dinheiro, PIX ou PIX direto.',
@@ -328,6 +370,10 @@ export function VendaEventoVendaPage() {
       tipoPadraoId > 0
         ? tipoIds.map((id) => id || tipoPadraoId)
         : undefined
+    const restricoesEnvio = normalizeRestricoesAlimentares(
+      temRestricao,
+      restricoesTexto,
+    )
 
     if (formaPagamento === 'pix') {
       if (!telefone.trim()) {
@@ -357,6 +403,7 @@ export function VendaEventoVendaPage() {
         linkToken: evento.link_token,
         nomes: nomesLimpos,
         tipoIds: tipoIdsEnvio,
+        restricoes: restricoesEnvio,
         compradorTelefone: fone,
         valor,
         descricao,
@@ -372,6 +419,7 @@ export function VendaEventoVendaPage() {
       eventoId: evento.evento_id,
       nomes: nomesLimpos,
       tipoIds: tipoIdsEnvio,
+      restricoes: restricoesEnvio,
       compradorTelefone: telefone,
       formaPagamento,
     })
@@ -402,6 +450,8 @@ export function VendaEventoVendaPage() {
     setQuantidade(1)
     setNomes([''])
     setTipoIds([tipoPadraoId])
+    setTemRestricao([false])
+    setRestricoesTexto([''])
     setTelefone('')
     setFormaPagamento(null)
     await reload()
@@ -632,6 +682,54 @@ export function VendaEventoVendaPage() {
                           </select>
                         </div>
                       </div>
+                      <div className="evento-convite-restricao">
+                        <label
+                          className="checkbox-label"
+                          htmlFor={`restricao_chk_${index}`}
+                        >
+                          <input
+                            id={`restricao_chk_${index}`}
+                            type="checkbox"
+                            checked={!!temRestricao[index]}
+                            onChange={(e) => {
+                              const checked = e.target.checked
+                              setTemRestricao((prev) =>
+                                prev.map((v, i) =>
+                                  i === index ? checked : v,
+                                ),
+                              )
+                              if (!checked) {
+                                setRestricoesTexto((prev) =>
+                                  prev.map((v, i) =>
+                                    i === index ? '' : v,
+                                  ),
+                                )
+                              }
+                            }}
+                            disabled={saving}
+                          />
+                          <span>Restrição alimentar</span>
+                        </label>
+                        {temRestricao[index] ? (
+                          <input
+                            id={`restricao_${index}`}
+                            className="input"
+                            value={restricoesTexto[index] ?? ''}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              setRestricoesTexto((prev) =>
+                                prev.map((v, i) =>
+                                  i === index ? value : v,
+                                ),
+                              )
+                            }}
+                            disabled={saving}
+                            required
+                            placeholder="Ex.: vegano, vegetariano, sem glúten"
+                            maxLength={120}
+                          />
+                        ) : null}
+                      </div>
                     </div>
                   ))
                 : null}
@@ -760,6 +858,8 @@ export function VendaEventoVendaPage() {
           setPixInput(null)
           setQuantidade(1)
           setNomes([''])
+          setTemRestricao([false])
+          setRestricoesTexto([''])
           setTelefone('')
           setFormaPagamento(null)
           void (async () => {
@@ -792,36 +892,68 @@ export function VendaEventoVendaPage() {
         {convites.length === 0 ? (
           <div className="empty">Nenhum convite vendido ainda.</div>
         ) : (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Nº</th>
-                  <th>Nome</th>
-                  <th>Tipo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {convites.map((c) => (
-                  <tr key={c.convite_id}>
-                    <td>
-                      <strong>{c.numero}</strong>
-                    </td>
-                    <td>{c.nome}</td>
-                    <td>
-                      {c.tipo_label
-                        ? `${c.tipo_label}${
-                            c.valor_unitario != null
-                              ? ` · ${formatMoney(Number(c.valor_unitario))}`
-                              : ''
-                          }`
-                        : '—'}
-                    </td>
+          <>
+            <div className="evento-convites-totais">
+              <p style={{ margin: 0 }}>
+                <strong>Total:</strong> {totaisLista.total} convite
+                {totaisLista.total === 1 ? '' : 's'}
+              </p>
+              {totaisLista.porTipo.length > 0 ? (
+                <p className="muted" style={{ margin: '0.35rem 0 0' }}>
+                  Por tipo:{' '}
+                  {totaisLista.porTipo
+                    .map(([label, qtde]) => `${label} (${qtde})`)
+                    .join(' · ')}
+                </p>
+              ) : null}
+              {totaisLista.comRestricao > 0 ? (
+                <p className="muted" style={{ margin: '0.35rem 0 0' }}>
+                  Restrições ({totaisLista.comRestricao}):{' '}
+                  {totaisLista.porRestricao
+                    .map(([label, qtde]) => `${label} (${qtde})`)
+                    .join(' · ')}
+                </p>
+              ) : (
+                <p className="muted" style={{ margin: '0.35rem 0 0' }}>
+                  Nenhuma restrição alimentar informada.
+                </p>
+              )}
+            </div>
+            <div className="table-wrap">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Nº</th>
+                    <th>Nome</th>
+                    <th>Tipo</th>
+                    <th>Restrição</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {convites.map((c) => (
+                    <tr key={c.convite_id}>
+                      <td>
+                        <strong>{c.numero}</strong>
+                      </td>
+                      <td>{c.nome}</td>
+                      <td>
+                        {c.tipo_label
+                          ? `${c.tipo_label}${
+                              c.valor_unitario != null
+                                ? ` · ${formatMoney(Number(c.valor_unitario))}`
+                                : ''
+                            }`
+                          : '—'}
+                      </td>
+                      <td>
+                        {(c.restricao_alimentar ?? '').trim() || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
     </>

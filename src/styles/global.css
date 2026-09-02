@@ -1055,6 +1055,37 @@ button {
   gap: 0.65rem;
 }
 
+.evento-convite-restricao {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 0.55rem;
+}
+
+.evento-convite-restricao .checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.evento-convite-restricao .input {
+  flex: 1 1 12rem;
+  min-width: min(100%, 12rem);
+}
+
+.evento-convites-totais {
+  margin: 0 0 0.85rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line, #c9d2c4);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
 @media (max-width: 640px) {
   .evento-convite-linha-grid {
     grid-template-columns: 1fr;

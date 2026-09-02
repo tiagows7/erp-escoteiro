@@ -58,6 +58,7 @@ type CreatePublicEventoBody = {
   link_token: string
   nomes: string[]
   tipo_ids?: number[] | null
+  restricoes_alimentares?: string[] | null
   comprador_telefone: string
   descricao?: string
 }
@@ -1352,12 +1353,21 @@ async function baixarVendaEvento(
   const eventoId = cob.evento_id as number
   const cobrancaId = cob.id as number
   const telefone = String(cob.comprador_telefone ?? '').trim()
-  const nomes = Array.isArray(cob.nomes)
-    ? (cob.nomes as unknown[])
-        .map((n) => String(n ?? '').trim())
-        .filter(Boolean)
-        .map((n) => n.slice(0, 200))
+  const nomesRaw = Array.isArray(cob.nomes) ? (cob.nomes as unknown[]) : []
+  const restricoesRaw = Array.isArray(cob.restricoes_alimentares)
+    ? (cob.restricoes_alimentares as unknown[])
     : []
+  const pares = nomesRaw
+    .map((n, i) => {
+      const nome = String(n ?? '').trim().slice(0, 200)
+      const restricao = String(restricoesRaw[i] ?? '')
+        .trim()
+        .slice(0, 120)
+      return { nome, restricao: restricao || null }
+    })
+    .filter((p) => p.nome)
+  const nomes = pares.map((p) => p.nome)
+  const restricoes = pares.map((p) => p.restricao)
   const valorTotal = Number(cob.valor)
 
   if (!eventoId || nomes.length === 0) {
@@ -1448,6 +1458,7 @@ async function baixarVendaEvento(
       tipo_id: tipoId,
       valor_unitario: linha?.valor ?? 0,
       tipo_label: linha?.label ?? null,
+      restricao_alimentar: restricoes[i] ?? null,
     }
   })
 
@@ -1774,10 +1785,21 @@ Deno.serve(async (req) => {
         const body = peek as CreatePublicEventoBody
         const token = String(body.link_token ?? '').trim()
         const fone = String(body.comprador_telefone ?? '').trim()
-        const nomesOrdered = (Array.isArray(body.nomes) ? body.nomes : [])
-          .map((n) => String(n ?? '').trim())
-          .filter(Boolean)
-          .map((n) => n.slice(0, 200))
+        const nomesRaw = Array.isArray(body.nomes) ? body.nomes : []
+        const restricoesRaw = Array.isArray(body.restricoes_alimentares)
+          ? body.restricoes_alimentares
+          : []
+        const pares = nomesRaw
+          .map((n, i) => {
+            const nome = String(n ?? '').trim().slice(0, 200)
+            const restricao = String(restricoesRaw[i] ?? '')
+              .trim()
+              .slice(0, 120)
+            return { nome, restricao }
+          })
+          .filter((p) => p.nome)
+        const nomesOrdered = pares.map((p) => p.nome)
+        const restricoesOrdered = pares.map((p) => p.restricao)
 
         if (!token) return json({ error: 'Link inválido.' }, 400)
         if (!fone) {
@@ -1895,6 +1917,7 @@ Deno.serve(async (req) => {
             link_token: token,
             nomes: nomesOrdered,
             tipo_ids: resolvedTipos.tipoIds,
+            restricoes_alimentares: restricoesOrdered,
             comprador_telefone: fone.slice(0, 40),
             comprador_nome: nomesOrdered[0] ?? null,
             valor,
