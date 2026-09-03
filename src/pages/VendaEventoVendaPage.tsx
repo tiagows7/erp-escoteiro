@@ -85,11 +85,18 @@ export function VendaEventoVendaPage() {
   }, [tipoIds, tipos])
 
   const totaisLista = useMemo(() => {
-    const porTipo = new Map<string, number>()
+    const porTipo = new Map<string, { qtde: number; valor: number }>()
     const porRestricao = new Map<string, number>()
+    let valorArrecadado = 0
     for (const c of convites) {
       const tipo = (c.tipo_label ?? 'Sem tipo').trim() || 'Sem tipo'
-      porTipo.set(tipo, (porTipo.get(tipo) ?? 0) + 1)
+      const unit =
+        c.valor_unitario != null && Number.isFinite(Number(c.valor_unitario))
+          ? Number(c.valor_unitario)
+          : 0
+      valorArrecadado += unit
+      const atual = porTipo.get(tipo) ?? { qtde: 0, valor: 0 }
+      porTipo.set(tipo, { qtde: atual.qtde + 1, valor: atual.valor + unit })
       const r = (c.restricao_alimentar ?? '').trim()
       if (r) {
         porRestricao.set(r, (porRestricao.get(r) ?? 0) + 1)
@@ -97,6 +104,7 @@ export function VendaEventoVendaPage() {
     }
     return {
       total: convites.length,
+      valorArrecadado: Math.round(valorArrecadado * 100) / 100,
       porTipo: [...porTipo.entries()].sort((a, b) => a[0].localeCompare(b[0])),
       porRestricao: [...porRestricao.entries()].sort((a, b) =>
         a[0].localeCompare(b[0]),
@@ -897,12 +905,18 @@ export function VendaEventoVendaPage() {
               <p style={{ margin: 0 }}>
                 <strong>Total:</strong> {totaisLista.total} convite
                 {totaisLista.total === 1 ? '' : 's'}
+                {' · '}
+                <strong>Arrecadado:</strong>{' '}
+                {formatMoney(totaisLista.valorArrecadado)}
               </p>
               {totaisLista.porTipo.length > 0 ? (
                 <p className="muted" style={{ margin: '0.35rem 0 0' }}>
                   Por tipo:{' '}
                   {totaisLista.porTipo
-                    .map(([label, qtde]) => `${label} (${qtde})`)
+                    .map(
+                      ([label, info]) =>
+                        `${label} (${info.qtde} · ${formatMoney(info.valor)})`,
+                    )
                     .join(' · ')}
                 </p>
               ) : null}
