@@ -1086,6 +1086,32 @@ button {
   background: rgba(255, 255, 255, 0.55);
 }
 
+.evento-convite-row-inativo td {
+  opacity: 0.65;
+}
+
+.evento-convite-nome-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.evento-convite-nome-edit .input {
+  flex: 1 1 10rem;
+  min-width: min(100%, 10rem);
+}
+
+.evento-convite-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.evento-convite-acoes .btn {
+  white-space: nowrap;
+}
+
 @media (max-width: 640px) {
   .evento-convite-linha-grid {
     grid-template-columns: 1fr;

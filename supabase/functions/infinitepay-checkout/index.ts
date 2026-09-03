@@ -308,6 +308,7 @@ async function baixarPedidoEvento(
     .from('venda_evento_convite')
     .select('numero')
     .eq('evento_id', eventoId)
+    .eq('ativo', true)
 
   const ocupadosSet = new Set(
     (ocupados ?? []).map((r) => Number(r.numero)),
@@ -667,6 +668,7 @@ Deno.serve(async (req) => {
         .from('venda_evento_convite')
         .select('convite_id', { count: 'exact', head: true })
         .eq('evento_id', evento.evento_id)
+        .eq('ativo', true)
       const disponiveis = Math.max(0, total - (vendidos ?? 0))
       if (nomesOrdered.length > disponiveis) {
         return json(

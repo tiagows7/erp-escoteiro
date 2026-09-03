@@ -68,13 +68,24 @@ export function VendaEventoVendaPage() {
   const [convitesPagos, setConvitesPagos] = useState<ConviteImpressoItem[]>([])
   const [pixOpen, setPixOpen] = useState(false)
   const [pixInput, setPixInput] = useState<PixPublicEventoInput | null>(null)
+  const [editandoConviteId, setEditandoConviteId] = useState<number | null>(
+    null,
+  )
+  const [nomeEdit, setNomeEdit] = useState('')
+  const [salvandoConviteId, setSalvandoConviteId] = useState<number | null>(
+    null,
+  )
 
   const total = useMemo(() => {
     if (!evento) return 0
     return totalConvitesEvento(evento.numero_inicial, evento.numero_final)
   }, [evento])
 
-  const vendidos = convites.length
+  const convitesAtivos = useMemo(
+    () => convites.filter((c) => c.ativo !== false),
+    [convites],
+  )
+  const vendidos = convitesAtivos.length
   const disponiveis = Math.max(0, total - vendidos)
   const tipoPadraoId = tipos[0]?.tipo_id ?? 0
   const totalSelecionado = useMemo(() => {
@@ -88,7 +99,7 @@ export function VendaEventoVendaPage() {
     const porTipo = new Map<string, { qtde: number; valor: number }>()
     const porRestricao = new Map<string, number>()
     let valorArrecadado = 0
-    for (const c of convites) {
+    for (const c of convitesAtivos) {
       const tipo = (c.tipo_label ?? 'Sem tipo').trim() || 'Sem tipo'
       const unit =
         c.valor_unitario != null && Number.isFinite(Number(c.valor_unitario))
@@ -103,7 +114,8 @@ export function VendaEventoVendaPage() {
       }
     }
     return {
-      total: convites.length,
+      total: convitesAtivos.length,
+      inativos: convites.length - convitesAtivos.length,
       valorArrecadado: Math.round(valorArrecadado * 100) / 100,
       porTipo: [...porTipo.entries()].sort((a, b) => a[0].localeCompare(b[0])),
       porRestricao: [...porRestricao.entries()].sort((a, b) =>
@@ -111,7 +123,7 @@ export function VendaEventoVendaPage() {
       ),
       comRestricao: [...porRestricao.values()].reduce((s, n) => s + n, 0),
     }
-  }, [convites])
+  }, [convites, convitesAtivos])
 
   async function reload() {
     if (!empresaId || !Number.isFinite(eventoId) || eventoId <= 0) return
@@ -130,7 +142,7 @@ export function VendaEventoVendaPage() {
       supabase
         .from('venda_evento_convite')
         .select(
-          'convite_id, empresa_id, evento_id, compra_id, numero, nome, tipo_id, valor_unitario, tipo_label, restricao_alimentar, created_at',
+          'convite_id, empresa_id, evento_id, compra_id, numero, nome, tipo_id, valor_unitario, tipo_label, restricao_alimentar, ativo, created_at',
         )
         .eq('evento_id', eventoId)
         .eq('empresa_id', empresaId)
@@ -278,6 +290,82 @@ export function VendaEventoVendaPage() {
     setError(null)
     setPixOpen(false)
     setPixInput(null)
+  }
+
+  function iniciarEdicaoNome(c: VendaEventoConvite) {
+    setEditandoConviteId(c.convite_id)
+    setNomeEdit(c.nome)
+  }
+
+  function cancelarEdicaoNome() {
+    setEditandoConviteId(null)
+    setNomeEdit('')
+  }
+
+  async function salvarNomeConvite(conviteId: number) {
+    const nome = nomeEdit.trim().slice(0, 200)
+    if (!nome) {
+      toast.error('Informe o nome.', 'O nome do convite não pode ficar vazio.')
+      return
+    }
+    setSalvandoConviteId(conviteId)
+    const { error: updError } = await supabase
+      .from('venda_evento_convite')
+      .update({ nome })
+      .eq('convite_id', conviteId)
+      .eq('empresa_id', empresaId!)
+    setSalvandoConviteId(null)
+    if (updError) {
+      toast.error('Não foi possível alterar o nome.', updError.message)
+      return
+    }
+    setConvites((prev) =>
+      prev.map((c) =>
+        c.convite_id === conviteId ? { ...c, nome } : c,
+      ),
+    )
+    cancelarEdicaoNome()
+    toast.success('Nome atualizado.', `Convite atualizado para “${nome}”.`)
+  }
+
+  async function alternarAtivoConvite(c: VendaEventoConvite) {
+    const novoAtivo = c.ativo === false
+    const acao = novoAtivo ? 'reativar' : 'inativar'
+    if (
+      !window.confirm(
+        novoAtivo
+          ? `Reativar o convite nº ${c.numero} (${c.nome})?`
+          : `Inativar o convite nº ${c.numero} (${c.nome})?\nO número ficará disponível para nova venda.`,
+      )
+    ) {
+      return
+    }
+    setSalvandoConviteId(c.convite_id)
+    const { error: updError } = await supabase
+      .from('venda_evento_convite')
+      .update({ ativo: novoAtivo })
+      .eq('convite_id', c.convite_id)
+      .eq('empresa_id', empresaId!)
+    setSalvandoConviteId(null)
+    if (updError) {
+      toast.error(
+        `Não foi possível ${acao} o convite.`,
+        updError.message.includes('venda_evento_convite_numero_ativo_uq')
+          ? `O número ${c.numero} já está em uso por outro convite ativo.`
+          : updError.message,
+      )
+      return
+    }
+    setConvites((prev) =>
+      prev.map((row) =>
+        row.convite_id === c.convite_id ? { ...row, ativo: novoAtivo } : row,
+      ),
+    )
+    if (editandoConviteId === c.convite_id) cancelarEdicaoNome()
+    toast.success(
+      novoAtivo ? 'Convite reativado.' : 'Convite inativado.',
+      `Nº ${c.numero} · ${c.nome}`,
+    )
   }
 
   async function buscarConvitesAposPix(fone: string) {
@@ -904,7 +992,13 @@ export function VendaEventoVendaPage() {
             <div className="evento-convites-totais">
               <p style={{ margin: 0 }}>
                 <strong>Total:</strong> {totaisLista.total} convite
+                {totaisLista.total === 1 ? '' : 's'} ativo
                 {totaisLista.total === 1 ? '' : 's'}
+                {totaisLista.inativos > 0
+                  ? ` · ${totaisLista.inativos} inativo${
+                      totaisLista.inativos === 1 ? '' : 's'
+                    }`
+                  : ''}
                 {' · '}
                 <strong>Arrecadado:</strong>{' '}
                 {formatMoney(totaisLista.valorArrecadado)}
@@ -941,29 +1035,107 @@ export function VendaEventoVendaPage() {
                     <th>Nome</th>
                     <th>Tipo</th>
                     <th>Restrição</th>
+                    <th>Situação</th>
+                    {canStaffEdit ? <th>Ações</th> : null}
                   </tr>
                 </thead>
                 <tbody>
-                  {convites.map((c) => (
-                    <tr key={c.convite_id}>
-                      <td>
-                        <strong>{c.numero}</strong>
-                      </td>
-                      <td>{c.nome}</td>
-                      <td>
-                        {c.tipo_label
-                          ? `${c.tipo_label}${
-                              c.valor_unitario != null
-                                ? ` · ${formatMoney(Number(c.valor_unitario))}`
-                                : ''
-                            }`
-                          : '—'}
-                      </td>
-                      <td>
-                        {(c.restricao_alimentar ?? '').trim() || '—'}
-                      </td>
-                    </tr>
-                  ))}
+                  {convites.map((c) => {
+                    const inativo = c.ativo === false
+                    const editando = editandoConviteId === c.convite_id
+                    const salvando = salvandoConviteId === c.convite_id
+                    return (
+                      <tr
+                        key={c.convite_id}
+                        className={
+                          inativo ? 'evento-convite-row-inativo' : undefined
+                        }
+                      >
+                        <td>
+                          <strong>{c.numero}</strong>
+                        </td>
+                        <td>
+                          {editando ? (
+                            <div className="evento-convite-nome-edit">
+                              <input
+                                className="input"
+                                value={nomeEdit}
+                                onChange={(e) => setNomeEdit(e.target.value)}
+                                disabled={salvando}
+                                maxLength={200}
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-primary"
+                                disabled={salvando}
+                                onClick={() =>
+                                  void salvarNomeConvite(c.convite_id)
+                                }
+                              >
+                                Salvar
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-soft"
+                                disabled={salvando}
+                                onClick={cancelarEdicaoNome}
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          ) : (
+                            c.nome
+                          )}
+                        </td>
+                        <td>
+                          {c.tipo_label
+                            ? `${c.tipo_label}${
+                                c.valor_unitario != null
+                                  ? ` · ${formatMoney(Number(c.valor_unitario))}`
+                                  : ''
+                              }`
+                            : '—'}
+                        </td>
+                        <td>
+                          {(c.restricao_alimentar ?? '').trim() || '—'}
+                        </td>
+                        <td>
+                          {inativo ? (
+                            <span className="badge badge-danger">Inativo</span>
+                          ) : (
+                            <span className="badge">Ativo</span>
+                          )}
+                        </td>
+                        {canStaffEdit ? (
+                          <td>
+                            <div className="evento-convite-acoes">
+                              {!editando ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-soft"
+                                  disabled={salvando}
+                                  onClick={() => iniciarEdicaoNome(c)}
+                                >
+                                  Alterar nome
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                className={`btn ${
+                                  inativo ? 'btn-soft' : 'btn-danger'
+                                }`}
+                                disabled={salvando || editando}
+                                onClick={() => void alternarAtivoConvite(c)}
+                              >
+                                {inativo ? 'Reativar' : 'Inativar'}
+                              </button>
+                            </div>
+                          </td>
+                        ) : null}
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

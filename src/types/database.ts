@@ -367,6 +367,7 @@ export type VendaEventoConvite = {
   valor_unitario: number | null
   tipo_label: string | null
   restricao_alimentar: string | null
+  ativo: boolean
   created_at: string | null
 }
 

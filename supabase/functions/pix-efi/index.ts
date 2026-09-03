@@ -261,7 +261,11 @@ async function createCob(
   try {
     const payload = {
       calendario: { expiracao: 3600 },
-      valor: { original: money2(input.valor) },
+      valor: {
+        original: money2(input.valor),
+        // 0 = valor fixo (pagador não altera no app do banco)
+        modalidadeAlteracao: 0,
+      },
       chave: cfg.chave,
       solicitacaoPagador: truncate(input.descricao, 140),
     }
