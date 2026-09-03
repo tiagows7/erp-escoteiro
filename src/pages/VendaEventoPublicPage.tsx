@@ -416,6 +416,12 @@ export function VendaEventoPublicPage() {
                     : ' Informe a quantidade, os nomes e pague via PIX para confirmar.'
                 : ''}
             </p>
+            {!info.encerrado ? (
+              <AlertMessage tone="info" title="Impressão dos comprovantes">
+                Após o pagamento, volte a esta página (ou ao aplicativo) para
+                imprimir os comprovantes dos ingressos.
+              </AlertMessage>
+            ) : null}
 
             {!info.encerrado ? (
               <form

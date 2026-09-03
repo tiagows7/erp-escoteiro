@@ -887,6 +887,10 @@ export function AcaoEntreAmigosVendaPage() {
                 serão gravados em todos os números selecionados. PIX online gera
                 a cobrança Sicredi; PIX direto registra o recebimento na hora.
               </p>
+              <AlertMessage tone="info" title="Impressão dos comprovantes">
+                Após o pagamento, volte a esta tela do aplicativo para imprimir
+                os comprovantes dos números comprados.
+              </AlertMessage>
               <form
                 className="form-grid form-grid-2"
                 onSubmit={(e) => void onVender(e)}

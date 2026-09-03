@@ -691,6 +691,12 @@ export function VendaEventoVendaPage() {
                 disponível.
               </p>
             ) : null}
+            {!encerrado ? (
+              <AlertMessage tone="info" title="Impressão dos comprovantes">
+                Após o pagamento, volte a esta tela do aplicativo para imprimir
+                os comprovantes dos ingressos.
+              </AlertMessage>
+            ) : null}
 
             {!encerrado ? (
             <form

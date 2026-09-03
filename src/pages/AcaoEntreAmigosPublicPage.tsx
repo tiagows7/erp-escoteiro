@@ -265,6 +265,10 @@ export function AcaoEntreAmigosPublicPage() {
             Total: {formatMoney(total)} ({formatMoney(valorUnitario)} cada) ·
             pagamento via PIX do ramo
           </p>
+          <AlertMessage tone="info" title="Impressão dos comprovantes">
+            Após o pagamento, volte a esta página (ou ao aplicativo) para
+            imprimir os comprovantes dos números comprados.
+          </AlertMessage>
           <form
             className="form-grid form-grid-2"
             onSubmit={(e) => onSubmit(e)}

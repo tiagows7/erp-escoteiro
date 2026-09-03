@@ -69,6 +69,10 @@ type StatusPublicBody = {
   link_token: string
 }
 
+type PollPendingBody = {
+  action: 'poll_pending'
+}
+
 type PixRequestBody =
   | CreateBody
   | StatusBody
@@ -76,6 +80,7 @@ type PixRequestBody =
   | CreatePublicBody
   | CreatePublicEventoBody
   | StatusPublicBody
+  | PollPendingBody
 
 function tipoUsaPixRamo(tipo: string): boolean {
   return (
@@ -535,7 +540,7 @@ function createMtlsClient(cfg: SicrediConfig): Deno.HttpClient {
 function oauthScope(): string {
   return (
     Deno.env.get('SICREDI_PIX_OAUTH_SCOPE')?.trim() ||
-    'cob.write cob.read pix.read'
+    'cob.write cob.read pix.read webhook.read webhook.write'
   )
 }
 
@@ -731,6 +736,163 @@ function extractPixCopiaECola(data: Record<string, unknown>): string | null {
   return null
 }
 
+/** URL pública que o Sicredi chama quando o PIX é pago. */
+function webhookPublicUrl(): string {
+  const base = (Deno.env.get('SUPABASE_URL') ?? '').replace(/\/$/, '')
+  const secret = Deno.env.get('PIX_SICREDI_WEBHOOK_SECRET')?.trim()
+  let url = `${base}/functions/v1/pix-sicredi?webhook=1`
+  if (secret) url += `&secret=${encodeURIComponent(secret)}`
+  return url
+}
+
+/**
+ * Garante webhook na chave PIX do Sicredi para baixar sem o usuário
+ * voltar à tela do app.
+ */
+async function ensureSicrediWebhook(cfg: SicrediConfig): Promise<void> {
+  const webhookUrl = webhookPublicUrl()
+  if (!webhookUrl.startsWith('https://')) return
+
+  const token = await getAccessToken(cfg)
+  const client = createMtlsClient(cfg)
+  try {
+    const chavePath = encodeURIComponent(cfg.chave)
+    const res = await fetch(
+      `${cfg.baseUrl}${cfg.apiPath}/webhook/${chavePath}`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ webhookUrl }),
+        client,
+      },
+    )
+    if (!res.ok) {
+      const raw = await res.text().catch(() => '')
+      console.error(
+        'ensureSicrediWebhook falhou',
+        res.status,
+        cfg.source,
+        raw.slice(0, 300),
+      )
+    }
+  } catch (e) {
+    console.error('ensureSicrediWebhook erro', cfg.source, e)
+  } finally {
+    client.close()
+  }
+}
+
+async function resolveConfigForCobranca(
+  admin: ReturnType<typeof createClient>,
+  cob: Record<string, unknown>,
+): Promise<{ cfg: SicrediConfig | null; hint: string | null }> {
+  let resolved = await resolveSicrediConfig(admin, {
+    empresaId: cob.empresa_id as number,
+    tipo: String(cob.tipo),
+    atividadeId: (cob.atividade_id as number | null) ?? null,
+    ramoId: (cob.ramo_id as number | null) ?? null,
+    secaoId: null,
+  })
+  if (resolved.cfg) return resolved
+
+  const tipo = String(cob.tipo)
+  if (tipo === 'venda_evento' && cob.evento_id) {
+    const { data: ev } = await admin
+      .from('venda_eventos')
+      .select('ramo, secao')
+      .eq('evento_id', cob.evento_id)
+      .maybeSingle()
+    if (ev) {
+      resolved = await resolveSicrediConfig(admin, {
+        empresaId: cob.empresa_id as number,
+        tipo: 'venda_evento',
+        ramoId: (ev.ramo as number | null) ?? null,
+        secaoId: (ev.secao as number | null) ?? null,
+      })
+    }
+  } else if (tipo === 'acao_entre_amigos' && cob.acao_id) {
+    const { data: acao } = await admin
+      .from('acao_entre_amigos')
+      .select('ramo, secao')
+      .eq('acao_id', cob.acao_id)
+      .maybeSingle()
+    if (acao) {
+      resolved = await resolveSicrediConfig(admin, {
+        empresaId: cob.empresa_id as number,
+        tipo: 'acao_entre_amigos',
+        ramoId: (acao.ramo as number | null) ?? null,
+        secaoId: (acao.secao as number | null) ?? null,
+      })
+    }
+  }
+  return resolved
+}
+
+async function reconfirmAndBaixarCobranca(
+  admin: ReturnType<typeof createClient>,
+  cob: Record<string, unknown>,
+): Promise<{ ok: boolean; paid: boolean; reason?: string }> {
+  if (cob.baixado_em) return { ok: true, paid: true }
+  const resolved = await resolveConfigForCobranca(admin, cob)
+  if (!resolved.cfg) {
+    return { ok: false, paid: false, reason: resolved.hint ?? 'Sem config PIX' }
+  }
+  const remote = await getCob(resolved.cfg, String(cob.txid))
+  const remoteStatus = String(remote.status ?? cob.status ?? '')
+  await admin
+    .from('pix_cobrancas')
+    .update({
+      status: remoteStatus || cob.status,
+      pix_copia_e_cola:
+        remote.pixCopiaECola ?? cob.pix_copia_e_cola ?? null,
+      raw_status: remote,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', cob.id)
+
+  if (remoteStatus !== 'CONCLUIDA') {
+    return { ok: true, paid: false, reason: remoteStatus }
+  }
+  await concluirEBaixar(admin, cob, remote)
+  return { ok: true, paid: true }
+}
+
+/** Varre cobranças abertas e baixa as que o Sicredi já marcou como pagas. */
+async function pollPendingCobrancas(
+  admin: ReturnType<typeof createClient>,
+): Promise<{ checked: number; paid: number; errors: number }> {
+  const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
+  const { data: pending, error } = await admin
+    .from('pix_cobrancas')
+    .select('*')
+    .is('baixado_em', null)
+    .neq('status', 'REMOVIDA')
+    .gte('created_at', since)
+    .order('created_at', { ascending: true })
+    .limit(40)
+
+  if (error) throw new Error(error.message)
+
+  let paid = 0
+  let errors = 0
+  for (const cob of pending ?? []) {
+    try {
+      const result = await reconfirmAndBaixarCobranca(
+        admin,
+        cob as Record<string, unknown>,
+      )
+      if (result.paid) paid += 1
+    } catch (e) {
+      errors += 1
+      console.error('poll_pending baixa', cob.id, cob.txid, e)
+    }
+  }
+  return { checked: (pending ?? []).length, paid, errors }
+}
+
 async function createCob(
   cfg: SicrediConfig,
   input: {
@@ -739,6 +901,9 @@ async function createCob(
     txid: string
   },
 ) {
+  // Garante escuta do Sicredi (não bloqueia a cobrança se falhar).
+  void ensureSicrediWebhook(cfg).catch(() => undefined)
+
   const token = await getAccessToken(cfg)
   const client = createMtlsClient(cfg)
   try {
@@ -1327,16 +1492,20 @@ async function fetchConvitesVendaEventoByCobranca(
   }[]
 > {
   if (tipo !== 'venda_evento') return []
-  const { data: compra } = await admin
+  const { data: compras } = await admin
     .from('venda_evento_compra')
     .select('compra_id')
     .eq('pix_cobranca_id', cobrancaId)
-    .maybeSingle()
-  if (!compra?.compra_id) return []
+    .order('compra_id', { ascending: true })
+  const compraIds = (compras ?? [])
+    .map((c) => Number(c.compra_id))
+    .filter((id) => Number.isFinite(id) && id > 0)
+  if (compraIds.length === 0) return []
   const { data } = await admin
     .from('venda_evento_convite')
     .select('numero, nome, tipo_label, valor_unitario')
-    .eq('compra_id', compra.compra_id)
+    .in('compra_id', compraIds)
+    .eq('ativo', true)
     .order('numero')
   return (data ?? []).map((r) => ({
     numero: Number(r.numero),
@@ -1378,11 +1547,23 @@ async function baixarVendaEvento(
     throw new Error('Cobrança de evento incompleta.')
   }
 
-  const { count: existing } = await admin
+  const { data: comprasExistentes } = await admin
     .from('venda_evento_compra')
-    .select('compra_id', { count: 'exact', head: true })
+    .select('compra_id')
     .eq('pix_cobranca_id', cobrancaId)
-  if ((existing ?? 0) > 0) return
+    .order('compra_id', { ascending: true })
+
+  const compraIds = (comprasExistentes ?? [])
+    .map((c) => Number(c.compra_id))
+    .filter((id) => Number.isFinite(id) && id > 0)
+
+  if (compraIds.length > 0) {
+    const { count: convitesExistentes } = await admin
+      .from('venda_evento_convite')
+      .select('convite_id', { count: 'exact', head: true })
+      .in('compra_id', compraIds)
+    if ((convitesExistentes ?? 0) > 0) return
+  }
 
   const resolvedTipos = await resolveEventoTiposLinhas(
     admin,
@@ -1432,23 +1613,48 @@ async function baixarVendaEvento(
     )
   }
 
-  const { data: compra, error: compraError } = await admin
-    .from('venda_evento_compra')
-    .insert({
-      empresa_id: empresaId,
-      evento_id: eventoId,
-      quantidade: nomes.length,
-      comprador_telefone: telefone ? telefone.slice(0, 40) : null,
-      valor: Number.isFinite(valorTotal) ? valorTotal : resolvedTipos.valorTotal,
-      forma_pagamento: 'pix',
-      vendido_por: null,
-      pix_cobranca_id: cobrancaId,
-    })
-    .select('compra_id')
-    .single()
+  let compraId = compraIds[0] ?? null
+  if (compraId == null) {
+    const { data: compra, error: compraError } = await admin
+      .from('venda_evento_compra')
+      .insert({
+        empresa_id: empresaId,
+        evento_id: eventoId,
+        quantidade: nomes.length,
+        comprador_telefone: telefone ? telefone.slice(0, 40) : null,
+        valor: Number.isFinite(valorTotal)
+          ? valorTotal
+          : resolvedTipos.valorTotal,
+        forma_pagamento: 'pix',
+        vendido_por: null,
+        pix_cobranca_id: cobrancaId,
+      })
+      .select('compra_id')
+      .single()
 
-  if (compraError || !compra) {
-    throw new Error(compraError?.message ?? 'Falha ao gravar compra.')
+    if (compraError) {
+      // Corrida: outra requisição já criou a compra desta cobrança.
+      const { data: raced } = await admin
+        .from('venda_evento_compra')
+        .select('compra_id')
+        .eq('pix_cobranca_id', cobrancaId)
+        .order('compra_id', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (!raced?.compra_id) {
+        throw new Error(compraError.message ?? 'Falha ao gravar compra.')
+      }
+      compraId = Number(raced.compra_id)
+      const { count: convitesRaced } = await admin
+        .from('venda_evento_convite')
+        .select('convite_id', { count: 'exact', head: true })
+        .eq('compra_id', compraId)
+      if ((convitesRaced ?? 0) > 0) return
+    } else if (!compra) {
+      throw new Error('Falha ao gravar compra.')
+    } else {
+      compraId = Number(compra.compra_id)
+    }
   }
 
   const rows = nomes.map((nome, i) => {
@@ -1457,13 +1663,14 @@ async function baixarVendaEvento(
     return {
       empresa_id: empresaId,
       evento_id: eventoId,
-      compra_id: compra.compra_id,
+      compra_id: compraId,
       numero: livres[i],
       nome,
       tipo_id: tipoId,
       valor_unitario: linha?.valor ?? 0,
       tipo_label: linha?.label ?? null,
       restricao_alimentar: restricoes[i] ?? null,
+      ativo: true,
     }
   })
 
@@ -1472,6 +1679,12 @@ async function baixarVendaEvento(
     .insert(rows)
 
   if (conviteError) {
+    // Outra corrida pode ter gravado os convites no mesmo instante.
+    const { count: afterRace } = await admin
+      .from('venda_evento_convite')
+      .select('convite_id', { count: 'exact', head: true })
+      .eq('compra_id', compraId)
+    if ((afterRace ?? 0) > 0) return
     throw new Error(conviteError.message)
   }
 }
@@ -1570,32 +1783,10 @@ Deno.serve(async (req) => {
           .maybeSingle()
         if (!cob || cob.baixado_em) continue
 
-        // Reconfirma no Sicredi antes de baixar (webhook sozinho não é prova)
-        const resolved = await resolveSicrediConfig(admin, {
-          empresaId: cob.empresa_id as number,
-          tipo: String(cob.tipo),
-          ramoId: (cob.ramo_id as number | null) ?? null,
-        })
-        if (!resolved.cfg) {
-          console.error('pix webhook: sem config Sicredi', txid, resolved.hint)
-          continue
-        }
         try {
-          const remote = await getCob(resolved.cfg, String(cob.txid))
-          const remoteStatus = String(remote.status ?? '')
-          await admin
-            .from('pix_cobrancas')
-            .update({
-              status: remoteStatus || cob.status,
-              raw_status: remote,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', cob.id)
-          if (remoteStatus !== 'CONCLUIDA') continue
-          await concluirEBaixar(
+          await reconfirmAndBaixarCobranca(
             admin,
             cob as Record<string, unknown>,
-            remote,
           )
         } catch (e) {
           console.error('pix webhook reconfirm/baixa', txid, e)
@@ -1611,6 +1802,24 @@ Deno.serve(async (req) => {
         .clone()
         .json()
         .catch(() => null)) as PixRequestBody | null
+
+      if (peek?.action === 'poll_pending') {
+        try {
+          const result = await pollPendingCobrancas(admin)
+          return json({ ok: true, ...result })
+        } catch (e) {
+          console.error('poll_pending', e)
+          return json(
+            {
+              error:
+                e instanceof Error
+                  ? e.message
+                  : 'Falha ao consultar cobranças pendentes.',
+            },
+            500,
+          )
+        }
+      }
 
       if (peek?.action === 'create_public') {
         const body = peek as CreatePublicBody
@@ -1993,11 +2202,10 @@ Deno.serve(async (req) => {
           })
         }
 
-        const resolved = await resolveSicrediConfig(admin, {
-          empresaId: cob.empresa_id as number,
-          tipo: String(cob.tipo),
-          ramoId: (cob.ramo_id as number | null) ?? null,
-        })
+        const resolved = await resolveConfigForCobranca(
+          admin,
+          cob as Record<string, unknown>,
+        )
         if (!resolved.cfg) {
           return json(
             {
@@ -2284,12 +2492,10 @@ Deno.serve(async (req) => {
         })
       }
 
-      const resolved = await resolveSicrediConfig(admin, {
-        empresaId: cob.empresa_id as number,
-        tipo: String(cob.tipo),
-        atividadeId: (cob.atividade_id as number | null) ?? null,
-        ramoId: (cob.ramo_id as number | null) ?? null,
-      })
+      const resolved = await resolveConfigForCobranca(
+        admin,
+        cob as Record<string, unknown>,
+      )
       if (!resolved.cfg) {
         return json(
           {
