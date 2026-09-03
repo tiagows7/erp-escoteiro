@@ -456,7 +456,7 @@ export function VendaEventoVendaPage() {
     }
     if (!formaPagamento) {
       setError(
-        'Selecione a forma de pagamento: Dinheiro, PIX ou PIX direto.',
+        'Selecione a forma de pagamento: Dinheiro, PIX, PIX direto ou Em aberto.',
       )
       return
     }
@@ -482,7 +482,7 @@ export function VendaEventoVendaPage() {
       }
       if (!(valor > 0)) {
         setError(
-          'Para convites isentos (R$ 0), use Dinheiro ou PIX direto.',
+          'Para convites isentos (R$ 0), use Dinheiro, PIX direto ou Em aberto.',
         )
         return
       }
@@ -897,12 +897,30 @@ export function VendaEventoVendaPage() {
                   >
                     PIX direto
                   </button>
+                  <button
+                    type="button"
+                    className={`btn ${
+                      formaPagamento === 'em_aberto'
+                        ? 'btn-primary'
+                        : 'btn-soft'
+                    }`}
+                    disabled={saving || pixOpen}
+                    onClick={() => setFormaPagamento('em_aberto')}
+                    title="Confirma o convite e deixa a receita em aberto para cobrar depois"
+                  >
+                    Em aberto
+                  </button>
                 </div>
                 {formaPagamento === 'pix' ? (
                   <p className="field-hint" style={{ marginBottom: 0 }}>
                     Gera cobrança PIX Sicredi com a conta bancária do ramo (ou
                     do grupo, se o evento for geral). Informe o telefone antes
                     de continuar.
+                  </p>
+                ) : formaPagamento === 'em_aberto' ? (
+                  <p className="field-hint" style={{ marginBottom: 0 }}>
+                    Confirma o(s) convite(s) agora e lança a receita em aberto
+                    (a receber) para cobrança posterior em Receitas.
                   </p>
                 ) : null}
               </div>

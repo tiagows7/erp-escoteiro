@@ -1562,7 +1562,13 @@ async function baixarVendaEvento(
       .from('venda_evento_convite')
       .select('convite_id', { count: 'exact', head: true })
       .in('compra_id', compraIds)
-    if ((convitesExistentes ?? 0) > 0) return
+    if ((convitesExistentes ?? 0) > 0) {
+      // Garante receita no portal mesmo em baixas antigas / corridas.
+      await admin.rpc('venda_evento_gerar_receita', {
+        p_compra_id: compraIds[0],
+      })
+      return
+    }
   }
 
   const resolvedTipos = await resolveEventoTiposLinhas(
@@ -1684,9 +1690,18 @@ async function baixarVendaEvento(
       .from('venda_evento_convite')
       .select('convite_id', { count: 'exact', head: true })
       .eq('compra_id', compraId)
-    if ((afterRace ?? 0) > 0) return
+    if ((afterRace ?? 0) > 0) {
+      await admin.rpc('venda_evento_gerar_receita', {
+        p_compra_id: compraId,
+      })
+      return
+    }
     throw new Error(conviteError.message)
   }
+
+  await admin.rpc('venda_evento_gerar_receita', {
+    p_compra_id: compraId,
+  })
 }
 
 async function baixarAcaoEntreAmigos(

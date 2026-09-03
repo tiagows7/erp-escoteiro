@@ -376,6 +376,10 @@ async function baixarPedidoEvento(
     throw new Error(conviteError.message)
   }
 
+  await admin.rpc('venda_evento_gerar_receita', {
+    p_compra_id: compra.compra_id,
+  })
+
   const wh = (webhookPayload ?? {}) as Record<string, unknown>
   await admin
     .from('infinitepay_pedidos')

@@ -341,6 +341,7 @@ export type VendaEventoFormaPagamento =
   | 'pix_direto'
   | 'pix'
   | 'infinitepay'
+  | 'em_aberto'
 
 export type VendaEventoCompra = {
   compra_id: number
@@ -352,6 +353,7 @@ export type VendaEventoCompra = {
   forma_pagamento: VendaEventoFormaPagamento | null
   vendido_por: string | null
   pix_cobranca_id: number | null
+  receita_id: number | null
   vendido_em: string
   created_at: string | null
 }
