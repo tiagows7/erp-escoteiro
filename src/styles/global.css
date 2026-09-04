@@ -1086,6 +1086,21 @@ button {
   background: rgba(255, 255, 255, 0.55);
 }
 
+.evento-lista-conferencia-cabecalho {
+  display: none;
+  margin: 0 0 0.85rem;
+}
+
+.evento-lista-conferencia-cabecalho h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.25rem;
+}
+
+.evento-lista-conferencia-cabecalho p {
+  margin: 0;
+  color: var(--muted, #5a6b55);
+}
+
 .evento-convite-row-inativo td {
   opacity: 0.65;
 }
@@ -1256,12 +1271,32 @@ button {
     display: none !important;
   }
 
-  body:has(.evento-convites-impressos) .page-header,
-  body:has(.evento-convites-impressos) .public-rifa-header,
-  body:has(.evento-convites-impressos) .alert-message,
-  body:has(.evento-convites-impressos) .panel:not(:has(.evento-convites-impressos)),
-  body:has(.evento-convites-impressos) .confirm-overlay {
+  body:has(.evento-convites-impressos):not(.print-evento-lista) .page-header,
+  body:has(.evento-convites-impressos):not(.print-evento-lista) .public-rifa-header,
+  body:has(.evento-convites-impressos):not(.print-evento-lista) .alert-message,
+  body:has(.evento-convites-impressos):not(.print-evento-lista)
+    .panel:not(:has(.evento-convites-impressos)),
+  body:has(.evento-convites-impressos):not(.print-evento-lista) .confirm-overlay {
     display: none !important;
+  }
+
+  body.print-evento-lista .page-header,
+  body.print-evento-lista .alert-message,
+  body.print-evento-lista .no-print-evento-lista,
+  body.print-evento-lista .confirm-overlay,
+  body.print-evento-lista .sidebar,
+  body.print-evento-lista .mobile-topbar,
+  body.print-evento-lista .sidebar-backdrop {
+    display: none !important;
+  }
+
+  body.print-evento-lista .evento-lista-conferencia-cabecalho {
+    display: block !important;
+  }
+
+  body.print-evento-lista .evento-convites-totais {
+    border-color: #999;
+    background: transparent;
   }
 
   .evento-convites-impressos {

@@ -584,7 +584,7 @@ export function VendaEventoVendaPage() {
 
   return (
     <>
-      <header className="page-header">
+      <header className="page-header no-print">
         <div>
           <h2>
             {encerrado
@@ -637,24 +637,30 @@ export function VendaEventoVendaPage() {
       </header>
 
       {error ? (
-        <AlertMessage tone="error" title="Atenção">
-          {error}
-        </AlertMessage>
+        <div className="no-print">
+          <AlertMessage tone="error" title="Atenção">
+            {error}
+          </AlertMessage>
+        </div>
       ) : null}
       {encerrado ? (
-        <AlertMessage tone="info" title="Evento encerrado">
-          Não é possível comprar ou vender novos convites.
-        </AlertMessage>
+        <div className="no-print">
+          <AlertMessage tone="info" title="Evento encerrado">
+            Não é possível comprar ou vender novos convites.
+          </AlertMessage>
+        </div>
       ) : null}
 
       {ultimaNumeracao && ultimaNumeracao.length > 0 ? (
-        <AlertMessage tone="success" title="Numeração atribuída">
-          Convite(s): <strong>{ultimaNumeracao.join(', ')}</strong>
-        </AlertMessage>
+        <div className="no-print">
+          <AlertMessage tone="success" title="Numeração atribuída">
+            Convite(s): <strong>{ultimaNumeracao.join(', ')}</strong>
+          </AlertMessage>
+        </div>
       ) : null}
 
       {convitesPagos.length > 0 && evento ? (
-        <section className="panel">
+        <section className="panel no-print-evento-lista">
           <EventoConvitesImpressos
             eventoNome={evento.nome}
             empresaNome={empresa?.nome}
@@ -665,7 +671,7 @@ export function VendaEventoVendaPage() {
         </section>
       ) : null}
 
-      <section className="panel">
+      <section className="panel no-print-evento-lista">
         <div
           className={`acao-venda-layout ${evento.imagem_url ? 'has-imagem' : ''}`}
         >
@@ -1004,11 +1010,51 @@ export function VendaEventoVendaPage() {
         }}
       />
 
-      <section className="panel">
-        <h3 style={{ marginTop: 0 }}>Lista para conferência</h3>
-        <p className="muted">
-          Convites já vendidos, ordenados pelo número — use no dia do evento.
-        </p>
+      <section className="panel evento-lista-conferencia">
+        <div className="evento-lista-conferencia-cabecalho print-only">
+          <h2>Lista de convites — {evento.nome}</h2>
+          <p>
+            {[empresa?.nome, formatDateBr(evento.data_evento)]
+              .filter((x) => x && x !== '—')
+              .join(' · ')}
+          </p>
+        </div>
+        <div
+          className="evento-lista-conferencia-toolbar no-print"
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: '0.75rem',
+          }}
+        >
+          <div>
+            <h3 style={{ marginTop: 0, marginBottom: '0.35rem' }}>
+              Lista para conferência
+            </h3>
+            <p className="muted" style={{ margin: 0 }}>
+              Convites já vendidos, ordenados pelo número — use no dia do
+              evento.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-soft"
+            disabled={convites.length === 0}
+            onClick={() => {
+              document.body.classList.add('print-evento-lista')
+              const cleanup = () => {
+                document.body.classList.remove('print-evento-lista')
+                window.removeEventListener('afterprint', cleanup)
+              }
+              window.addEventListener('afterprint', cleanup)
+              window.print()
+            }}
+          >
+            Imprimir lista
+          </button>
+        </div>
         {convites.length === 0 ? (
           <div className="empty">Nenhum convite vendido ainda.</div>
         ) : (
@@ -1060,7 +1106,9 @@ export function VendaEventoVendaPage() {
                     <th>Tipo</th>
                     <th>Restrição</th>
                     <th>Situação</th>
-                    {canStaffEdit ? <th>Ações</th> : null}
+                    {canStaffEdit ? (
+                      <th className="no-print">Ações</th>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -1080,7 +1128,7 @@ export function VendaEventoVendaPage() {
                         </td>
                         <td>
                           {editando ? (
-                            <div className="evento-convite-nome-edit">
+                            <div className="evento-convite-nome-edit no-print">
                               <input
                                 className="input"
                                 value={nomeEdit}
@@ -1111,6 +1159,9 @@ export function VendaEventoVendaPage() {
                           ) : (
                             c.nome
                           )}
+                          {editando ? (
+                            <span className="print-only">{c.nome}</span>
+                          ) : null}
                         </td>
                         <td>
                           {c.tipo_label
@@ -1132,7 +1183,7 @@ export function VendaEventoVendaPage() {
                           )}
                         </td>
                         {canStaffEdit ? (
-                          <td>
+                          <td className="no-print">
                             <div className="evento-convite-acoes">
                               {!editando ? (
                                 <button
