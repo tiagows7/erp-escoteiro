@@ -9,6 +9,7 @@ import {
   type ConviteImpressoItem,
 } from '@/components/EventoConvitesImpressos'
 import { PixSicrediPublicCheckoutModal } from '@/components/PixSicrediPublicCheckoutModal'
+import { QuantidadeStepper } from '@/components/QuantidadeStepper'
 import { formatMoney } from '@/lib/despesas'
 import {
   checkInfinitePayPedidoStatus,
@@ -781,25 +782,16 @@ export function VendaEventoVendaPage() {
             >
               <div className="field">
                 <label htmlFor="quantidade">Quantidade</label>
-                <input
+                <QuantidadeStepper
                   id="quantidade"
-                  className="input"
-                  type="number"
-                  min={1}
-                  max={Math.max(1, disponiveis)}
                   value={quantidade}
-                  onChange={(e) => {
-                    const n = Number(e.target.value)
-                    setQuantidade(
-                      Number.isFinite(n)
-                        ? Math.min(Math.max(1, Math.floor(n)), Math.max(1, disponiveis || 1))
-                        : 1,
-                    )
+                  max={Math.max(1, disponiveis)}
+                  disabled={saving || disponiveis === 0}
+                  onChange={(n) => {
+                    setQuantidade(n)
                     setUltimaNumeracao(null)
                     setConvitesPagos([])
                   }}
-                  disabled={saving || disponiveis === 0}
-                  required
                 />
               </div>
               <div className="field">

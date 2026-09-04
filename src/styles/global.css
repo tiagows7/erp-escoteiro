@@ -2620,6 +2620,55 @@ textarea.input {
   border-color: var(--accent);
 }
 
+.quantidade-stepper {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(0, 1fr) 2.6rem;
+  align-items: stretch;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 12rem;
+}
+
+.quantidade-stepper-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  min-height: 2.4rem;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.quantidade-stepper-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: rgba(47, 125, 98, 0.06);
+}
+
+.quantidade-stepper-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.quantidade-stepper-input {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-size: 1rem;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+
+.quantidade-stepper.is-disabled {
+  opacity: 0.7;
+}
+
 .btn {
   border: none;
   border-radius: 8px;
