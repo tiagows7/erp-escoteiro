@@ -1101,6 +1101,53 @@ button {
   color: var(--muted, #5a6b55);
 }
 
+.evento-lista-filtro-tipos {
+  margin: 0 0 0.85rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line, #c9d2c4);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.evento-lista-filtro-tipos-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.55rem;
+}
+
+.evento-lista-filtro-tipos-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.evento-lista-filtro-tipos-acoes .btn {
+  padding: 0.25rem 0.65rem;
+  font-size: 0.85rem;
+}
+
+.evento-lista-filtro-tipos-opcoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.9rem;
+}
+
+.evento-lista-filtro-tipo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.evento-lista-filtro-tipo input {
+  margin: 0;
+}
+
 .evento-convite-row-inativo td {
   opacity: 0.65;
 }

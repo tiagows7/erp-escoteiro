@@ -40,6 +40,10 @@ function tipoOptionLabel(t: Pick<VendaEventoTipo, 'label' | 'valor'>) {
   return `${t.label} · ${formatMoney(Number(t.valor ?? 0))}`
 }
 
+function tipoLabelConvite(c: Pick<VendaEventoConvite, 'tipo_label'>) {
+  return (c.tipo_label ?? 'Sem tipo').trim() || 'Sem tipo'
+}
+
 export function VendaEventoVendaPage() {
   const { id } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -75,6 +79,7 @@ export function VendaEventoVendaPage() {
   const [salvandoConviteId, setSalvandoConviteId] = useState<number | null>(
     null,
   )
+  const [filtroTipos, setFiltroTipos] = useState<Record<string, boolean>>({})
 
   const total = useMemo(() => {
     if (!evento) return 0
@@ -95,12 +100,67 @@ export function VendaEventoVendaPage() {
     }, 0)
   }, [tipoIds, tipos])
 
+  const tiposNaLista = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const c of convites) {
+      const label = tipoLabelConvite(c)
+      map.set(label, (map.get(label) ?? 0) + 1)
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [convites])
+
+  useEffect(() => {
+    setFiltroTipos((prev) => {
+      const next: Record<string, boolean> = {}
+      let changed = false
+      for (const [label] of tiposNaLista) {
+        next[label] = label in prev ? prev[label] : true
+        if (!(label in prev) || next[label] !== prev[label]) changed = true
+      }
+      for (const key of Object.keys(prev)) {
+        if (!(key in next)) {
+          changed = true
+          break
+        }
+      }
+      if (!changed && Object.keys(prev).length === Object.keys(next).length) {
+        return prev
+      }
+      return next
+    })
+  }, [tiposNaLista])
+
+  const tiposFiltroAtivos = useMemo(() => {
+    const selected = tiposNaLista
+      .map(([label]) => label)
+      .filter((label) => filtroTipos[label] !== false)
+    return new Set(selected)
+  }, [tiposNaLista, filtroTipos])
+
+  const filtroTiposParcial =
+    tiposNaLista.length > 0 &&
+    tiposFiltroAtivos.size > 0 &&
+    tiposFiltroAtivos.size < tiposNaLista.length
+
+  const todosTiposMarcados =
+    tiposNaLista.length > 0 && tiposFiltroAtivos.size === tiposNaLista.length
+
+  const convitesFiltrados = useMemo(() => {
+    if (tiposNaLista.length === 0 || todosTiposMarcados) return convites
+    return convites.filter((c) => tiposFiltroAtivos.has(tipoLabelConvite(c)))
+  }, [convites, tiposNaLista.length, todosTiposMarcados, tiposFiltroAtivos])
+
+  const convitesFiltradosAtivos = useMemo(
+    () => convitesFiltrados.filter((c) => c.ativo !== false),
+    [convitesFiltrados],
+  )
+
   const totaisLista = useMemo(() => {
     const porTipo = new Map<string, { qtde: number; valor: number }>()
     const porRestricao = new Map<string, number>()
     let valorArrecadado = 0
-    for (const c of convitesAtivos) {
-      const tipo = (c.tipo_label ?? 'Sem tipo').trim() || 'Sem tipo'
+    for (const c of convitesFiltradosAtivos) {
+      const tipo = tipoLabelConvite(c)
       const unit =
         c.valor_unitario != null && Number.isFinite(Number(c.valor_unitario))
           ? Number(c.valor_unitario)
@@ -114,8 +174,8 @@ export function VendaEventoVendaPage() {
       }
     }
     return {
-      total: convitesAtivos.length,
-      inativos: convites.length - convitesAtivos.length,
+      total: convitesFiltradosAtivos.length,
+      inativos: convitesFiltrados.length - convitesFiltradosAtivos.length,
       valorArrecadado: Math.round(valorArrecadado * 100) / 100,
       porTipo: [...porTipo.entries()].sort((a, b) => a[0].localeCompare(b[0])),
       porRestricao: [...porRestricao.entries()].sort((a, b) =>
@@ -123,7 +183,17 @@ export function VendaEventoVendaPage() {
       ),
       comRestricao: [...porRestricao.values()].reduce((s, n) => s + n, 0),
     }
-  }, [convites, convitesAtivos])
+  }, [convitesFiltrados, convitesFiltradosAtivos])
+
+  function imprimirListaConvites() {
+    document.body.classList.add('print-evento-lista')
+    const cleanup = () => {
+      document.body.classList.remove('print-evento-lista')
+      window.removeEventListener('afterprint', cleanup)
+    }
+    window.addEventListener('afterprint', cleanup)
+    window.print()
+  }
 
   async function reload() {
     if (!empresaId || !Number.isFinite(eventoId) || eventoId <= 0) return
@@ -1018,6 +1088,11 @@ export function VendaEventoVendaPage() {
               .filter((x) => x && x !== '—')
               .join(' · ')}
           </p>
+          {filtroTiposParcial ? (
+            <p>
+              Tipos: {[...tiposFiltroAtivos].sort((a, b) => a.localeCompare(b)).join(', ')}
+            </p>
+          ) : null}
         </div>
         <div
           className="evento-lista-conferencia-toolbar no-print"
@@ -1035,22 +1110,16 @@ export function VendaEventoVendaPage() {
             </h3>
             <p className="muted" style={{ margin: 0 }}>
               Convites já vendidos, ordenados pelo número — use no dia do
-              evento.
+              evento. Marque os tipos para filtrar a lista e a impressão.
             </p>
           </div>
           <button
             type="button"
             className="btn btn-soft"
-            disabled={convites.length === 0}
-            onClick={() => {
-              document.body.classList.add('print-evento-lista')
-              const cleanup = () => {
-                document.body.classList.remove('print-evento-lista')
-                window.removeEventListener('afterprint', cleanup)
-              }
-              window.addEventListener('afterprint', cleanup)
-              window.print()
-            }}
+            disabled={
+              convitesFiltrados.length === 0 || tiposFiltroAtivos.size === 0
+            }
+            onClick={imprimirListaConvites}
           >
             Imprimir lista
           </button>
@@ -1059,6 +1128,68 @@ export function VendaEventoVendaPage() {
           <div className="empty">Nenhum convite vendido ainda.</div>
         ) : (
           <>
+            {tiposNaLista.length > 1 ? (
+              <div className="evento-lista-filtro-tipos no-print">
+                <div className="evento-lista-filtro-tipos-head">
+                  <strong>Filtrar por tipo</strong>
+                  <div className="evento-lista-filtro-tipos-acoes">
+                    <button
+                      type="button"
+                      className="btn btn-soft"
+                      disabled={todosTiposMarcados}
+                      onClick={() =>
+                        setFiltroTipos(
+                          Object.fromEntries(
+                            tiposNaLista.map(([label]) => [label, true]),
+                          ),
+                        )
+                      }
+                    >
+                      Todos
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-soft"
+                      disabled={tiposFiltroAtivos.size === 0}
+                      onClick={() =>
+                        setFiltroTipos(
+                          Object.fromEntries(
+                            tiposNaLista.map(([label]) => [label, false]),
+                          ),
+                        )
+                      }
+                    >
+                      Nenhum
+                    </button>
+                  </div>
+                </div>
+                <div className="evento-lista-filtro-tipos-opcoes">
+                  {tiposNaLista.map(([label, qtde]) => (
+                    <label key={label} className="evento-lista-filtro-tipo">
+                      <input
+                        type="checkbox"
+                        checked={filtroTipos[label] !== false}
+                        onChange={(e) =>
+                          setFiltroTipos((prev) => ({
+                            ...prev,
+                            [label]: e.target.checked,
+                          }))
+                        }
+                      />
+                      <span>
+                        {label} ({qtde})
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {tiposFiltroAtivos.size === 0 ? (
+              <div className="empty">
+                Selecione ao menos um tipo de convite para exibir ou imprimir.
+              </div>
+            ) : (
+              <>
             <div className="evento-convites-totais">
               <p style={{ margin: 0 }}>
                 <strong>Total:</strong> {totaisLista.total} convite
@@ -1068,6 +1199,11 @@ export function VendaEventoVendaPage() {
                   ? ` · ${totaisLista.inativos} inativo${
                       totaisLista.inativos === 1 ? '' : 's'
                     }`
+                  : ''}
+                {filtroTiposParcial
+                  ? ` · filtro: ${[...tiposFiltroAtivos]
+                      .sort((a, b) => a.localeCompare(b))
+                      .join(', ')}`
                   : ''}
                 {' · '}
                 <strong>Arrecadado:</strong>{' '}
@@ -1112,7 +1248,7 @@ export function VendaEventoVendaPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {convites.map((c) => {
+                  {convitesFiltrados.map((c) => {
                     const inativo = c.ativo === false
                     const editando = editandoConviteId === c.convite_id
                     const salvando = salvandoConviteId === c.convite_id
@@ -1214,6 +1350,8 @@ export function VendaEventoVendaPage() {
                 </tbody>
               </table>
             </div>
+              </>
+            )}
           </>
         )}
       </section>
