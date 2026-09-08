@@ -210,15 +210,15 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     type: 'link',
-    to: '/atividades',
-    label: 'Atividades',
-    permission: 'atividades.view',
-  },
-  {
-    type: 'link',
     to: '/competicoes',
     label: 'Competições',
     permission: 'competicoes.view',
+  },
+  {
+    type: 'link',
+    to: '/atividades',
+    label: 'Atividades',
+    permission: 'atividades.view',
   },
   // Eventos oculto por enquanto
   // {
