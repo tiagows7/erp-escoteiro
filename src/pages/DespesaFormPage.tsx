@@ -126,6 +126,12 @@ export function DespesaFormPage() {
   const [documentoUrls, setDocumentoUrls] = useState<string[]>([])
   const documentoHrefs = useSignedDocumentUrls(documentoUrls)
   const [notaFiles, setNotaFiles] = useState<File[]>([])
+  const [tiposPagamento, setTiposPagamento] = useState<
+    { tipopagto_id: number; nome: string }[]
+  >([])
+  const [quitarNaInclusao, setQuitarNaInclusao] = useState(false)
+  const [dataPagamento, setDataPagamento] = useState(todayISO())
+  const [tipopagtoId, setTipopagtoId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
@@ -189,6 +195,23 @@ export function DespesaFormPage() {
       )
     })
   }, [empresaId])
+
+  useEffect(() => {
+    if (!empresaId || !isNew) return
+    void supabase
+      .from('tipo_pagamento')
+      .select('tipopagto_id, nome')
+      .eq('empresa_id', empresaId)
+      .order('nome')
+      .then(({ data }) => {
+        setTiposPagamento(
+          (data ?? []).map((row) => ({
+            tipopagto_id: row.tipopagto_id as number,
+            nome: row.nome as string,
+          })),
+        )
+      })
+  }, [empresaId, isNew])
 
   const secoesFiltradas = useMemo(() => {
     if (!form.despesa_ramo) return secoes
@@ -623,6 +646,16 @@ export function DespesaFormPage() {
       setError('Informe um valor maior que zero.')
       return
     }
+    if (isNew && quitarNaInclusao) {
+      if (!dataPagamento) {
+        setError('Informe a data do pagamento.')
+        return
+      }
+      if (!tipopagtoId) {
+        setError('Selecione o tipo de pagamento.')
+        return
+      }
+    }
 
     const ramoPayload = lockedByVinculo
       ? numOrNull(form.despesa_ramo)
@@ -656,8 +689,10 @@ export function DespesaFormPage() {
           despesa_emissao: strOrNull(form.despesa_emissao),
           despesa_vencimento: strOrNull(form.despesa_vencimento),
           despesa_valor: valor,
-          despesa_saldo: valor,
-          despesa_situacao: DESPESA_SITUACAO.ABERTO,
+          despesa_saldo: quitarNaInclusao ? 0 : valor,
+          despesa_situacao: quitarNaInclusao
+            ? DESPESA_SITUACAO.PAGO
+            : DESPESA_SITUACAO.ABERTO,
           despesa_finalidade: form.despesa_finalidade.trim(),
         })
         .select('despesa_id')
@@ -667,6 +702,30 @@ export function DespesaFormPage() {
         setSaving(false)
         setError(insertError?.message ?? 'Não foi possível salvar a despesa.')
         return
+      }
+
+      if (quitarNaInclusao) {
+        const { error: pagamentoError } = await supabase
+          .from('despesa_pagamento')
+          .insert({
+            empresa_id: empresaId,
+            despesa_id: created.despesa_id as number,
+            tipopagto_id: Number(tipopagtoId),
+            data_pagamento: dataPagamento,
+            valor,
+            observacao: 'Pagamento registrado na inclusão da despesa',
+          })
+
+        if (pagamentoError) {
+          await supabase
+            .from('despesas')
+            .delete()
+            .eq('despesa_id', created.despesa_id as number)
+            .eq('empresa_id', empresaId)
+          setSaving(false)
+          setError(pagamentoError.message)
+          return
+        }
       }
 
       if (notaFiles.length > 0) {
@@ -735,7 +794,12 @@ export function DespesaFormPage() {
     setSaving(false)
     clearDraft()
     navigate('/despesas/inclusao', {
-      state: { flashSuccess: 'Salvo com sucesso!' },
+      state: {
+        flashSuccess:
+          isNew && quitarNaInclusao
+            ? 'Despesa salva e quitada com sucesso!'
+            : 'Salvo com sucesso!',
+      },
     })
   }
 
@@ -1110,6 +1174,63 @@ export function DespesaFormPage() {
             />
           </div>
 
+          {isNew && canWrite ? (
+            <div className="field field-span-2 receita-recibo-opcao">
+              <div className="field-checks">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={quitarNaInclusao}
+                    onChange={(e) => setQuitarNaInclusao(e.target.checked)}
+                    disabled={disabled}
+                  />
+                  Registrar pagamento e quitar na inclusão
+                </label>
+              </div>
+              {quitarNaInclusao ? (
+                <div className="form-grid receita-recibo-campos">
+                  <div className="field">
+                    <label htmlFor="despesa_data_pagamento">
+                      Data do pagamento
+                    </label>
+                    <input
+                      id="despesa_data_pagamento"
+                      className="input"
+                      type="date"
+                      value={dataPagamento}
+                      onChange={(e) => setDataPagamento(e.target.value)}
+                      disabled={disabled}
+                      required
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="despesa_tipopagto">
+                      Tipo de pagamento
+                    </label>
+                    <select
+                      id="despesa_tipopagto"
+                      className="select"
+                      value={tipopagtoId}
+                      onChange={(e) => setTipopagtoId(e.target.value)}
+                      disabled={disabled}
+                      required
+                    >
+                      <option value="">Selecione</option>
+                      {tiposPagamento.map((tipo) => (
+                        <option
+                          key={tipo.tipopagto_id}
+                          value={tipo.tipopagto_id}
+                        >
+                          {tipo.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="field field-span-2">
             <label htmlFor="despesa_nota">Nota / comprovante</label>
             <input
@@ -1174,7 +1295,11 @@ export function DespesaFormPage() {
           {canWrite && !isPaid ? (
             <>
               <button className="btn btn-primary" type="submit" disabled={saving}>
-                {saving ? 'Salvando…' : 'Salvar'}
+                {saving
+                  ? 'Salvando…'
+                  : isNew && quitarNaInclusao
+                    ? 'Salvar e quitar'
+                    : 'Salvar'}
               </button>
               {!isNew ? (
                 <button

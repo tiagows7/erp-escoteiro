@@ -141,6 +141,7 @@ export function ReceitaFormPage() {
   const [tiposPagamento, setTiposPagamento] = useState<
     { tipopagto_id: number; nome: string }[]
   >([])
+  const [quitarNaInclusao, setQuitarNaInclusao] = useState(false)
   const [gerarRecibo, setGerarRecibo] = useState(false)
   const [tipopagtoId, setTipopagtoId] = useState('')
   const [dataPagamento, setDataPagamento] = useState(todayISO())
@@ -165,6 +166,7 @@ export function ReceitaFormPage() {
     setError(null)
     setDocumentoUrls([])
     setDocFiles([])
+    setQuitarNaInclusao(false)
     setGerarRecibo(false)
     setTipopagtoId('')
     setDataPagamento(todayISO())
@@ -649,13 +651,13 @@ export function ReceitaFormPage() {
       setError('Informe um valor maior que zero.')
       return
     }
-    if (isNew && gerarRecibo) {
+    if (isNew && quitarNaInclusao) {
       if (!dataPagamento) {
-        setError('Informe a data do pagamento para o recibo.')
+        setError('Informe a data do recebimento.')
         return
       }
       if (!tipopagtoId) {
-        setError('Selecione o tipo de pagamento para gerar o recibo.')
+        setError('Selecione o tipo de pagamento.')
         return
       }
     }
@@ -681,7 +683,7 @@ export function ReceitaFormPage() {
     setError(null)
 
     if (isNew) {
-      const quitarComRecibo = gerarRecibo
+      const quitarNaHora = quitarNaInclusao
       const { data: inserted, error: insertError } = await supabase
         .from('receitas')
         .insert({
@@ -698,8 +700,8 @@ export function ReceitaFormPage() {
           receita_emissao: strOrNull(form.receita_emissao),
           receita_vencimento: strOrNull(form.receita_vencimento),
           receita_valor: valor,
-          receita_saldo: quitarComRecibo ? 0 : valor,
-          receita_situacao: quitarComRecibo
+          receita_saldo: quitarNaHora ? 0 : valor,
+          receita_situacao: quitarNaHora
             ? TITULO_SITUACAO.PAGO
             : TITULO_SITUACAO.ABERTO,
           receita_observacao: strOrNull(form.receita_observacao),
@@ -715,7 +717,7 @@ export function ReceitaFormPage() {
 
       const receitaId = inserted.receita_id as number
 
-      if (quitarComRecibo) {
+      if (quitarNaHora) {
         const tipoNome =
           tiposPagamento.find((t) => t.tipopagto_id === Number(tipopagtoId))
             ?.nome ?? null
@@ -767,20 +769,27 @@ export function ReceitaFormPage() {
         })
         setDocFiles([])
         setDocumentoUrls([])
+        setQuitarNaInclusao(false)
         setGerarRecibo(false)
         setTipopagtoId('')
         setDataPagamento(todayISO())
-        setRecibo({
-          empresaNome: empresa?.nome ?? 'Grupo escoteiro',
-          empresaLogoUrl: empresa?.logo_url ?? null,
-          receitaId,
-          descricao: form.receita_descricao.trim(),
-          associadoNome,
-          valor,
-          dataPagamento,
-          tipoPagamento: tipoNome,
-          observacao: strOrNull(form.receita_observacao),
-        })
+        if (gerarRecibo) {
+          setRecibo({
+            empresaNome: empresa?.nome ?? 'Grupo escoteiro',
+            empresaLogoUrl: empresa?.logo_url ?? null,
+            receitaId,
+            descricao: form.receita_descricao.trim(),
+            associadoNome,
+            valor,
+            dataPagamento,
+            tipoPagamento: tipoNome,
+            observacao: strOrNull(form.receita_observacao),
+          })
+        } else {
+          navigate('/receitas/inclusao', {
+            state: { flashSuccess: 'Receita salva e quitada com sucesso!' },
+          })
+        }
         return
       }
 
@@ -863,6 +872,7 @@ export function ReceitaFormPage() {
     })
     setDocFiles([])
     setDocumentoUrls([])
+    setQuitarNaInclusao(false)
     setGerarRecibo(false)
     setTipopagtoId('')
     setDataPagamento(todayISO())
@@ -1318,18 +1328,21 @@ export function ReceitaFormPage() {
                 <label>
                   <input
                     type="checkbox"
-                    checked={gerarRecibo}
-                    onChange={(e) => setGerarRecibo(e.target.checked)}
+                    checked={quitarNaInclusao}
+                    onChange={(e) => {
+                      setQuitarNaInclusao(e.target.checked)
+                      if (!e.target.checked) setGerarRecibo(false)
+                    }}
                     disabled={disabled}
                   />
-                  Registrar pagamento e gerar recibo para entrega
+                  Registrar recebimento e quitar na inclusão
                 </label>
               </div>
-              {gerarRecibo ? (
+              {quitarNaInclusao ? (
                 <div className="form-grid receita-recibo-campos">
                   <div className="field">
                     <label htmlFor="recibo_data_pagamento">
-                      Data do pagamento
+                      Data do recebimento
                     </label>
                     <input
                       id="recibo_data_pagamento"
@@ -1359,6 +1372,19 @@ export function ReceitaFormPage() {
                       ))}
                     </select>
                   </div>
+                  <div className="field field-span-2">
+                    <div className="field-checks">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={gerarRecibo}
+                          onChange={(e) => setGerarRecibo(e.target.checked)}
+                          disabled={disabled}
+                        />
+                        Gerar recibo para impressão
+                      </label>
+                    </div>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -1371,8 +1397,10 @@ export function ReceitaFormPage() {
               <button className="btn btn-primary" type="submit" disabled={saving}>
                 {saving
                   ? 'Salvando…'
-                  : isNew && gerarRecibo
-                    ? 'Salvar e gerar recibo'
+                  : isNew && quitarNaInclusao && gerarRecibo
+                    ? 'Salvar, quitar e gerar recibo'
+                    : isNew && quitarNaInclusao
+                      ? 'Salvar e quitar'
                     : 'Salvar'}
               </button>
               {!isNew ? (
