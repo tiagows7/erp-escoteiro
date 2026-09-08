@@ -208,6 +208,45 @@ export type Atividade = {
   created_at: string | null
 }
 
+export type Competicao = {
+  competicao_id: number
+  empresa_id: number
+  secao_id: number
+  nome: string
+  descricao: string | null
+  data_inicio: string | null
+  data_fim: string | null
+  encerrado_em: string | null
+  created_at: string | null
+}
+
+export type CompeticaoParticipante = {
+  participante_id: number
+  empresa_id: number
+  competicao_id: number
+  secaonome_id: number
+  created_at: string | null
+}
+
+export type CompeticaoProva = {
+  prova_id: number
+  empresa_id: number
+  competicao_id: number
+  nome: string
+  ordem: number
+  created_at: string | null
+}
+
+export type CompeticaoPontuacao = {
+  pontuacao_id: number
+  empresa_id: number
+  prova_id: number
+  participante_id: number
+  pontos: number
+  observacao: string | null
+  updated_at: string | null
+}
+
 export type CalendarioGrupoEvento = {
   id: number
   empresa_id: number
@@ -408,6 +447,26 @@ export type Database = {
         Row: Atividade
         Insert: Partial<Atividade>
         Update: Partial<Atividade>
+      }
+      competicoes: {
+        Row: Competicao
+        Insert: Partial<Competicao>
+        Update: Partial<Competicao>
+      }
+      competicao_participante: {
+        Row: CompeticaoParticipante
+        Insert: Partial<CompeticaoParticipante>
+        Update: Partial<CompeticaoParticipante>
+      }
+      competicao_prova: {
+        Row: CompeticaoProva
+        Insert: Partial<CompeticaoProva>
+        Update: Partial<CompeticaoProva>
+      }
+      competicao_pontuacao: {
+        Row: CompeticaoPontuacao
+        Insert: Partial<CompeticaoPontuacao>
+        Update: Partial<CompeticaoPontuacao>
       }
     }
     Functions: {

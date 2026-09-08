@@ -214,6 +214,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Atividades',
     permission: 'atividades.view',
   },
+  {
+    type: 'link',
+    to: '/competicoes',
+    label: 'Competições',
+    permission: 'competicoes.view',
+  },
   // Eventos oculto por enquanto
   // {
   //   type: 'link',

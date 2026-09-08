@@ -298,6 +298,57 @@ button {
   width: min(100%, 520px);
 }
 
+.competicao-equipes-opcoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.competicao-equipes-opcoes label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.competicao-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.competicao-section-head h3,
+.competicao-section-head p {
+  margin: 0;
+}
+
+.competicao-nova-prova {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.competicao-nova-prova .input {
+  width: min(100%, 260px);
+}
+
+.competicao-pontuacao-table {
+  min-width: 640px;
+}
+
+.competicao-pontos-input {
+  width: 6.5rem;
+  text-align: right;
+}
+
 .despesa-nota-preview img {
   max-width: min(220px, 100%);
   max-height: 160px;

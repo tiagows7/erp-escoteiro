@@ -171,6 +171,7 @@ export function pathMatchesMenuKey(pathname: string, menuKey: string): boolean {
 /** Menus sempre liberados mesmo com menu_keys restrito (equipe e associado). */
 export const ALWAYS_VISIBLE_MENU_KEYS = [
   '/dashboard',
+  '/competicoes',
   '/regimento-interno',
   '/documentos/por-online',
   // Admin do grupo: item só entra no nav se role=admin.

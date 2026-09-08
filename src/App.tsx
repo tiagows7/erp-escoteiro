@@ -78,6 +78,8 @@ import { PortalRedirectPage } from '@/pages/PortalRedirectPage'
 import { AtividadesPage } from '@/pages/AtividadesPage'
 import { AtividadeFormPage } from '@/pages/AtividadeFormPage'
 import { AtividadeContasPage } from '@/pages/AtividadeContasPage'
+import { CompeticoesPage } from '@/pages/CompeticoesPage'
+import { CompeticaoFormPage } from '@/pages/CompeticaoFormPage'
 import { PwaInstallBanner } from '@/components/PwaInstallBanner'
 
 export default function App() {
@@ -434,6 +436,24 @@ export default function App() {
               element={
                 <RequirePermission anyOf={['atividades.view', 'atividades.write']}>
                   <AtividadeFormPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="competicoes"
+              element={
+                <RequirePermission permission="competicoes.view">
+                  <CompeticoesPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="competicoes/:id"
+              element={
+                <RequirePermission
+                  anyOf={['competicoes.view', 'competicoes.write']}
+                >
+                  <CompeticaoFormPage />
                 </RequirePermission>
               }
             />
