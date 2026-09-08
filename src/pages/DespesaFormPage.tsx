@@ -1200,7 +1200,7 @@ export function DespesaFormPage() {
           </div>
 
           {isNew && canWrite ? (
-            <div className="field field-span-2 receita-recibo-opcao">
+            <div className="field field-span-full receita-recibo-opcao">
               <div className="field-checks">
                 <label>
                   <input
@@ -1256,7 +1256,7 @@ export function DespesaFormPage() {
             </div>
           ) : null}
 
-          <div className="field field-span-2">
+          <div className="field field-span-full despesa-nota-upload">
             <label htmlFor="despesa_nota">Nota / comprovante</label>
             <input
               id="despesa_nota"
