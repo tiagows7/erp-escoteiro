@@ -234,6 +234,7 @@ export type CompeticaoProva = {
   competicao_id: number
   nome: string
   ordem: number
+  data_execucao: string | null
   created_at: string | null
 }
 

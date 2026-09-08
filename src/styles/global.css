@@ -333,11 +333,20 @@ button {
 .competicao-nova-prova {
   display: flex;
   flex-wrap: wrap;
+  align-items: end;
   gap: 0.5rem;
 }
 
-.competicao-nova-prova .input {
+.competicao-nova-prova .field {
+  margin-bottom: 0;
+}
+
+.competicao-nova-prova .field:first-child .input {
   width: min(100%, 260px);
+}
+
+.competicao-nova-prova input[type='date'] {
+  width: auto;
 }
 
 .competicao-pontuacao-table {

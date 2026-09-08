@@ -27,6 +27,7 @@ type Prova = {
   prova_id: number
   nome: string
   ordem: number
+  data_execucao: string | null
 }
 
 type Pontuacao = {
@@ -47,6 +48,16 @@ function num(value: string) {
   return Number(String(value).replace(',', '.'))
 }
 
+function todayISO() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function formatDate(value: string | null) {
+  if (!value) return 'Data não informada'
+  const [ano, mes, dia] = value.slice(0, 10).split('-')
+  return ano && mes && dia ? `${dia}/${mes}/${ano}` : value
+}
+
 export function CompeticaoFormPage() {
   const { id } = useParams()
   const isNew = !id || id === 'novo'
@@ -64,6 +75,7 @@ export function CompeticaoFormPage() {
   const [provas, setProvas] = useState<Prova[]>([])
   const [pontos, setPontos] = useState<Record<string, string>>({})
   const [novaProva, setNovaProva] = useState('')
+  const [novaProvaData, setNovaProvaData] = useState(todayISO())
   const [encerradoEm, setEncerradoEm] = useState<string | null>(null)
   const [loading, setLoading] = useState(!isNew)
   const [saving, setSaving] = useState(false)
@@ -117,7 +129,7 @@ export function CompeticaoFormPage() {
         .eq('empresa_id', empresaId),
       supabase
         .from('competicao_prova')
-        .select('prova_id, nome, ordem')
+        .select('prova_id, nome, ordem, data_execucao')
         .eq('competicao_id', competicaoId)
         .eq('empresa_id', empresaId)
         .order('ordem')
@@ -327,6 +339,10 @@ export function CompeticaoFormPage() {
 
   async function adicionarProva() {
     if (!canWrite || !empresaId || isNew || !novaProva.trim()) return
+    if (!novaProvaData) {
+      setError('Informe a data de execução da prova.')
+      return
+    }
     setSaving(true)
     const { error: insertError } = await supabase
       .from('competicao_prova')
@@ -335,11 +351,13 @@ export function CompeticaoFormPage() {
         competicao_id: Number(id),
         nome: novaProva.trim(),
         ordem: provas.length,
+        data_execucao: novaProvaData,
       })
     if (insertError) {
       setError(insertError.message)
     } else {
       setNovaProva('')
+      setNovaProvaData(todayISO())
       await carregarCompeticao()
     }
     setSaving(false)
@@ -640,17 +658,32 @@ export function CompeticaoFormPage() {
               </div>
               {!encerradoEm && canWrite ? (
                 <div className="competicao-nova-prova">
-                  <input
-                    className="input"
-                    placeholder="Nome da prova"
-                    value={novaProva}
-                    onChange={(event) => setNovaProva(event.target.value)}
-                    maxLength={120}
-                  />
+                  <div className="field">
+                    <label htmlFor="nova_prova_nome">Nome da prova</label>
+                    <input
+                      id="nova_prova_nome"
+                      className="input"
+                      placeholder="Ex.: Corrida de revezamento"
+                      value={novaProva}
+                      onChange={(event) => setNovaProva(event.target.value)}
+                      maxLength={120}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="nova_prova_data">Data de execução</label>
+                    <input
+                      id="nova_prova_data"
+                      className="input"
+                      type="date"
+                      value={novaProvaData}
+                      onChange={(event) => setNovaProvaData(event.target.value)}
+                      required
+                    />
+                  </div>
                   <button
                     type="button"
                     className="btn btn-soft"
-                    disabled={saving || !novaProva.trim()}
+                    disabled={saving || !novaProva.trim() || !novaProvaData}
                     onClick={() => void adicionarProva()}
                   >
                     Adicionar prova
@@ -681,6 +714,9 @@ export function CompeticaoFormPage() {
                         <tr key={prova.prova_id}>
                           <td>
                             <strong>{prova.nome}</strong>
+                            <span className="field-hint">
+                              Executada em {formatDate(prova.data_execucao)}
+                            </span>
                           </td>
                           {participantes.map((participante) => {
                             const key = `${prova.prova_id}:${participante.participante_id}`
