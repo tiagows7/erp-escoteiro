@@ -6,6 +6,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
+  clearFormDraftsForResource,
   formDraftKey,
   usePersistedFormState,
 } from '@/hooks/usePersistedFormState'
@@ -106,12 +107,15 @@ export function DespesaFormPage() {
     `despesa${searchParams.toString() ? `?${searchParams.toString()}` : ''}`,
     id,
   )
+  // Nova despesa começa limpa; rascunho fica disponível somente na edição.
+  const persistKey = isNew ? null : draftKey
+  const emptyNewForm = {
+    ...emptyForm,
+    despesa_emissao: todayISO(),
+    despesa_vencimento: todayISO(),
+  }
   const [form, setForm, { hydrateFromServer, clearDraft, restored }] =
-    usePersistedFormState(draftKey, {
-      ...emptyForm,
-      despesa_emissao: todayISO(),
-      despesa_vencimento: todayISO(),
-    })
+    usePersistedFormState(persistKey, emptyNewForm)
   const [saldo, setSaldo] = useState<number | null>(null)
   const [situacao, setSituacao] = useState<number | null>(null)
   const [paidAmount, setPaidAmount] = useState(0)
@@ -135,6 +139,27 @@ export function DespesaFormPage() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
+
+  useEffect(() => {
+    if (!isNew) return
+    if (empresaId != null) {
+      clearFormDraftsForResource(empresaId, 'despesa', 'novo')
+    }
+    clearDraft({
+      ...emptyForm,
+      despesa_emissao: todayISO(),
+      despesa_vencimento: todayISO(),
+    })
+    setSaldo(null)
+    setSituacao(null)
+    setPaidAmount(0)
+    setDocumentoUrls([])
+    setNotaFiles([])
+    setQuitarNaInclusao(false)
+    setDataPagamento(todayISO())
+    setTipopagtoId('')
+    setError(null)
+  }, [isNew, empresaId, clearDraft])
 
   useEffect(() => {
     if (!scope || !isNew || lockedByVinculo) return
