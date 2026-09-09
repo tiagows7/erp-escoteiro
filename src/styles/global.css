@@ -358,6 +358,71 @@ button {
   text-align: right;
 }
 
+.dashboard-competicao-panel {
+  margin-bottom: 1rem;
+}
+
+.dashboard-competicao-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.dashboard-competicao-head h3,
+.dashboard-competicao-head p {
+  margin: 0;
+}
+
+.dashboard-competicao-head .select {
+  width: min(100%, 320px);
+}
+
+.dashboard-competicao-chart-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.dashboard-competicao-chart {
+  display: block;
+  width: 100%;
+  min-width: 620px;
+  height: auto;
+}
+
+.dashboard-competicao-grid-line {
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.dashboard-competicao-axis-text {
+  fill: var(--ink-muted);
+  font-size: 12px;
+}
+
+.dashboard-competicao-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 1rem;
+  margin-top: 0.75rem;
+}
+
+.dashboard-competicao-legenda span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.dashboard-competicao-legenda i {
+  display: inline-block;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+}
+
 .despesa-nota-preview img {
   max-width: min(220px, 100%);
   max-height: 160px;

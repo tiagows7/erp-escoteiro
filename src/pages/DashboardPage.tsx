@@ -9,6 +9,7 @@ import { AssociadoAtividadesPanel } from '@/components/AssociadoAtividadesPanel'
 import { AssociadoMensalidadesPanel } from '@/components/AssociadoMensalidadesPanel'
 import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { StaffAtividadesPanel } from '@/components/StaffAtividadesPanel'
+import { StaffCompeticoesChart } from '@/components/StaffCompeticoesChart'
 import { StaffMensalidadesAbertasPanel } from '@/components/StaffMensalidadesAbertasPanel'
 import { formatMoney } from '@/lib/despesas'
 import { RECEITA_ORIGEM } from '@/lib/receitas'
@@ -1890,6 +1891,14 @@ export function DashboardPage() {
         <AssociadoAtividadesPanel
           empresaId={empresaId}
           registro={profile.registro}
+        />
+      ) : null}
+
+      {!associadoView && empresaId && ramoFiltro != null ? (
+        <StaffCompeticoesChart
+          empresaId={empresaId}
+          codigoRamo={ramoFiltro}
+          codigoSecao={secaoFiltro}
         />
       ) : null}
 
