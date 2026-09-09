@@ -44,6 +44,12 @@ export const AUDITORIA_TABELA_LABELS: Record<string, string> = {
   plataforma_cobranca_pagamento: 'Pagamento plataforma',
   plataforma_efi_pix: 'PIX Efí (plataforma)',
   plataforma_pix_cobrancas: 'PIX cobrança plataforma',
+  conquistas: 'Conquistas',
+  competicoes: 'Competições',
+  competicao_participante: 'Participantes (competição)',
+  competicao_prova: 'Provas (competição)',
+  competicao_pontuacao: 'Pontuação (competição)',
+  sugestao_melhoria: 'Sugestões de melhoria',
 }
 
 export function tabelaAuditoriaLabel(tabela: string | null | undefined): string {
