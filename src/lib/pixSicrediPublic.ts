@@ -23,10 +23,27 @@ export type PixPublicEventoInput = {
   descricao: string
 }
 
-export type PixPublicInput = PixPublicAcaoInput | PixPublicEventoInput
+export type PixPublicLojaInput = {
+  kind: 'loja'
+  linkToken: string
+  itens: Array<{ produto_id: number; quantidade: number }>
+  compradorNome: string
+  compradorTelefone: string
+  valor: number
+  descricao: string
+}
+
+export type PixPublicInput =
+  | PixPublicAcaoInput
+  | PixPublicEventoInput
+  | PixPublicLojaInput
 
 function isEventoInput(input: PixPublicInput): input is PixPublicEventoInput {
   return input.kind === 'evento'
+}
+
+function isLojaInput(input: PixPublicInput): input is PixPublicLojaInput {
+  return input.kind === 'loja'
 }
 
 async function readFunctionsError(error: unknown): Promise<string | null> {
@@ -50,6 +67,19 @@ export function pixPublicPaymentKey(input: PixPublicInput): string {
       input.nomes.join('|'),
       (input.tipoIds ?? []).join(','),
       (input.restricoes ?? []).join('|'),
+      input.compradorTelefone.trim(),
+    ].join('|')
+  }
+  if (isLojaInput(input)) {
+    return [
+      'loja',
+      input.linkToken,
+      input.valor,
+      input.itens
+        .map((item) => `${item.produto_id}:${item.quantidade}`)
+        .sort()
+        .join(','),
+      input.compradorNome.trim(),
       input.compradorTelefone.trim(),
     ].join('|')
   }
@@ -79,6 +109,14 @@ export async function createPixSicrediPublic(
         comprador_telefone: input.compradorTelefone,
         descricao: input.descricao,
       }
+    : isLojaInput(input)
+      ? {
+          action: 'create_public_loja',
+          link_token: input.linkToken,
+          itens: input.itens,
+          comprador_nome: input.compradorNome,
+          comprador_telefone: input.compradorTelefone,
+        }
     : {
         action: 'create_public',
         link_token: input.linkToken,

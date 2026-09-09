@@ -233,8 +233,8 @@ export function PixSicrediPublicCheckoutModal({
         {phase === 'waiting' && cobranca ? (
           <div className="pix-sicredi-waiting">
             <p>
-              Escaneie o QR Code ou use o Pix Copia e Cola. Os números só são
-              gravados após a confirmação do pagamento.
+              Escaneie o QR Code ou use o Pix Copia e Cola. A compra só será
+              confirmada após a confirmação do pagamento.
             </p>
             {message ? <p className="muted">{message}</p> : null}
             {qrDataUrl ? (
@@ -266,7 +266,9 @@ export function PixSicrediPublicCheckoutModal({
             <p className="field-hint">
               {input.kind === 'evento'
                 ? `Convites: ${input.nomes.length} · Aguardando confirmação…`
-                : `Números: ${input.numeros.join(', ')} · Aguardando confirmação…`}
+                : input.kind === 'loja'
+                  ? `Itens: ${input.itens.length} · Aguardando confirmação…`
+                  : `Números: ${input.numeros.join(', ')} · Aguardando confirmação…`}
             </p>
           </div>
         ) : null}

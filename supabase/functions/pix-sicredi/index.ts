@@ -63,6 +63,14 @@ type CreatePublicEventoBody = {
   descricao?: string
 }
 
+type CreatePublicLojaBody = {
+  action: 'create_public_loja'
+  link_token: string
+  itens: Array<{ produto_id: number; quantidade: number }>
+  comprador_nome: string
+  comprador_telefone: string
+}
+
 type StatusPublicBody = {
   action: 'status_public'
   cobranca_id: number
@@ -79,6 +87,7 @@ type PixRequestBody =
   | ConfigBody
   | CreatePublicBody
   | CreatePublicEventoBody
+  | CreatePublicLojaBody
   | StatusPublicBody
   | PollPendingBody
 
@@ -2173,6 +2182,182 @@ Deno.serve(async (req) => {
         return json({ ok: true, configured: true, cobranca: row })
       }
 
+      if (peek?.action === 'create_public_loja') {
+        const body = peek as CreatePublicLojaBody
+        const token = String(body.link_token ?? '').trim()
+        const nome = String(body.comprador_nome ?? '').trim().slice(0, 200)
+        const fone = String(body.comprador_telefone ?? '').trim().slice(0, 40)
+        const itensRaw = Array.isArray(body.itens) ? body.itens : []
+
+        if (!token) return json({ error: 'Link inválido.' }, 400)
+        if (!nome) return json({ error: 'Informe o nome do comprador.' }, 400)
+        if (!fone) return json({ error: 'Informe o telefone do comprador.' }, 400)
+
+        const quantidades = new Map<number, number>()
+        for (const item of itensRaw) {
+          const produtoId = Number(item?.produto_id)
+          const quantidade = Number(item?.quantidade)
+          if (
+            !Number.isInteger(produtoId) ||
+            produtoId <= 0 ||
+            !Number.isFinite(quantidade) ||
+            quantidade <= 0
+          ) {
+            return json({ error: 'Há um item inválido no carrinho.' }, 400)
+          }
+          quantidades.set(
+            produtoId,
+            (quantidades.get(produtoId) ?? 0) + quantidade,
+          )
+        }
+        if (quantidades.size === 0) {
+          return json({ error: 'Adicione ao menos um produto.' }, 400)
+        }
+
+        const { data: empresa, error: empresaError } = await admin
+          .from('empresa')
+          .select('id, nome, ativo')
+          .eq('loja_link_token', token)
+          .maybeSingle()
+        if (empresaError || !empresa || empresa.ativo === false) {
+          return json({ error: 'Link inválido ou expirado.' }, 404)
+        }
+
+        const produtoIds = [...quantidades.keys()]
+        const { data: produtos, error: produtosError } = await admin
+          .from('produto')
+          .select(
+            'produto_id, nome, valor_venda, estoque_atual, controla_estoque',
+          )
+          .eq('empresa_id', empresa.id)
+          .eq('ativo', true)
+          .eq('venda', true)
+          .in('produto_id', produtoIds)
+        if (produtosError || (produtos ?? []).length !== produtoIds.length) {
+          return json(
+            { error: 'Um ou mais produtos não estão mais disponíveis.' },
+            409,
+          )
+        }
+
+        const itens: LojaItemCob[] = []
+        for (const produto of produtos ?? []) {
+          const quantidade = quantidades.get(Number(produto.produto_id)) ?? 0
+          const unitario = Number(produto.valor_venda ?? 0)
+          const estoque = Number(produto.estoque_atual ?? 0)
+          if (!(unitario > 0)) {
+            return json(
+              { error: `“${produto.nome}” está sem preço de venda.` },
+              409,
+            )
+          }
+          if (produto.controla_estoque !== false && quantidade > estoque) {
+            return json(
+              { error: `Estoque insuficiente para “${produto.nome}”.` },
+              409,
+            )
+          }
+          itens.push({
+            produto_id: Number(produto.produto_id),
+            nome: String(produto.nome),
+            unitario,
+            quantidade,
+          })
+        }
+
+        const valor = Number(
+          itens
+            .reduce(
+              (total, item) => total + item.unitario * item.quantidade,
+              0,
+            )
+            .toFixed(2),
+        )
+        if (!(valor > 0)) return json({ error: 'Valor da compra inválido.' }, 400)
+
+        const { data: tipoPagamento } = await admin
+          .from('tipo_pagamento')
+          .select('tipopagto_id')
+          .eq('empresa_id', empresa.id)
+          .eq('comunica_banco', true)
+          .order('nome')
+          .limit(1)
+          .maybeSingle()
+        if (!tipoPagamento?.tipopagto_id) {
+          return json(
+            { error: 'O pagamento PIX da loja não está configurado.' },
+            503,
+          )
+        }
+
+        const resolved = await resolveSicrediConfig(admin, {
+          empresaId: Number(empresa.id),
+          tipo: 'loja',
+        })
+        if (!resolved.cfg) {
+          return json(
+            {
+              error:
+                resolved.hint ||
+                'PIX Sicredi não configurado para este grupo.',
+              configured: false,
+            },
+            503,
+          )
+        }
+
+        const descricao = truncate(
+          `Venda loja online — ${itens.map((item) => item.nome).join(', ')}`,
+          120,
+        )
+        const txid = generateTxid()
+        const cobRes = await createCob(resolved.cfg, {
+          valor,
+          descricao,
+          txid,
+        })
+        const status = String(cobRes.status ?? 'ATIVA')
+        const { data: row, error: insertError } = await admin
+          .from('pix_cobrancas')
+          .insert({
+            empresa_id: empresa.id,
+            associado_id: null,
+            created_by: null,
+            tipo: 'loja',
+            receita_ids: [],
+            atividade_id: null,
+            link_token: token,
+            comprador_nome: nome,
+            comprador_telefone: fone,
+            valor,
+            txid: cobRes.txid ?? txid,
+            status,
+            pix_copia_e_cola: cobRes.pixCopiaECola ?? null,
+            location: cobRes.location ?? null,
+            descricao,
+            raw_create: cobRes,
+            loja_itens: {
+              canal: 'online',
+              comprador_nome: nome,
+              comprador_telefone: fone,
+              itens,
+            },
+            tipopagto_id: Number(tipoPagamento.tipopagto_id),
+          })
+          .select(
+            'id, txid, status, valor, pix_copia_e_cola, location, descricao, created_at',
+          )
+          .single()
+
+        if (insertError || !row) {
+          return json(
+            { error: insertError?.message ?? 'Falha ao salvar cobrança.' },
+            400,
+          )
+        }
+        return json({ ok: true, configured: true, cobranca: row })
+      }
+
       if (peek?.action === 'status_public') {
         const body = peek as StatusPublicBody
         const cobrancaId = Number(body.cobranca_id)
@@ -2185,7 +2370,7 @@ Deno.serve(async (req) => {
           .from('pix_cobrancas')
           .select('*')
           .eq('id', cobrancaId)
-          .in('tipo', ['acao_entre_amigos', 'venda_evento'])
+          .in('tipo', ['acao_entre_amigos', 'venda_evento', 'loja'])
           .eq('link_token', token)
           .maybeSingle()
 

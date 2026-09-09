@@ -41,6 +41,7 @@ import { VendaEventoVendaPage } from '@/pages/VendaEventoVendaPage'
 import { VendaEventoPublicPage } from '@/pages/VendaEventoPublicPage'
 import { LojaPage } from '@/pages/LojaPage'
 import { LojaOnlinePage } from '@/pages/LojaOnlinePage'
+import { LojaOnlinePublicPage } from '@/pages/LojaOnlinePublicPage'
 import { LojaOnlineVendasPage } from '@/pages/LojaOnlineVendasPage'
 import { LojaCaixaPage } from '@/pages/LojaCaixaPage'
 import { UsuariosPage } from '@/pages/UsuariosPage'
@@ -107,6 +108,7 @@ export default function App() {
             path="/ingresso/:token"
             element={<VendaEventoPublicPage />}
           />
+          <Route path="/loja/:token" element={<LojaOnlinePublicPage />} />
           <Route
             element={
               <ProtectedRoute>

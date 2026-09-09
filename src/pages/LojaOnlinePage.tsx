@@ -12,6 +12,7 @@ import {
 } from '@/lib/pixSicredi'
 import { loadPixPendingForEmpresa } from '@/lib/pixSicrediPending'
 import { isAssociadoLogin } from '@/lib/roles'
+import { linkPublicoLojaOnline } from '@/lib/lojaOnlinePublic'
 
 type ProdutoLoja = {
   produto_id: number
@@ -68,6 +69,7 @@ export function LojaOnlinePage() {
   const [pixDisponivel, setPixDisponivel] = useState(false)
   const [pixTitle, setPixTitle] = useState('Loja online')
   const [pixInput, setPixInput] = useState<PixCreateInput | null>(null)
+  const [lojaLinkToken, setLojaLinkToken] = useState('')
 
   const grupoMap = useMemo(
     () => new Map(grupos.map((g) => [g.grupoproduto_id, g.nome])),
@@ -84,11 +86,12 @@ export function LojaOnlinePage() {
       setProdutos([])
       setGrupos([])
       setTiposPagamento([])
+      setLojaLinkToken('')
       setLoading(false)
       return
     }
     setLoading(true)
-    const [prodRes, grupoRes, tipoRes, pixOk] = await Promise.all([
+    const [prodRes, grupoRes, tipoRes, pixOk, empresaRes] = await Promise.all([
       supabase
         .from('produto')
         .select(
@@ -109,6 +112,11 @@ export function LojaOnlinePage() {
         .eq('empresa_id', empresaId)
         .order('nome'),
       empresaTemChavePixInformada(empresaId),
+      supabase
+        .from('empresa')
+        .select('loja_link_token')
+        .eq('id', empresaId)
+        .maybeSingle(),
     ])
     if (prodRes.error) {
       setError(prodRes.error.message)
@@ -121,6 +129,7 @@ export function LojaOnlinePage() {
     const tipos = (tipoRes.data as TipoPagamento[]) ?? []
     setTiposPagamento(tipos)
     setPixDisponivel(pixOk)
+    setLojaLinkToken(String(empresaRes.data?.loja_link_token ?? ''))
 
     if (associadoLogin && profile?.registro) {
       const registroNum = Number(String(profile.registro).replace(/\D/g, ''))
@@ -353,6 +362,21 @@ export function LojaOnlinePage() {
     await loadProdutos()
   }
 
+  async function copiarLinkPublico() {
+    if (!lojaLinkToken) {
+      setError('Link público da loja ainda não está disponível.')
+      return
+    }
+    const link = linkPublicoLojaOnline(lojaLinkToken)
+    try {
+      await navigator.clipboard.writeText(link)
+      setError(null)
+      setSuccess('Link público da loja copiado.')
+    } catch {
+      window.prompt('Copie o link público da loja:', link)
+    }
+  }
+
   if (!empresaId) {
     return (
       <section className="panel">
@@ -374,6 +398,16 @@ export function LojaOnlinePage() {
           </p>
         </div>
         <div className="page-header-actions">
+          {!associadoLogin ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!lojaLinkToken}
+              onClick={() => void copiarLinkPublico()}
+            >
+              Copiar link da loja
+            </button>
+          ) : null}
           {!associadoLogin ? (
             <Link className="btn btn-soft" to="/vendas/loja-online/vendas">
               Ver vendas
