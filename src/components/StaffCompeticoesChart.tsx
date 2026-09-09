@@ -64,10 +64,14 @@ export function StaffCompeticoesChart({
   empresaId,
   codigoRamo,
   codigoSecao,
+  registro,
+  somenteVisualizacao = false,
 }: {
   empresaId: number
-  codigoRamo: number
+  codigoRamo?: number | null
   codigoSecao?: number | null
+  registro?: string | null
+  somenteVisualizacao?: boolean
 }) {
   const [competicoes, setCompeticoes] = useState<Competicao[]>([])
   const [competicaoId, setCompeticaoId] = useState<number | null>(null)
@@ -82,13 +86,56 @@ export function StaffCompeticoesChart({
     let mounted = true
     void (async () => {
       setLoading(true)
+      let ramoFiltro = codigoRamo ?? null
+      let secaoFiltro = codigoSecao ?? null
+
+      if (registro) {
+        const registroNumero = Number(String(registro).replace(/\D/g, ''))
+        if (Number.isFinite(registroNumero) && registroNumero > 0) {
+          const { data: associado, error: associadoError } = await supabase
+            .from('associados')
+            .select('ramo, secao')
+            .eq('empresa_id', empresaId)
+            .eq('registro', registroNumero)
+            .maybeSingle()
+          if (!mounted) return
+          if (associadoError) {
+            setError(associadoError.message)
+            setCompeticoes([])
+            setLoading(false)
+            return
+          }
+          if (!associado) {
+            setCompeticoes([])
+            setCompeticaoId(null)
+            setLoading(false)
+            return
+          }
+          ramoFiltro = (associado?.ramo as number | null) ?? null
+          secaoFiltro = (associado?.secao as number | null) ?? null
+          if (ramoFiltro == null && secaoFiltro == null) {
+            setCompeticoes([])
+            setCompeticaoId(null)
+            setLoading(false)
+            return
+          }
+        } else {
+          setCompeticoes([])
+          setCompeticaoId(null)
+          setLoading(false)
+          return
+        }
+      }
+
       let secoesQuery = supabase
         .from('secao')
         .select('secao_id')
         .eq('empresa_id', empresaId)
-        .eq('ramo', codigoRamo)
-      if (codigoSecao != null && codigoSecao > 0) {
-        secoesQuery = secoesQuery.eq('secao_id', codigoSecao)
+      if (ramoFiltro != null && ramoFiltro > 0) {
+        secoesQuery = secoesQuery.eq('ramo', ramoFiltro)
+      }
+      if (secaoFiltro != null && secaoFiltro > 0) {
+        secoesQuery = secoesQuery.eq('secao_id', secaoFiltro)
       }
       const { data: secoes, error: secoesError } = await secoesQuery
       if (!mounted) return
@@ -131,7 +178,7 @@ export function StaffCompeticoesChart({
     return () => {
       mounted = false
     }
-  }, [empresaId, codigoRamo, codigoSecao])
+  }, [empresaId, codigoRamo, codigoSecao, registro])
 
   useEffect(() => {
     if (!competicaoId) {
@@ -409,7 +456,7 @@ export function StaffCompeticoesChart({
         </>
       )}
 
-      {competicaoId ? (
+      {competicaoId && !somenteVisualizacao ? (
         <div className="form-actions">
           <Link className="btn btn-soft" to={`/competicoes/${competicaoId}`}>
             Abrir competição

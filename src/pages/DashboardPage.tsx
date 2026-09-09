@@ -1894,11 +1894,15 @@ export function DashboardPage() {
         />
       ) : null}
 
-      {!associadoView && empresaId && ramoFiltro != null ? (
+      {empresaId ? (
         <StaffCompeticoesChart
           empresaId={empresaId}
-          codigoRamo={ramoFiltro}
-          codigoSecao={secaoFiltro}
+          codigoRamo={associadoView ? null : ramoFiltro}
+          codigoSecao={associadoView ? null : secaoFiltro}
+          registro={associadoView ? profile?.registro : null}
+          somenteVisualizacao={
+            associadoView || !hasPermission('competicoes.view')
+          }
         />
       ) : null}
 
