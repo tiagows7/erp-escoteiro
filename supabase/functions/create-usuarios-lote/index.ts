@@ -162,13 +162,7 @@ Deno.serve(async (req) => {
               msg.includes('exists')
             ) {
               userId = await findUserIdByEmail(supabaseUrl, serviceKey, email)
-              if (userId) {
-                await admin.auth.admin.updateUserById(userId, {
-                  password,
-                  email_confirm: true,
-                  user_metadata: { nome },
-                })
-              } else {
+              if (!userId) {
                 failed.push({
                   registro,
                   nome,
@@ -176,6 +170,28 @@ Deno.serve(async (req) => {
                 })
                 continue
               }
+              // Conta Auth já existe: nunca resetar senha nem sequestrar perfil
+              const { data: existingAny } = await admin
+                .from('profiles')
+                .select('id, empresa_id')
+                .eq('id', userId)
+                .maybeSingle()
+              if (existingAny?.empresa_id && existingAny.empresa_id !== empresaId) {
+                failed.push({
+                  registro,
+                  nome,
+                  error: 'E-mail já vinculado a outro grupo.',
+                })
+                continue
+              }
+              if (existingAny?.id) {
+                skipped.push({
+                  registro,
+                  motivo: 'Usuário Auth já existe neste grupo.',
+                })
+                continue
+              }
+              // Auth existe sem perfil neste fluxo: cria só o perfil, sem trocar senha
             } else {
               failed.push({
                 registro,
@@ -189,11 +205,19 @@ Deno.serve(async (req) => {
           }
           emailToId.set(email, userId)
         } else {
-          await admin.auth.admin.updateUserById(userId, {
-            password,
-            email_confirm: true,
-            user_metadata: { nome },
-          })
+          // Já vimos este e-mail neste lote — não sobrescrever senha
+          const { data: existingAny } = await admin
+            .from('profiles')
+            .select('id, empresa_id')
+            .eq('id', userId)
+            .maybeSingle()
+          if (existingAny?.id) {
+            skipped.push({
+              registro,
+              motivo: 'Usuário já processado neste lote.',
+            })
+            continue
+          }
         }
 
         const { data: profile, error: profileError } = await admin

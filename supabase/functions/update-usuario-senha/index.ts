@@ -72,12 +72,19 @@ Deno.serve(async (req) => {
 
     const { data: target } = await adminClient
       .from('profiles')
-      .select('id, empresa_id')
+      .select('id, empresa_id, role')
       .eq('id', userId)
       .maybeSingle()
 
     if (!target) {
       return json({ error: 'Usuário não encontrado.' }, 404)
+    }
+
+    if (target.role === 'super_admin' && callerProfile.role !== 'super_admin') {
+      return json(
+        { error: 'Não é permitido alterar a senha de um super_admin.' },
+        403,
+      )
     }
 
     if (

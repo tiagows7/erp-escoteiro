@@ -453,15 +453,19 @@ Deno.serve(async (req) => {
 
     if (isWebhook && body?.order_nsu) {
       const expectedSecret = Deno.env.get('INFINITEPAY_WEBHOOK_SECRET')?.trim()
-      if (expectedSecret) {
-        const got =
-          req.headers.get('x-webhook-secret')?.trim() ||
-          req.headers.get('x-infinitepay-webhook-secret')?.trim() ||
-          url.searchParams.get('secret')?.trim() ||
-          ''
-        if (got !== expectedSecret) {
-          return json({ error: 'Webhook não autorizado.' }, 401)
-        }
+      if (!expectedSecret) {
+        return json(
+          { error: 'Webhook InfinitePay não configurado (secret ausente).' },
+          503,
+        )
+      }
+      const got =
+        req.headers.get('x-webhook-secret')?.trim() ||
+        req.headers.get('x-infinitepay-webhook-secret')?.trim() ||
+        url.searchParams.get('secret')?.trim() ||
+        ''
+      if (got !== expectedSecret) {
+        return json({ error: 'Webhook não autorizado.' }, 401)
       }
 
       const orderNsu = String(body.order_nsu)

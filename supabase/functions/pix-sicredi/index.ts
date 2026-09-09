@@ -1411,6 +1411,28 @@ async function concluirEBaixar(
     return { paid: true, baixado: true }
   }
 
+  const nowIso = new Date().toISOString()
+  // Claim atômico: evita baixa duplicada (webhook + poll + status)
+  const { data: claimed, error: claimError } = await admin
+    .from('pix_cobrancas')
+    .update({
+      status: 'CONCLUIDA',
+      paid_at: nowIso,
+      baixado_em: nowIso,
+      raw_status: statusPayload,
+      last_error: null,
+      updated_at: nowIso,
+    })
+    .eq('id', cob.id)
+    .is('baixado_em', null)
+    .select('id')
+    .maybeSingle()
+
+  if (claimError) throw new Error(claimError.message)
+  if (!claimed) {
+    return { paid: true, baixado: true }
+  }
+
   const tipopagtoIdCob = Number(cob.tipopagto_id ?? 0)
   const tipopagtoId =
     Number.isFinite(tipopagtoIdCob) && tipopagtoIdCob > 0
@@ -1419,72 +1441,76 @@ async function concluirEBaixar(
   const tipo = String(cob.tipo)
   const receitaIds = (cob.receita_ids as number[]) ?? []
 
-  if (tipo === 'mensalidade' || tipo === 'mensalidade_lote') {
-    await baixarMensalidades(admin, {
-      empresaId: cob.empresa_id as number,
-      receitaIds,
-      tipopagtoId,
-      txid: String(cob.txid),
-    })
-  } else if (tipo === 'atividade') {
-    if (!cob.associado_id || !cob.atividade_id) {
-      throw new Error('Cobrança de atividade incompleta.')
+  try {
+    if (tipo === 'mensalidade' || tipo === 'mensalidade_lote') {
+      await baixarMensalidades(admin, {
+        empresaId: cob.empresa_id as number,
+        receitaIds,
+        tipopagtoId,
+        txid: String(cob.txid),
+      })
+    } else if (tipo === 'atividade') {
+      if (!cob.associado_id || !cob.atividade_id) {
+        throw new Error('Cobrança de atividade incompleta.')
+      }
+      await baixarAtividade(admin, {
+        empresaId: cob.empresa_id as number,
+        associadoId: cob.associado_id as number,
+        atividadeId: cob.atividade_id as number,
+        valor: Number(cob.valor),
+        tipopagtoId,
+        txid: String(cob.txid),
+        descricao: (cob.descricao as string | null) ?? null,
+      })
+    } else if (tipo === 'acao_entre_amigos') {
+      await baixarAcaoEntreAmigos(admin, cob)
+    } else if (tipo === 'venda_evento') {
+      await baixarVendaEvento(admin, cob)
+    } else if (tipo === 'loja') {
+      const itens = parseLojaItens(cob.loja_itens)
+      const meta = parseLojaMeta(cob.loja_itens)
+      let tipopagtoNome: string | null = null
+      if (tipopagtoId) {
+        const { data: tp } = await admin
+          .from('tipo_pagamento')
+          .select('nome')
+          .eq('tipopagto_id', tipopagtoId)
+          .eq('empresa_id', cob.empresa_id as number)
+          .maybeSingle()
+        tipopagtoNome = (tp?.nome as string | null) ?? null
+      }
+      await baixarLoja(admin, {
+        empresaId: cob.empresa_id as number,
+        valor: Number(cob.valor),
+        tipopagtoId,
+        tipopagtoNome,
+        txid: String(cob.txid),
+        descricao: (cob.descricao as string | null) ?? null,
+        observacao: null,
+        itens,
+        canal: meta.canal,
+        compradorNome: meta.compradorNome,
+        compradorTelefone: meta.compradorTelefone,
+        associadoId: (cob.associado_id as number | null) ?? null,
+        criadoPor: (cob.created_by as string | null) ?? null,
+      })
     }
-    await baixarAtividade(admin, {
-      empresaId: cob.empresa_id as number,
-      associadoId: cob.associado_id as number,
-      atividadeId: cob.atividade_id as number,
-      valor: Number(cob.valor),
-      tipopagtoId,
-      txid: String(cob.txid),
-      descricao: (cob.descricao as string | null) ?? null,
-    })
-  } else if (tipo === 'acao_entre_amigos') {
-    await baixarAcaoEntreAmigos(admin, cob)
-  } else if (tipo === 'venda_evento') {
-    await baixarVendaEvento(admin, cob)
-  } else if (tipo === 'loja') {
-    const itens = parseLojaItens(cob.loja_itens)
-    const meta = parseLojaMeta(cob.loja_itens)
-    let tipopagtoNome: string | null = null
-    if (tipopagtoId) {
-      const { data: tp } = await admin
-        .from('tipo_pagamento')
-        .select('nome')
-        .eq('tipopagto_id', tipopagtoId)
-        .maybeSingle()
-      tipopagtoNome = (tp?.nome as string | null) ?? null
-    }
-    await baixarLoja(admin, {
-      empresaId: cob.empresa_id as number,
-      valor: Number(cob.valor),
-      tipopagtoId,
-      tipopagtoNome,
-      txid: String(cob.txid),
-      descricao: (cob.descricao as string | null) ?? null,
-      observacao: null,
-      itens,
-      canal: meta.canal,
-      compradorNome: meta.compradorNome,
-      compradorTelefone: meta.compradorTelefone,
-      associadoId: (cob.associado_id as number | null) ?? null,
-      criadoPor: (cob.created_by as string | null) ?? null,
-    })
+  } catch (e) {
+    // Libera o claim para retry (poll/webhook) se a baixa falhar
+    await admin
+      .from('pix_cobrancas')
+      .update({
+        baixado_em: null,
+        paid_at: null,
+        status: 'CONCLUIDA',
+        last_error:
+          e instanceof Error ? e.message.slice(0, 500) : 'Falha na baixa',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', cob.id)
+    throw e
   }
 
-  const { error } = await admin
-    .from('pix_cobrancas')
-    .update({
-      status: 'CONCLUIDA',
-      paid_at: new Date().toISOString(),
-      baixado_em: new Date().toISOString(),
-      raw_status: statusPayload,
-      last_error: null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', cob.id)
-
-  if (error) throw new Error(error.message)
   return { paid: true, baixado: true }
 }
 
@@ -1779,15 +1805,19 @@ Deno.serve(async (req) => {
     const url = new URL(req.url)
     if (req.method === 'POST' && url.searchParams.get('webhook') === '1') {
       const expectedSecret = Deno.env.get('PIX_SICREDI_WEBHOOK_SECRET')?.trim()
-      if (expectedSecret) {
-        const got =
-          req.headers.get('x-webhook-secret')?.trim() ||
-          req.headers.get('x-pix-webhook-secret')?.trim() ||
-          url.searchParams.get('secret')?.trim() ||
-          ''
-        if (got !== expectedSecret) {
-          return json({ error: 'Webhook não autorizado.' }, 401)
-        }
+      if (!expectedSecret) {
+        return json(
+          { error: 'Webhook PIX não configurado (secret ausente).' },
+          503,
+        )
+      }
+      const got =
+        req.headers.get('x-webhook-secret')?.trim() ||
+        req.headers.get('x-pix-webhook-secret')?.trim() ||
+        url.searchParams.get('secret')?.trim() ||
+        ''
+      if (got !== expectedSecret) {
+        return json({ error: 'Webhook não autorizado.' }, 401)
       }
 
       const payload = await req.json().catch(() => ({}))
@@ -1828,6 +1858,26 @@ Deno.serve(async (req) => {
         .catch(() => null)) as PixRequestBody | null
 
       if (peek?.action === 'poll_pending') {
+        const pollSecret =
+          Deno.env.get('PIX_SICREDI_POLL_SECRET')?.trim() ||
+          Deno.env.get('PIX_SICREDI_WEBHOOK_SECRET')?.trim() ||
+          ''
+        const gotSecret =
+          req.headers.get('x-pix-poll-secret')?.trim() ||
+          String(
+            (peek as { poll_secret?: unknown }).poll_secret ?? '',
+          ).trim()
+        const authBearer = (req.headers.get('Authorization') ?? '')
+          .replace(/^Bearer\s+/i, '')
+          .trim()
+        const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim() ||
+          ''
+        const authorized =
+          (pollSecret && gotSecret && gotSecret === pollSecret) ||
+          (serviceKey && authBearer && authBearer === serviceKey)
+        if (!authorized) {
+          return json({ error: 'Poll não autorizado.' }, 401)
+        }
         try {
           const result = await pollPendingCobrancas(admin)
           return json({ ok: true, ...result })
@@ -2530,7 +2580,7 @@ Deno.serve(async (req) => {
         return json({ error: 'Grupo inválido para esta cobrança.' }, 403)
       }
 
-      const valor = Number(body.valor)
+      let valor = Number(body.valor)
       if (!Number.isFinite(valor) || valor <= 0) {
         return json({ error: 'Valor inválido.' }, 400)
       }
@@ -2552,12 +2602,154 @@ Deno.serve(async (req) => {
         return json({ error: 'Informe atividade e associado.' }, 400)
       }
 
-      const lojaItens =
+      let lojaItens =
         tipo === 'loja' ? parseLojaItens(body.loja_itens) : []
       if (tipo === 'loja' && lojaItens.length === 0) {
         return json({ error: 'Informe os itens da venda da loja.' }, 400)
       }
       const lojaMeta = tipo === 'loja' ? parseLojaMeta(body.loja_itens) : null
+
+      // Recalcula preços/estoque da loja no servidor (não confia no client)
+      if (tipo === 'loja') {
+        const produtoIds = [
+          ...new Set(lojaItens.map((item) => item.produto_id)),
+        ]
+        const { data: produtos, error: produtosError } = await admin
+          .from('produto')
+          .select(
+            'produto_id, nome, valor_venda, estoque_atual, controla_estoque',
+          )
+          .eq('empresa_id', empresaId)
+          .eq('ativo', true)
+          .eq('venda', true)
+          .in('produto_id', produtoIds)
+        if (produtosError || (produtos ?? []).length !== produtoIds.length) {
+          return json(
+            { error: 'Um ou mais produtos não estão mais disponíveis.' },
+            409,
+          )
+        }
+        const byId = new Map(
+          (produtos ?? []).map((p) => [Number(p.produto_id), p]),
+        )
+        const recalculados: LojaItemCob[] = []
+        for (const item of lojaItens) {
+          const produto = byId.get(item.produto_id)
+          if (!produto) {
+            return json({ error: 'Produto inválido no carrinho.' }, 409)
+          }
+          const unitario = Number(produto.valor_venda ?? 0)
+          const estoque = Number(produto.estoque_atual ?? 0)
+          if (!(unitario > 0)) {
+            return json(
+              { error: `“${produto.nome}” está sem preço de venda.` },
+              409,
+            )
+          }
+          if (produto.controla_estoque !== false && item.quantidade > estoque) {
+            return json(
+              { error: `Estoque insuficiente para “${produto.nome}”.` },
+              409,
+            )
+          }
+          recalculados.push({
+            produto_id: item.produto_id,
+            nome: String(produto.nome),
+            unitario,
+            quantidade: item.quantidade,
+          })
+        }
+        lojaItens = recalculados
+        valor = Number(
+          lojaItens
+            .reduce(
+              (total, item) => total + item.unitario * item.quantidade,
+              0,
+            )
+            .toFixed(2),
+        )
+      }
+
+      // Mensalidade: valor da cobrança deve bater com o saldo das receitas
+      if (tipo === 'mensalidade' || tipo === 'mensalidade_lote') {
+        const { data: receitas, error: recErr } = await admin
+          .from('receitas')
+          .select('receita_id, receita_saldo, empresa_id')
+          .eq('empresa_id', empresaId)
+          .in('receita_id', receitaIds)
+        if (recErr || (receitas ?? []).length !== receitaIds.length) {
+          return json(
+            { error: 'Uma ou mais mensalidades são inválidas.' },
+            400,
+          )
+        }
+        const esperado = Number(
+          (receitas ?? [])
+            .reduce(
+              (acc, row) => acc + Math.max(0, Number(row.receita_saldo ?? 0)),
+              0,
+            )
+            .toFixed(2),
+        )
+        if (!(esperado > 0)) {
+          return json({ error: 'Mensalidades sem saldo em aberto.' }, 400)
+        }
+        if (Math.abs(valor - esperado) > 0.009) {
+          return json(
+            {
+              error: `Valor PIX (${valor.toFixed(2)}) diferente do saldo das mensalidades (${esperado.toFixed(2)}).`,
+            },
+            400,
+          )
+        }
+        valor = esperado
+      }
+
+      // Atividade: usa valor cadastrado no servidor
+      if (tipo === 'atividade' && atividadeId) {
+        const { data: ativValor } = await admin
+          .from('atividades')
+          .select('atividade_id, valor')
+          .eq('empresa_id', empresaId)
+          .eq('atividade_id', atividadeId)
+          .maybeSingle()
+        if (!ativValor) {
+          return json({ error: 'Atividade não encontrada.' }, 404)
+        }
+        const esperado = Number(ativValor.valor ?? 0)
+        if (!(esperado > 0)) {
+          return json({ error: 'Atividade sem valor configurado.' }, 400)
+        }
+        if (Math.abs(valor - esperado) > 0.009) {
+          return json(
+            {
+              error: `Valor PIX diferente do valor da atividade (${esperado.toFixed(2)}).`,
+            },
+            400,
+          )
+        }
+        valor = esperado
+      }
+
+      const tipopagtoIdBody = body.tipopagto_id
+        ? Number(body.tipopagto_id)
+        : null
+      if (
+        tipopagtoIdBody != null &&
+        Number.isFinite(tipopagtoIdBody) &&
+        tipopagtoIdBody > 0
+      ) {
+        const { data: tpOk } = await admin
+          .from('tipo_pagamento')
+          .select('tipopagto_id')
+          .eq('empresa_id', empresaId)
+          .eq('tipopagto_id', tipopagtoIdBody)
+          .maybeSingle()
+        if (!tpOk) {
+          return json({ error: 'Tipo de pagamento inválido.' }, 400)
+        }
+      }
+
       const lojaPayload =
         tipo === 'loja'
           ? {
@@ -2567,9 +2759,6 @@ Deno.serve(async (req) => {
               itens: lojaItens,
             }
           : null
-      const tipopagtoIdBody = body.tipopagto_id
-        ? Number(body.tipopagto_id)
-        : null
 
       let ramoId: number | null = null
       let secaoId: number | null = null

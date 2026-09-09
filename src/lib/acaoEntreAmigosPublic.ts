@@ -65,32 +65,19 @@ export async function fetchAcaoPublicInfo(
 }
 
 export async function venderAcaoPublic(
-  token: string,
-  numeros: number[],
-  compradorNome: string,
-  compradorTelefone: string,
+  _token: string,
+  _numeros: number[],
+  _compradorNome: string,
+  _compradorTelefone: string,
 ): Promise<{
   ok: boolean
   mensagem: string
   numerosSalvos: number[]
 }> {
-  const { data, error } = await supabase.rpc('acao_amigos_public_vender', {
-    p_token: token,
-    p_numeros: numeros,
-    p_comprador_nome: compradorNome,
-    p_comprador_telefone: compradorTelefone,
-  })
-
-  if (error) {
-    return { ok: false, mensagem: error.message, numerosSalvos: [] }
-  }
-
-  const row = Array.isArray(data) ? data[0] : data
   return {
-    ok: !!row?.ok,
-    mensagem: String(row?.mensagem ?? 'Não foi possível concluir a venda.'),
-    numerosSalvos: Array.isArray(row?.numeros_salvos)
-      ? row.numeros_salvos.map((n: unknown) => Number(n))
-      : [],
+    ok: false,
+    mensagem:
+      'Venda pública sem pagamento foi desativada. Use o PIX do link da rifa.',
+    numerosSalvos: [],
   }
 }
