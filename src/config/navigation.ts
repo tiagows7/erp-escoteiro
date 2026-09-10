@@ -516,11 +516,11 @@ export function navItemsForProfile(
 
   const items = NAV_ITEMS.map((item) => {
     if (item.type !== 'group') return item
-    // Login por e-mail: itens de cadastro seguem só a permissão do papel.
+    // Itens só de admin do grupo (ex.: Função); associados e demais papéis não veem.
     return {
       ...item,
       children: item.children.filter(
-        (child) => !child.grupoAdminOnly || !isAssociadoLogin(profile),
+        (child) => !child.grupoAdminOnly || isGrupoAdmin(profile?.role),
       ),
     }
   }).filter((item) => {
