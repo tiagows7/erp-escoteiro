@@ -22,6 +22,10 @@ import type { Ramo } from '@/types/database'
 type Lookup = { id: number; nome: string }
 type TabId = 'geral' | 'endereco' | 'outras' | 'responsavel'
 
+function categoriaEhBeneficiario(nome: string | null | undefined): boolean {
+  return (nome ?? '').toUpperCase().includes('BENEFICI')
+}
+
 const emptyForm = {
   registro: '',
   registro_identificador: '',
@@ -298,11 +302,31 @@ export function AssociadoFormPage() {
   /** Novo cadastro ou edição sem aceite prévio (obrigatório, sobretudo para menores). */
   const exigeConsentimento = isNew || !jaTemAceite
 
+  const categoriaSelecionada = useMemo(
+    () =>
+      form.categoria
+        ? (categorias.find((c) => String(c.id) === form.categoria)?.nome ?? null)
+        : null,
+    [categorias, form.categoria],
+  )
+  const isBeneficiario = categoriaEhBeneficiario(categoriaSelecionada)
+
   function update<K extends keyof typeof emptyForm>(
     key: K,
     value: (typeof emptyForm)[K],
   ) {
-    setForm((prev) => ({ ...prev, [key]: value }))
+    setForm((prev) => {
+      const next = { ...prev, [key]: value }
+      if (key === 'categoria') {
+        const nome = value
+          ? (categorias.find((c) => String(c.id) === value)?.nome ?? null)
+          : null
+        if (categoriaEhBeneficiario(nome)) {
+          next.funcao = ''
+        }
+      }
+      return next
+    })
   }
 
   async function onSubmit(event: FormEvent) {
@@ -378,7 +402,7 @@ export function AssociadoFormPage() {
       ramo: numOrNull(form.ramo),
       secao: numOrNull(form.secao),
       patrulha_matilha: numOrNull(form.patrulha_matilha),
-      funcao: numOrNull(form.funcao),
+      funcao: isBeneficiario ? null : numOrNull(form.funcao),
       responsavel_nome: strOrNull(form.responsavel_nome)?.toUpperCase() ?? null,
       responsavel_foneresi: strOrNull(form.responsavel_foneresi),
       responsavel_fonecelular: strOrNull(form.responsavel_fonecelular),
@@ -1007,17 +1031,24 @@ export function AssociadoFormPage() {
               <select
                 id="funcao"
                 className="select"
-                value={form.funcao}
+                value={isBeneficiario ? '' : form.funcao}
                 onChange={(e) => update('funcao', e.target.value)}
-                disabled={disabled}
+                disabled={disabled || isBeneficiario}
               >
-                <option value="">Selecione…</option>
+                <option value="">
+                  {isBeneficiario ? 'Não se aplica' : 'Selecione…'}
+                </option>
                 {funcoes.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.nome}
                   </option>
                 ))}
               </select>
+              {isBeneficiario ? (
+                <p className="field-hint">
+                  Beneficiários não possuem função cadastrada.
+                </p>
+              ) : null}
             </div>
             <div className="field">
               <label htmlFor="ramo">Ramo</label>

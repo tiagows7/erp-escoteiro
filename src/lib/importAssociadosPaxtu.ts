@@ -552,7 +552,11 @@ export async function importAssociadosFromPaxtuExcel(
         endereco_cep: endereco.endereco_cep,
         categoria,
         categoria2,
-        funcao,
+        funcao: categoriaEhBeneficiario(
+          categoria != null ? catNomeById.get(categoria) : null,
+        )
+          ? null
+          : funcao,
         ramo,
         secao,
         patrulha_matilha,
