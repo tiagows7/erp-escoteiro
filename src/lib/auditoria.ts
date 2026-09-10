@@ -9,6 +9,7 @@ export const AUDITORIA_TABELA_LABELS: Record<string, string> = {
   profiles: 'Usuários',
   secao: 'Seções',
   secao_nome: 'Matilhas / Patrulhas / Clã',
+  funcao: 'Função',
   tipo_pagamento: 'Tipo de pagamento',
   tipo_mensalidade: 'Tipo de mensalidade',
   fornecedor_despesa: 'Fornecedores',

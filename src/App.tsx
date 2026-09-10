@@ -19,6 +19,8 @@ import { SecoesPage } from '@/pages/SecoesPage'
 import { SecaoFormPage } from '@/pages/SecaoFormPage'
 import { PatrulhasPage } from '@/pages/PatrulhasPage'
 import { PatrulhaFormPage } from '@/pages/PatrulhaFormPage'
+import { FuncaoPage } from '@/pages/FuncaoPage'
+import { FuncaoFormPage } from '@/pages/FuncaoFormPage'
 import {
   EventosPage,
 } from '@/pages/placeholders'
@@ -190,6 +192,22 @@ export default function App() {
               element={
                 <RequirePermission permission="estrutura.view" grupoAdmin>
                   <PatrulhaFormPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="cadastros/funcao"
+              element={
+                <RequirePermission permission="estrutura.view" grupoAdmin>
+                  <FuncaoPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="cadastros/funcao/:id"
+              element={
+                <RequirePermission permission="estrutura.view" grupoAdmin>
+                  <FuncaoFormPage />
                 </RequirePermission>
               }
             />

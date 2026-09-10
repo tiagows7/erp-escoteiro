@@ -124,6 +124,12 @@ export const NAV_ITEMS: NavItem[] = [
       },
       {
         type: 'link',
+        to: '/cadastros/funcao',
+        label: 'Função',
+        permission: 'estrutura.view',
+      },
+      {
+        type: 'link',
         to: '/cadastros/tipo-mensalidade',
         label: 'Tipo de Mensalidade',
         permission: 'financeiro.view',
