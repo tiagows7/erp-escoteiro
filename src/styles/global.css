@@ -880,6 +880,10 @@ button {
   }
 }
 
+.voluntarios-grid {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
 .gera-whats-panel {
   margin-bottom: 1rem;
 }

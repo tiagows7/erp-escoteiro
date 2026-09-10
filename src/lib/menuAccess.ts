@@ -21,6 +21,7 @@ export const ASSOCIADO_PORTAL_MENU_KEYS = [
   '/calendario',
   '/portal-transparencia',
   '/conquistas',
+  '/voluntarios',
   '/regimento-interno',
   '/documentos/por-online',
   '/atividades',

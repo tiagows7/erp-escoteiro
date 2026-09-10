@@ -55,6 +55,12 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'dashboard.view',
   },
   {
+    type: 'link',
+    to: '/voluntarios',
+    label: 'Voluntários',
+    permission: 'dashboard.view',
+  },
+  {
     type: 'group',
     id: 'documentos',
     label: 'Documentos',
@@ -365,6 +371,12 @@ export function navItemsForProfile(
         type: 'link',
         to: '/conquistas',
         label: 'Conquistas',
+        permission: 'dashboard.view',
+      },
+      {
+        type: 'link',
+        to: '/voluntarios',
+        label: 'Voluntários',
         permission: 'dashboard.view',
       },
       {

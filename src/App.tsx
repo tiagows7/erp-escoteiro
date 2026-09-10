@@ -64,6 +64,7 @@ import { BackupPage } from '@/pages/BackupPage'
 import { AuditoriaPage } from '@/pages/AuditoriaPage'
 import { ConquistasPage } from '@/pages/ConquistasPage'
 import { ConquistaFormPage } from '@/pages/ConquistaFormPage'
+import { VoluntariosPage } from '@/pages/VoluntariosPage'
 import { RegimentoInternoPage } from '@/pages/RegimentoInternoPage'
 import { PlataformaPlanosPage } from '@/pages/PlataformaPlanosPage'
 import { PlataformaCobrancasPage } from '@/pages/PlataformaCobrancasPage'
@@ -661,6 +662,14 @@ export default function App() {
               element={
                 <RequirePermission permission="dashboard.view">
                   <ConquistaFormPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="voluntarios"
+              element={
+                <RequirePermission permission="dashboard.view">
+                  <VoluntariosPage />
                 </RequirePermission>
               }
             />
