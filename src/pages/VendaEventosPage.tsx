@@ -262,18 +262,25 @@ export function VendaEventosPage() {
                     <td>{row.disponiveis}</td>
                     <td>{formatMoney(Number(row.valor_convite ?? 0))}</td>
                     <td className="actions-pair">
-                      <Link
-                        className={`btn ${encerrado ? 'btn-soft' : 'btn-primary'}`}
-                        to={`/vendas/eventos/${row.evento_id}/vender`}
-                      >
-                        {encerrado
-                          ? associadoLogin
-                            ? 'Fechamento'
-                            : 'Lista'
-                          : associadoLogin
-                            ? 'Comprar / link'
-                            : 'Vender'}
-                      </Link>
+                      {encerrado && associadoLogin ? (
+                        <Link
+                          className="btn btn-primary"
+                          to={`/vendas/eventos/${row.evento_id}`}
+                        >
+                          Fechamento
+                        </Link>
+                      ) : (
+                        <Link
+                          className={`btn ${encerrado ? 'btn-soft' : 'btn-primary'}`}
+                          to={`/vendas/eventos/${row.evento_id}/vender`}
+                        >
+                          {encerrado
+                            ? 'Lista'
+                            : associadoLogin
+                              ? 'Comprar / link'
+                              : 'Vender'}
+                        </Link>
+                      )}
                       {!encerrado && !associadoLogin ? (
                         <button
                           type="button"
