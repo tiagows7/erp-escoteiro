@@ -177,6 +177,8 @@ export const ALWAYS_VISIBLE_MENU_KEYS = [
   '/voluntarios',
   '/regimento-interno',
   '/documentos/por-online',
+  // Cadastro novo: libera mesmo com menu_keys antigo (rota exige grupoAdmin).
+  '/cadastros/funcao',
   // Admin do grupo: item só entra no nav se role=admin.
   '/grupos/meu',
   '/sugestoes-melhoria',

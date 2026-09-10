@@ -1,5 +1,9 @@
 import type { Permission } from '@/lib/roles'
-import { isAssociadoLogin, isRamoFinanceiroScoped } from '@/lib/roles'
+import {
+  isAssociadoLogin,
+  isGrupoAdmin,
+  isRamoFinanceiroScoped,
+} from '@/lib/roles'
 import type { Profile } from '@/types/database'
 
 export type NavLinkItem = {
@@ -127,6 +131,7 @@ export const NAV_ITEMS: NavItem[] = [
         to: '/cadastros/funcao',
         label: 'Função',
         permission: 'estrutura.view',
+        grupoAdminOnly: true,
       },
       {
         type: 'link',
