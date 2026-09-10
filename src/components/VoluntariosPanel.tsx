@@ -269,6 +269,11 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
                           <RegistroProvisorioBadge />
                         ) : null}
                       </div>
+                      {pessoa.funcaoNome ? (
+                        <span className="conquistas-lista-secao">
+                          {pessoa.funcaoNome}
+                        </span>
+                      ) : null}
                       {pessoa.secaoNome ? (
                         <span className="conquistas-lista-secao muted">
                           {pessoa.secaoNome}
