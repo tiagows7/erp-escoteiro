@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
-import { isAssociadoLogin } from '@/lib/roles'
+import { getLoginVia, isAssociadoLogin } from '@/lib/roles'
 
 type VoluntarioPessoa = {
   associado_id: number
@@ -76,8 +76,11 @@ function isFuncaoDirigente(funcNome: string | null) {
 export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
   const { hasPermission, profile } = useAuth()
   const associadoLogin = isAssociadoLogin(profile)
+  // Login por registro: só consulta — nunca abre cadastro do associado.
   const canOpenAssociado =
-    !associadoLogin && hasPermission('associados.view')
+    !associadoLogin &&
+    getLoginVia() !== 'registro' &&
+    hasPermission('associados.view')
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

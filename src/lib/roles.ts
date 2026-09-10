@@ -206,6 +206,16 @@ export function setLoginVia(via: 'email' | 'registro') {
   }
 }
 
+export function getLoginVia(): 'email' | 'registro' | null {
+  try {
+    const via = sessionStorage.getItem(LOGIN_VIA_KEY)
+    if (via === 'email' || via === 'registro') return via
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
 export function clearLoginVia() {
   try {
     sessionStorage.removeItem(LOGIN_VIA_KEY)

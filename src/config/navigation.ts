@@ -450,6 +450,8 @@ export function navItemsForProfile(
       const alwaysTo = [
         '/dashboard',
         '/calendario',
+        '/conquistas',
+        '/voluntarios',
         '/regimento-interno',
         '/documentos/por-online',
         '/projetos',
