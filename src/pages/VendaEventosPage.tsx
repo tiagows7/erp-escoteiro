@@ -11,6 +11,7 @@ import { isEncerrado } from '@/lib/encerrado'
 import { totalConvitesEvento } from '@/lib/vendaEventos'
 import { linkPublicoVendaEvento } from '@/lib/vendaEventosPublic'
 import { isAssociadoLogin } from '@/lib/roles'
+import { filtroAtividadesRamoOuGrupo } from '@/lib/atividadeVisibilidade'
 import type { VendaEvento } from '@/types/database'
 
 type EventoRow = VendaEvento & {
@@ -37,25 +38,79 @@ export function VendaEventosPage() {
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [associadoRamo, setAssociadoRamo] = useState<number | null>(null)
+  const [scopeReady, setScopeReady] = useState(!associadoLogin)
 
   useEffect(() => {
-    if (!empresaId) {
-      setRows([])
-      setLoading(false)
+    let mounted = true
+    void (async () => {
+      if (!associadoLogin) {
+        if (mounted) {
+          setAssociadoRamo(null)
+          setScopeReady(true)
+        }
+        return
+      }
+
+      let ramo: number | null =
+        profile?.codigo_ramo != null && profile.codigo_ramo > 0
+          ? profile.codigo_ramo
+          : null
+
+      if (empresaId && profile?.registro) {
+        const registroNum = Number(String(profile.registro).replace(/\D/g, ''))
+        if (Number.isFinite(registroNum) && registroNum > 0) {
+          const { data } = await supabase
+            .from('associados')
+            .select('ramo')
+            .eq('empresa_id', empresaId)
+            .eq('registro', registroNum)
+            .maybeSingle()
+          if (data?.ramo != null && Number(data.ramo) > 0) {
+            ramo = Number(data.ramo)
+          }
+        }
+      }
+
+      if (!mounted) return
+      setAssociadoRamo(ramo)
+      setScopeReady(true)
+    })()
+
+    return () => {
+      mounted = false
+    }
+  }, [associadoLogin, empresaId, profile?.codigo_ramo, profile?.registro])
+
+  useEffect(() => {
+    if (!empresaId || !scopeReady) {
+      if (!empresaId) {
+        setRows([])
+        setLoading(false)
+      }
       return
     }
 
     let mounted = true
     void (async () => {
       setLoading(true)
+      let eventosQuery = supabase
+        .from('venda_eventos')
+        .select(
+          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, link_token, encerrado_em, created_at, ramo, secao',
+        )
+        .eq('empresa_id', empresaId)
+        .order('nome')
+
+      // Associado com ramo: eventos do ramo + grupo todo (ramo null).
+      if (associadoLogin && associadoRamo != null) {
+        eventosQuery = eventosQuery.or(
+          filtroAtividadesRamoOuGrupo(associadoRamo),
+        )
+      }
+
       const [eventosRes, convitesRes] = await Promise.all([
-        supabase
-          .from('venda_eventos')
-          .select(
-            'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, link_token, encerrado_em, created_at',
-          )
-          .eq('empresa_id', empresaId)
-          .order('nome'),
+        eventosQuery,
         supabase
           .from('venda_evento_convite')
           .select('evento_id')
@@ -94,7 +149,7 @@ export function VendaEventosPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, flashTick])
+  }, [empresaId, flashTick, scopeReady, associadoLogin, associadoRamo])
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()

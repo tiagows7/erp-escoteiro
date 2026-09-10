@@ -12,6 +12,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { AddIcon } from '@/components/AddIcon'
 import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
+import { filtroAtividadesRamoOuGrupo } from '@/lib/atividadeVisibilidade'
 import type { CalendarioGrupoEvento, Ramo } from '@/types/database'
 
 type SecaoOpt = { secao_id: number; nome: string; ramo: number | null }
@@ -333,9 +334,9 @@ export function CalendarioGrupoPage() {
         .lte('data_inicio', to)
         .or(`data_fim.is.null,data_fim.gte.${from}`)
 
-      // Associado com ramo: só eventos daquele ramo (sem coluna GRUPO).
+      // Associado com ramo: eventos do ramo + grupo todo (ramo null).
       if (associadoLogin && associadoRamo != null) {
-        qy = qy.eq('ramo', associadoRamo)
+        qy = qy.or(filtroAtividadesRamoOuGrupo(associadoRamo))
       } else if (filtroRamo) {
         qy = qy.or(`ramo.is.null,ramo.eq.${Number(filtroRamo)}`)
       } else if (ramoScoped != null) {
@@ -395,8 +396,8 @@ export function CalendarioGrupoPage() {
       })
     }
 
-    // GRUPO só na visão geral (sem ramo travado).
-    if (scopedId == null) {
+    // GRUPO: visão geral, ou associado (sempre vê eventos do grupo todo).
+    if (scopedId == null || associadoLogin) {
       cols.push({
         key: 'grupo',
         ramoId: null,

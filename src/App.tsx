@@ -529,7 +529,7 @@ export default function App() {
             <Route
               path="vendas/eventos/:id/vender"
               element={
-                <RequirePermission permission="vendas.write">
+                <RequirePermission anyOf={['vendas.view', 'vendas.write']}>
                   <VendaEventoVendaPage />
                 </RequirePermission>
               }
