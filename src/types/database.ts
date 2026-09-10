@@ -392,9 +392,19 @@ export type VendaEventoCompra = {
   valor: number
   forma_pagamento: VendaEventoFormaPagamento | null
   vendido_por: string | null
+  associado_vendedor_id: number | null
   pix_cobranca_id: number | null
   receita_id: number | null
   vendido_em: string
+  created_at: string | null
+}
+
+export type VendaEventoVendedor = {
+  vendedor_id: number
+  empresa_id: number
+  evento_id: number
+  associado_id: number
+  link_token: string
   created_at: string | null
 }
 

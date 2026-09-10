@@ -345,6 +345,11 @@ export function VendaEventoPublicPage() {
             <span className="badge badge-danger">Encerrado</span>
           ) : null}
         </h1>
+        {info.vendedor_nome ? (
+          <p className="muted" style={{ marginTop: '0.35rem' }}>
+            Vendedor: <strong>{info.vendedor_nome}</strong>
+          </p>
+        ) : null}
         <div className="evento-tipos-precos">
           {tipos.length > 0 ? (
             tipos.map((t) => (

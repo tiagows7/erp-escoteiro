@@ -272,7 +272,7 @@ export function VendaEventosPage() {
                             ? 'Comprar'
                             : 'Vender'}
                       </Link>
-                      {!encerrado ? (
+                      {!encerrado && !associadoLogin ? (
                         <button
                           type="button"
                           className="btn btn-soft"

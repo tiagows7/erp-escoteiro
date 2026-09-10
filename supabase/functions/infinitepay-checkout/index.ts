@@ -343,6 +343,9 @@ async function baixarPedidoEvento(
       vendido_por: pedido.vendido_por
         ? String(pedido.vendido_por)
         : null,
+      associado_vendedor_id: pedido.associado_vendedor_id
+        ? Number(pedido.associado_vendedor_id)
+        : null,
       infinitepay_pedido_id: pedidoId,
     })
     .select('compra_id')
@@ -531,15 +534,48 @@ Deno.serve(async (req) => {
       const token = String(body.link_token ?? '').trim()
       if (!token) return json({ error: 'Link inválido.' }, 400)
 
-      const { data: evento, error: eventoError } = await admin
-        .from('venda_eventos')
-        .select(
-          'evento_id, empresa_id, ramo, secao, encerrado_em, valor_convite',
-        )
+      let evento: {
+        evento_id: number
+        empresa_id: number
+        ramo: number | null
+        secao: number | null
+        encerrado_em: string | null
+        valor_convite: number
+      } | null = null
+
+      const { data: vendedorRow } = await admin
+        .from('venda_evento_vendedor')
+        .select('evento_id')
         .eq('link_token', token)
         .maybeSingle()
 
-      if (eventoError || !evento) {
+      if (vendedorRow?.evento_id) {
+        const { data: eventoRow, error: eventoError } = await admin
+          .from('venda_eventos')
+          .select(
+            'evento_id, empresa_id, ramo, secao, encerrado_em, valor_convite',
+          )
+          .eq('evento_id', vendedorRow.evento_id)
+          .maybeSingle()
+        if (eventoError || !eventoRow) {
+          return json({ error: 'Link inválido ou expirado.' }, 404)
+        }
+        evento = eventoRow as typeof evento
+      } else {
+        const { data: eventoRow, error: eventoError } = await admin
+          .from('venda_eventos')
+          .select(
+            'evento_id, empresa_id, ramo, secao, encerrado_em, valor_convite',
+          )
+          .eq('link_token', token)
+          .maybeSingle()
+        if (eventoError || !eventoRow) {
+          return json({ error: 'Link inválido ou expirado.' }, 404)
+        }
+        evento = eventoRow as typeof evento
+      }
+
+      if (!evento) {
         return json({ error: 'Link inválido ou expirado.' }, 404)
       }
 
@@ -655,15 +691,54 @@ Deno.serve(async (req) => {
         return json({ error: 'Informe ao menos um nome.' }, 400)
       }
 
-      const { data: evento, error: eventoError } = await admin
-        .from('venda_eventos')
-        .select(
-          'evento_id, empresa_id, nome, valor_convite, numero_inicial, numero_final, link_token, ramo, secao, encerrado_em',
-        )
+      let associadoVendedorId: number | null = null
+      let evento: {
+        evento_id: number
+        empresa_id: number
+        nome: string
+        valor_convite: number
+        numero_inicial: number
+        numero_final: number
+        link_token: string
+        ramo: number | null
+        secao: number | null
+        encerrado_em: string | null
+      } | null = null
+
+      const { data: vendedorRow } = await admin
+        .from('venda_evento_vendedor')
+        .select('associado_id, evento_id')
         .eq('link_token', token)
         .maybeSingle()
 
-      if (eventoError || !evento) {
+      if (vendedorRow?.evento_id) {
+        associadoVendedorId = Number(vendedorRow.associado_id)
+        const { data: eventoRow, error: eventoError } = await admin
+          .from('venda_eventos')
+          .select(
+            'evento_id, empresa_id, nome, valor_convite, numero_inicial, numero_final, link_token, ramo, secao, encerrado_em',
+          )
+          .eq('evento_id', vendedorRow.evento_id)
+          .maybeSingle()
+        if (eventoError || !eventoRow) {
+          return json({ error: 'Link inválido ou expirado.' }, 404)
+        }
+        evento = eventoRow as typeof evento
+      } else {
+        const { data: eventoRow, error: eventoError } = await admin
+          .from('venda_eventos')
+          .select(
+            'evento_id, empresa_id, nome, valor_convite, numero_inicial, numero_final, link_token, ramo, secao, encerrado_em',
+          )
+          .eq('link_token', token)
+          .maybeSingle()
+        if (eventoError || !eventoRow) {
+          return json({ error: 'Link inválido ou expirado.' }, 404)
+        }
+        evento = eventoRow as typeof evento
+      }
+
+      if (!evento) {
         return json({ error: 'Link inválido ou expirado.' }, 404)
       }
       if (evento.encerrado_em) {
@@ -763,6 +838,7 @@ Deno.serve(async (req) => {
           descricao,
           status: 'pendente',
           vendido_por: vendidoPor,
+          associado_vendedor_id: associadoVendedorId,
         })
         .select('id, order_nsu')
         .single()

@@ -35,6 +35,7 @@ export const AUDITORIA_TABELA_LABELS: Record<string, string> = {
   venda_evento_compra: 'Compras de evento',
   venda_evento_convite: 'Convites',
   venda_evento_tipo: 'Tipos de convite',
+  venda_evento_vendedor: 'Vendedores do evento',
   loja_pedido: 'Pedidos da loja',
   loja_pedido_item: 'Itens do pedido (loja)',
   infinitepay_pedidos: 'Pedidos InfinitePay',

@@ -66,3 +66,39 @@ export async function comprarConvitesEvento(input: {
       : [],
   }
 }
+
+/** Garante link público do associado logado para o evento. */
+export async function ensureMeuLinkEvento(eventoId: number): Promise<{
+  linkToken: string | null
+  associadoId: number | null
+  vendedorNome: string | null
+  error: string | null
+}> {
+  const { data, error } = await supabase.rpc('venda_evento_meu_link', {
+    p_evento_id: eventoId,
+  })
+  if (error) {
+    return {
+      linkToken: null,
+      associadoId: null,
+      vendedorNome: null,
+      error: error.message,
+    }
+  }
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row?.link_token) {
+    return {
+      linkToken: null,
+      associadoId: null,
+      vendedorNome: null,
+      error: 'Não foi possível gerar seu link (verifique o registro do associado).',
+    }
+  }
+  return {
+    linkToken: String(row.link_token),
+    associadoId:
+      row.associado_id != null ? Number(row.associado_id) : null,
+    vendedorNome: row.vendedor_nome ? String(row.vendedor_nome) : null,
+    error: null,
+  }
+}

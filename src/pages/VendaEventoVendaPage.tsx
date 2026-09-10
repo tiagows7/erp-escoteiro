@@ -17,6 +17,7 @@ import {
 import type { PixPublicEventoInput } from '@/lib/pixSicrediPublic'
 import {
   comprarConvitesEvento,
+  ensureMeuLinkEvento,
   normalizeRestricoesAlimentares,
   totalConvitesEvento,
 } from '@/lib/vendaEventos'
@@ -73,6 +74,7 @@ export function VendaEventoVendaPage() {
   const [convitesPagos, setConvitesPagos] = useState<ConviteImpressoItem[]>([])
   const [pixOpen, setPixOpen] = useState(false)
   const [pixInput, setPixInput] = useState<PixPublicEventoInput | null>(null)
+  const [meuLinkToken, setMeuLinkToken] = useState<string | null>(null)
   const [editandoConviteId, setEditandoConviteId] = useState<number | null>(
     null,
   )
@@ -264,6 +266,19 @@ export function VendaEventoVendaPage() {
         },
       ])
     }
+
+    if (associadoLogin) {
+      const meu = await ensureMeuLinkEvento(eventoId)
+      if (meu.error) {
+        setMeuLinkToken(null)
+        // Não bloqueia a tela — só impede copiar link pessoal.
+      } else {
+        setMeuLinkToken(meu.linkToken)
+      }
+    } else {
+      setMeuLinkToken(null)
+    }
+
     setError(null)
     setLoading(false)
   }
@@ -484,7 +499,9 @@ export function VendaEventoVendaPage() {
       await navigator.clipboard.writeText(url)
       toast.success(
         'Link copiado!',
-        'Envie para quem for comprar os convites fora do app.',
+        associadoLogin
+          ? 'Compras por este link serão creditadas a você.'
+          : 'Envie para quem for comprar os convites fora do app.',
       )
     } catch {
       window.prompt('Copie o link:', url)
@@ -684,7 +701,16 @@ export function VendaEventoVendaPage() {
           ) : null}
         </div>
         <div className="page-header-actions actions-pair">
-          {evento.link_token && !encerrado ? (
+          {associadoLogin && meuLinkToken && !encerrado ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void copiarLink(meuLinkToken)}
+            >
+              Copiar meu link
+            </button>
+          ) : null}
+          {evento.link_token && !encerrado && !associadoLogin ? (
             <button
               type="button"
               className="btn btn-primary"

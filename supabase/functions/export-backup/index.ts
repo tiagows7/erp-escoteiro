@@ -40,6 +40,7 @@ const TENANT_TABLES: { name: string; filterColumn: string }[] = [
   { name: 'acao_entre_amigos_faixa', filterColumn: 'empresa_id' },
   { name: 'acao_entre_amigos_venda', filterColumn: 'empresa_id' },
   { name: 'venda_eventos', filterColumn: 'empresa_id' },
+  { name: 'venda_evento_vendedor', filterColumn: 'empresa_id' },
   { name: 'venda_evento_compra', filterColumn: 'empresa_id' },
   { name: 'venda_evento_convite', filterColumn: 'empresa_id' },
   { name: 'venda_evento_tipo', filterColumn: 'empresa_id' },
