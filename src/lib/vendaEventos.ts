@@ -68,7 +68,10 @@ export async function comprarConvitesEvento(input: {
 }
 
 /** Garante link público do associado logado para o evento. */
-export async function ensureMeuLinkEvento(eventoId: number): Promise<{
+export async function ensureMeuLinkEvento(
+  eventoId: number,
+  opts?: { empresaId?: number; registro?: string | null },
+): Promise<{
   linkToken: string | null
   associadoId: number | null
   vendedorNome: string | null
@@ -77,28 +80,96 @@ export async function ensureMeuLinkEvento(eventoId: number): Promise<{
   const { data, error } = await supabase.rpc('venda_evento_meu_link', {
     p_evento_id: eventoId,
   })
-  if (error) {
+  if (!error) {
+    const row = Array.isArray(data) ? data[0] : data
+    if (row?.link_token) {
+      return {
+        linkToken: String(row.link_token),
+        associadoId:
+          row.associado_id != null ? Number(row.associado_id) : null,
+        vendedorNome: row.vendedor_nome ? String(row.vendedor_nome) : null,
+        error: null,
+      }
+    }
+  }
+
+  // Fallback: cria o link direto (mesmo critério da ação entre amigos).
+  const empresaId = opts?.empresaId
+  const registroNum = Number(String(opts?.registro ?? '').replace(/\D/g, ''))
+  if (
+    !empresaId ||
+    !Number.isFinite(registroNum) ||
+    registroNum <= 0
+  ) {
     return {
       linkToken: null,
       associadoId: null,
       vendedorNome: null,
-      error: error.message,
+      error:
+        error?.message ??
+        'Não foi possível gerar seu link (verifique o registro do associado).',
     }
   }
-  const row = Array.isArray(data) ? data[0] : data
-  if (!row?.link_token) {
+
+  const { data: assoc, error: assocError } = await supabase
+    .from('associados')
+    .select('associado_id, nome')
+    .eq('empresa_id', empresaId)
+    .eq('registro', registroNum)
+    .maybeSingle()
+
+  if (assocError || !assoc?.associado_id) {
     return {
       linkToken: null,
       associadoId: null,
       vendedorNome: null,
-      error: 'Não foi possível gerar seu link (verifique o registro do associado).',
+      error:
+        assocError?.message ??
+        'Associado não encontrado para o seu registro.',
     }
   }
+
+  const { data: existing } = await supabase
+    .from('venda_evento_vendedor')
+    .select('link_token')
+    .eq('evento_id', eventoId)
+    .eq('associado_id', assoc.associado_id)
+    .maybeSingle()
+
+  if (existing?.link_token) {
+    return {
+      linkToken: String(existing.link_token),
+      associadoId: Number(assoc.associado_id),
+      vendedorNome: assoc.nome ? String(assoc.nome) : null,
+      error: null,
+    }
+  }
+
+  const { data: created, error: createError } = await supabase
+    .from('venda_evento_vendedor')
+    .insert({
+      empresa_id: empresaId,
+      evento_id: eventoId,
+      associado_id: assoc.associado_id,
+    })
+    .select('link_token')
+    .single()
+
+  if (createError || !created?.link_token) {
+    return {
+      linkToken: null,
+      associadoId: Number(assoc.associado_id),
+      vendedorNome: assoc.nome ? String(assoc.nome) : null,
+      error:
+        createError?.message ??
+        'Não foi possível criar seu link de venda.',
+    }
+  }
+
   return {
-    linkToken: String(row.link_token),
-    associadoId:
-      row.associado_id != null ? Number(row.associado_id) : null,
-    vendedorNome: row.vendedor_nome ? String(row.vendedor_nome) : null,
+    linkToken: String(created.link_token),
+    associadoId: Number(assoc.associado_id),
+    vendedorNome: assoc.nome ? String(assoc.nome) : null,
     error: null,
   }
 }

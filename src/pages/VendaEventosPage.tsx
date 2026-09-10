@@ -267,9 +267,11 @@ export function VendaEventosPage() {
                         to={`/vendas/eventos/${row.evento_id}/vender`}
                       >
                         {encerrado
-                          ? 'Lista'
+                          ? associadoLogin
+                            ? 'Fechamento'
+                            : 'Lista'
                           : associadoLogin
-                            ? 'Comprar'
+                            ? 'Comprar / link'
                             : 'Vender'}
                       </Link>
                       {!encerrado && !associadoLogin ? (

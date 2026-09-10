@@ -268,12 +268,13 @@ export function VendaEventoVendaPage() {
     }
 
     if (associadoLogin) {
-      const meu = await ensureMeuLinkEvento(eventoId)
-      if (meu.error) {
-        setMeuLinkToken(null)
-        // Não bloqueia a tela — só impede copiar link pessoal.
-      } else {
-        setMeuLinkToken(meu.linkToken)
+      const meu = await ensureMeuLinkEvento(eventoId, {
+        empresaId,
+        registro: profile?.registro,
+      })
+      setMeuLinkToken(meu.linkToken)
+      if (meu.error && !meu.linkToken) {
+        console.warn('Link do vendedor:', meu.error)
       }
     } else {
       setMeuLinkToken(null)
@@ -508,6 +509,27 @@ export function VendaEventoVendaPage() {
     }
   }
 
+  async function copiarMeuLink() {
+    if (isEncerrado(evento?.encerrado_em)) return
+    let token = meuLinkToken
+    if (!token) {
+      const meu = await ensureMeuLinkEvento(eventoId, {
+        empresaId,
+        registro: profile?.registro,
+      })
+      if (meu.error || !meu.linkToken) {
+        toast.error(
+          'Não foi possível gerar seu link',
+          meu.error ?? 'Verifique se seu registro está vinculado a um associado.',
+        )
+        return
+      }
+      token = meu.linkToken
+      setMeuLinkToken(token)
+    }
+    await copiarLink(token)
+  }
+
   async function onComprar(event: FormEvent) {
     event.preventDefault()
     if (!evento) return
@@ -701,11 +723,11 @@ export function VendaEventoVendaPage() {
           ) : null}
         </div>
         <div className="page-header-actions actions-pair">
-          {associadoLogin && meuLinkToken && !encerrado ? (
+          {associadoLogin && !encerrado ? (
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => void copiarLink(meuLinkToken)}
+              onClick={() => void copiarMeuLink()}
             >
               Copiar meu link
             </button>
@@ -1105,6 +1127,7 @@ export function VendaEventoVendaPage() {
         }}
       />
 
+      {!associadoLogin ? (
       <section className="panel evento-lista-conferencia">
         <div className="evento-lista-conferencia-cabecalho print-only">
           <h2>Lista de convites — {evento.nome}</h2>
@@ -1380,6 +1403,7 @@ export function VendaEventoVendaPage() {
           </>
         )}
       </section>
+      ) : null}
     </>
   )
 }
