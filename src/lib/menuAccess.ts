@@ -173,6 +173,8 @@ export function pathMatchesMenuKey(pathname: string, menuKey: string): boolean {
 export const ALWAYS_VISIBLE_MENU_KEYS = [
   '/dashboard',
   '/competicoes',
+  '/conquistas',
+  '/voluntarios',
   '/regimento-interno',
   '/documentos/por-online',
   // Admin do grupo: item só entra no nav se role=admin.
@@ -186,6 +188,8 @@ export const ALWAYS_VISIBLE_MENU_KEYS = [
  */
 export const ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS = [
   '/calendario',
+  '/conquistas',
+  '/voluntarios',
   '/regimento-interno',
   '/documentos/por-online',
   '/projetos',
