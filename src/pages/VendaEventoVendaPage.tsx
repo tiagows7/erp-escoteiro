@@ -700,6 +700,13 @@ export function VendaEventoVendaPage() {
             >
               {encerrado ? 'Ver evento' : 'Editar evento'}
             </Link>
+          ) : associadoLogin && encerrado ? (
+            <Link
+              className="btn btn-primary"
+              to={`/vendas/eventos/${evento.evento_id}`}
+            >
+              Fechamento
+            </Link>
           ) : null}
           <Link className="btn btn-soft" to="/vendas/eventos">
             Voltar

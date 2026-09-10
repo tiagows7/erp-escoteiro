@@ -288,6 +288,13 @@ export function VendaEventosPage() {
                         >
                           {encerrado ? 'Ver' : 'Editar'}
                         </Link>
+                      ) : associadoLogin && encerrado ? (
+                        <Link
+                          className="btn btn-primary"
+                          to={`/vendas/eventos/${row.evento_id}`}
+                        >
+                          Fechamento
+                        </Link>
                       ) : null}
                     </td>
                   </tr>

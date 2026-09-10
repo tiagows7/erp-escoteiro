@@ -301,10 +301,31 @@ export function VendaEventoFormPage() {
       (s, row) => s + Number(row.despesa_valor ?? 0),
       0,
     )
+    const recebido = receitas.reduce(
+      (s, row) =>
+        s +
+        Math.max(
+          0,
+          Number(row.receita_valor ?? 0) - Number(row.receita_saldo ?? 0),
+        ),
+      0,
+    )
+    const pago = despesas.reduce(
+      (s, row) =>
+        s +
+        Math.max(
+          0,
+          Number(row.despesa_valor ?? 0) - Number(row.despesa_saldo ?? 0),
+        ),
+      0,
+    )
     return {
       totalReceitas,
       totalDespesas,
+      recebido,
+      pago,
       resultado: totalReceitas - totalDespesas,
+      saldoCaixa: recebido - pago,
     }
   }, [receitas, despesas])
 
@@ -314,6 +335,27 @@ export function VendaEventoFormPage() {
       : totais.resultado < -0.005
         ? 'deficit'
         : 'zero'
+
+  const resultadoLabel =
+    totais.resultado > 0.005
+      ? 'Sobrou'
+      : totais.resultado < -0.005
+        ? 'Não sobrou (faltou)'
+        : 'Zerado'
+
+  const caixaTone =
+    totais.saldoCaixa > 0.005
+      ? 'ok'
+      : totais.saldoCaixa < -0.005
+        ? 'deficit'
+        : 'zero'
+
+  const caixaLabel =
+    totais.saldoCaixa > 0.005
+      ? 'Sobra de caixa'
+      : totais.saldoCaixa < -0.005
+        ? 'Falta de caixa'
+        : 'Caixa zerado'
 
   if (associadoLogin && isNew) {
     return <Navigate to="/vendas/eventos" replace />
@@ -622,15 +664,23 @@ export function VendaEventoFormPage() {
       <header className="page-header">
         <div>
           <h2>
-            {isNew ? 'Novo evento' : encerrado ? 'Evento' : 'Editar evento'}{' '}
+            {isNew
+              ? 'Novo evento'
+              : associadoLogin && encerrado
+                ? 'Fechamento do evento'
+                : encerrado
+                  ? 'Evento'
+                  : 'Editar evento'}{' '}
             {encerrado ? (
               <span className="badge badge-danger">Encerrado</span>
             ) : null}
           </h2>
           <p>
-            {encerrado
-              ? 'Somente visualização — vendas e lançamentos bloqueados.'
-              : 'Nome, ramo/seção, faixa de convites e valor unitário'}
+            {associadoLogin && encerrado
+              ? 'Resumo do fechamento — receitas, despesas e caixa.'
+              : encerrado
+                ? 'Somente visualização — vendas e lançamentos bloqueados.'
+                : 'Nome, ramo/seção, faixa de convites e valor unitário'}
           </p>
         </div>
         <div className="page-header-actions">
@@ -673,6 +723,19 @@ export function VendaEventoFormPage() {
         </div>
       </header>
 
+      {associadoLogin && encerrado ? (
+        <section className="panel">
+          <p style={{ marginTop: 0 }}>
+            <strong>{form.nome || 'Evento'}</strong>
+          </p>
+          <p className="muted" style={{ marginBottom: 0 }}>
+            Data: {formatDate(form.data_evento || null)}
+            {form.numero_inicial && form.numero_final
+              ? ` · Convites ${form.numero_inicial}–${form.numero_final}`
+              : null}
+          </p>
+        </section>
+      ) : (
       <form className="panel" onSubmit={(e) => void onSubmit(e)}>
         {error ? (
           <AlertMessage tone="error" title="Atenção">
@@ -965,6 +1028,7 @@ export function VendaEventoFormPage() {
           )}
         </div>
       </form>
+      )}
 
       {!isNew ? (
         <>
@@ -972,7 +1036,9 @@ export function VendaEventoFormPage() {
             className="panel atividade-contas-resumo"
             style={{ marginTop: '1rem' }}
           >
-            <h3 style={{ marginTop: 0 }}>Resumo financeiro</h3>
+            <h3 style={{ marginTop: 0 }}>
+              {encerrado ? 'Fechamento financeiro' : 'Resumo financeiro'}
+            </h3>
             <div className="atividade-contas-grid">
               <div>
                 <span className="muted">Receitas</span>
@@ -982,21 +1048,35 @@ export function VendaEventoFormPage() {
                 <span className="muted">Despesas</span>
                 <strong>{formatMoney(totais.totalDespesas)}</strong>
               </div>
+              <div>
+                <span className="muted">Recebido</span>
+                <strong>{formatMoney(totais.recebido)}</strong>
+              </div>
+              <div>
+                <span className="muted">Pago</span>
+                <strong>{formatMoney(totais.pago)}</strong>
+              </div>
             </div>
             <div
               className={`atividade-contas-saldo atividade-contas-saldo--${resultadoTone}`}
             >
               <div>
                 <span className="muted">
-                  {totais.resultado > 0
-                    ? 'Lucro'
-                    : totais.resultado < 0
-                      ? 'Prejuízo'
-                      : 'Resultado'}{' '}
-                  (receitas − despesas)
+                  Resultado (receitas − despesas)
                 </span>
                 <strong>{formatMoney(totais.resultado)}</strong>
               </div>
+              <p>{resultadoLabel}</p>
+            </div>
+            <div
+              className={`atividade-contas-saldo atividade-contas-saldo--${caixaTone}`}
+              style={{ marginTop: '0.65rem' }}
+            >
+              <div>
+                <span className="muted">Caixa (recebido − pago)</span>
+                <strong>{formatMoney(totais.saldoCaixa)}</strong>
+              </div>
+              <p>{caixaLabel}</p>
             </div>
           </section>
 
