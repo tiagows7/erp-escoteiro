@@ -53,6 +53,26 @@ function sortByNome(a: VoluntarioPessoa, b: VoluntarioPessoa) {
   return a.nome.localeCompare(b.nome, 'pt-BR')
 }
 
+/** Nos cards de ramo: chefes de seção primeiro, depois assistentes, depois os demais. */
+function sortEscotistasRamo(a: VoluntarioPessoa, b: VoluntarioPessoa) {
+  const rank = (p: VoluntarioPessoa) => {
+    if (nomeContem(p.funcaoNome, 'ASSISTENTE')) return 1
+    if (nomeContem(p.funcaoNome, 'CHEFE')) return 0
+    return 2
+  }
+  const byFuncao = rank(a) - rank(b)
+  if (byFuncao !== 0) return byFuncao
+  return sortByNome(a, b)
+}
+
+function isFuncaoDirigente(funcNome: string | null) {
+  return (
+    nomeContem(funcNome, 'DIRIGENTE') ||
+    nomeContem(funcNome, 'DIRETOR') ||
+    nomeContem(funcNome, 'DIRETO')
+  )
+}
+
 export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
   const { hasPermission, profile } = useAuth()
   const associadoLogin = isAssociadoLogin(profile)
@@ -133,9 +153,12 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
         row.funcao != null ? (funcMap.get(row.funcao) ?? null) : null
 
       const isDirigente =
-        nomeContem(catNome, 'DIRIGENTE') || nomeContem(funcNome, 'DIRIGENTE')
+        nomeContem(catNome, 'DIRIGENTE') || isFuncaoDirigente(funcNome)
       const isEscotista =
-        nomeContem(catNome, 'ESCOTISTA') || nomeContem(funcNome, 'ESCOTISTA')
+        nomeContem(catNome, 'ESCOTISTA') ||
+        nomeContem(funcNome, 'ESCOTISTA') ||
+        nomeContem(funcNome, 'CHEFE') ||
+        nomeContem(funcNome, 'ASSISTENTE')
 
       if (!isDirigente && !isEscotista) continue
 
@@ -161,8 +184,6 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
         list.push(pessoa)
         porRamo.set(row.ramo, list)
       } else {
-        // Escotista sem ramo: fica no card de dirigentes? Melhor card próprio
-        // — colocamos em um bucket “Sem ramo” via ramo_id 0 virtual below.
         const list = porRamo.get(0) ?? []
         list.push(pessoa)
         porRamo.set(0, list)
@@ -171,28 +192,31 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
 
     dirigentes.sort(sortByNome)
 
-    const next: Coluna[] = [
-      {
+    const next: Coluna[] = []
+
+    if (dirigentes.length > 0) {
+      next.push({
         id: 'dirigentes',
         titulo: 'Dirigentes',
         hint: 'Categoria / função dirigente',
         className: 'stat-card-diretoria',
         pessoas: dirigentes,
-      },
-    ]
+      })
+    }
 
     for (const ramo of ramos) {
-      const pessoas = (porRamo.get(ramo.ramo_id) ?? []).sort(sortByNome)
+      const pessoas = (porRamo.get(ramo.ramo_id) ?? []).sort(sortEscotistasRamo)
+      if (pessoas.length === 0) continue
       next.push({
         id: `ramo-${ramo.ramo_id}`,
         titulo: ramo.nome,
-        hint: 'Escotistas do ramo',
+        hint: 'Chefes de seção, depois assistentes',
         className: ramoCardClass(ramo.ramo_id, ramo.nome),
         pessoas,
       })
     }
 
-    const semRamo = (porRamo.get(0) ?? []).sort(sortByNome)
+    const semRamo = (porRamo.get(0) ?? []).sort(sortEscotistasRamo)
     if (semRamo.length > 0) {
       next.push({
         id: 'sem-ramo',
@@ -235,7 +259,8 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
   return (
     <section className="panel conquistas-panel">
       <p className="muted" style={{ marginTop: 0 }}>
-        {total} voluntário(s) ativo(s) · dirigentes primeiro, depois por ramo.
+        {total} voluntário(s) ativo(s) · dirigentes, depois ramos (chefe →
+        assistentes).
       </p>
 
       <div className="conquistas-grid voluntarios-grid">
@@ -247,48 +272,44 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
             <span>{col.titulo}</span>
             <strong>{col.pessoas.length}</strong>
             <em className="stat-card-hint">{col.hint}</em>
-            {col.pessoas.length === 0 ? (
-              <p className="muted conquistas-empty">Nenhum associado</p>
-            ) : (
-              <ul className="conquistas-lista">
-                {col.pessoas.map((pessoa) => (
-                  <li
-                    key={`${col.id}-${pessoa.associado_id}`}
-                    className="conquistas-lista-item"
-                  >
-                    <div className="conquista-pessoa-card">
-                      <div className="conquistas-lista-nome">
-                        {canOpenAssociado ? (
-                          <Link to={`/associados/${pessoa.associado_id}`}>
-                            {pessoa.nome}
-                          </Link>
-                        ) : (
-                          pessoa.nome
-                        )}
-                        {pessoa.registro_provisorio ? (
-                          <RegistroProvisorioBadge />
-                        ) : null}
-                      </div>
-                      {pessoa.funcaoNome ? (
-                        <span className="conquistas-lista-secao">
-                          {pessoa.funcaoNome}
-                        </span>
-                      ) : null}
-                      {pessoa.secaoNome ? (
-                        <span className="conquistas-lista-secao muted">
-                          {pessoa.secaoNome}
-                        </span>
-                      ) : null}
-                      {pessoa.registro != null ? (
-                        <span className="conquistas-lista-data muted">
-                          Reg. {pessoa.registro}
-                        </span>
+            <ul className="conquistas-lista">
+              {col.pessoas.map((pessoa) => (
+                <li
+                  key={`${col.id}-${pessoa.associado_id}`}
+                  className="conquistas-lista-item"
+                >
+                  <div className="conquista-pessoa-card">
+                    <div className="conquistas-lista-nome">
+                      {canOpenAssociado ? (
+                        <Link to={`/associados/${pessoa.associado_id}`}>
+                          {pessoa.nome}
+                        </Link>
+                      ) : (
+                        pessoa.nome
+                      )}
+                      {pessoa.registro_provisorio ? (
+                        <RegistroProvisorioBadge />
                       ) : null}
                     </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+                    {pessoa.funcaoNome ? (
+                      <span className="conquistas-lista-secao">
+                        {pessoa.funcaoNome}
+                      </span>
+                    ) : null}
+                    {pessoa.secaoNome ? (
+                      <span className="conquistas-lista-secao muted">
+                        {pessoa.secaoNome}
+                      </span>
+                    ) : null}
+                    {pessoa.registro != null ? (
+                      <span className="conquistas-lista-data muted">
+                        Reg. {pessoa.registro}
+                      </span>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
           </article>
         ))}
       </div>
