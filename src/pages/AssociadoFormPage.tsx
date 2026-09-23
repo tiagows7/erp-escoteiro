@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -17,6 +17,10 @@ import {
   textoConsentimentoLgpd,
 } from '@/lib/lgpdConsent'
 import { syncConquistasFromAssociado } from '@/lib/conquistas'
+import {
+  removerAssociadoFoto,
+  uploadAssociadoFoto,
+} from '@/lib/uploadAssociadoFoto'
 import type { Ramo } from '@/types/database'
 
 type Lookup = { id: number; nome: string }
@@ -114,6 +118,11 @@ export function AssociadoFormPage() {
   const [lgpdAceite, setLgpdAceite] = useState(false)
   const [lgpdAceiteEm, setLgpdAceiteEm] = useState<string | null>(null)
   const [lgpdAceiteIp, setLgpdAceiteIp] = useState<string | null>(null)
+  const [fotoUrl, setFotoUrl] = useState<string | null>(null)
+  const [fotoFile, setFotoFile] = useState<File | null>(null)
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null)
+  const [removerFoto, setRemoverFoto] = useState(false)
+  const fotoInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!empresaId) return
@@ -282,6 +291,12 @@ export function AssociadoFormPage() {
         (data as { lgpd_aceite_ip?: string | null }).lgpd_aceite_ip ?? null,
       )
       setLgpdAceite(false)
+      const foto =
+        (data as { foto_url?: string | null }).foto_url ?? null
+      setFotoUrl(foto)
+      setFotoPreview(foto)
+      setFotoFile(null)
+      setRemoverFoto(false)
       setLoading(false)
     })()
 
@@ -310,6 +325,12 @@ export function AssociadoFormPage() {
     [categorias, form.categoria],
   )
   const isBeneficiario = categoriaEhBeneficiario(categoriaSelecionada)
+
+  function onFotoFileChange(file: File | null) {
+    setFotoFile(file)
+    setRemoverFoto(false)
+    setFotoPreview(file ? URL.createObjectURL(file) : fotoUrl)
+  }
 
   function update<K extends keyof typeof emptyForm>(
     key: K,
@@ -477,6 +498,38 @@ export function AssociadoFormPage() {
           `Associado salvo, mas a tabela de conquistas não sincronizou: ${sync.error}`,
         )
         return
+      }
+
+      if (fotoFile) {
+        const imgOk = await uploadAssociadoFoto(empresaId, associadoId, fotoFile)
+        if ('error' in imgOk) {
+          setSaving(false)
+          setError(`Associado salvo, mas a foto falhou: ${imgOk.error}`)
+          if (isNew) {
+            clearDraft()
+            navigate(`/associados/${associadoId}`, {
+              state: {
+                flashSuccess: 'Associado salvo. Ajuste a foto se precisar.',
+              },
+            })
+          }
+          return
+        }
+        setFotoUrl(imgOk.url)
+        setFotoPreview(imgOk.url)
+        setFotoFile(null)
+      } else if (removerFoto && !isNew) {
+        const rem = await removerAssociadoFoto(empresaId, associadoId)
+        if ('error' in rem) {
+          setSaving(false)
+          setError(
+            `Associado salvo, mas não foi possível remover a foto: ${rem.error}`,
+          )
+          return
+        }
+        setFotoUrl(null)
+        setFotoPreview(null)
+        setRemoverFoto(false)
       }
     }
 
@@ -658,6 +711,85 @@ export function AssociadoFormPage() {
                 disabled={disabled}
                 required
               />
+            </div>
+            <div className="field field-span-2">
+              <label htmlFor="associado-foto">Foto</label>
+              <div className="logo-upload-field">
+                {fotoPreview && !removerFoto ? (
+                  <img
+                    className="associado-foto-preview"
+                    src={fotoPreview}
+                    alt="Pré-visualização da foto do associado"
+                  />
+                ) : (
+                  <div className="logo-preview logo-preview-placeholder associado-foto-placeholder">
+                    Sem foto
+                  </div>
+                )}
+                <div>
+                  <input
+                    ref={fotoInputRef}
+                    id="associado-foto"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    disabled={disabled}
+                    onChange={(e) =>
+                      onFotoFileChange(e.target.files?.[0] ?? null)
+                    }
+                  />
+                  <span className="field-hint">
+                    PNG, JPG, WEBP ou GIF · máx. 2 MB. Aparece nos cards de
+                    voluntários.
+                  </span>
+                  {fotoFile ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ marginTop: '0.4rem' }}
+                      onClick={() => {
+                        onFotoFileChange(null)
+                        if (fotoInputRef.current) {
+                          fotoInputRef.current.value = ''
+                        }
+                      }}
+                      disabled={disabled}
+                    >
+                      Cancelar arquivo
+                    </button>
+                  ) : null}
+                  {!fotoFile && fotoUrl && !removerFoto ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ marginTop: '0.4rem' }}
+                      onClick={() => {
+                        setRemoverFoto(true)
+                        setFotoPreview(null)
+                        if (fotoInputRef.current) {
+                          fotoInputRef.current.value = ''
+                        }
+                      }}
+                      disabled={disabled}
+                    >
+                      Remover foto
+                    </button>
+                  ) : null}
+                  {removerFoto ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ marginTop: '0.4rem' }}
+                      onClick={() => {
+                        setRemoverFoto(false)
+                        setFotoPreview(fotoUrl)
+                      }}
+                      disabled={disabled}
+                    >
+                      Manter foto atual
+                    </button>
+                  ) : null}
+                </div>
+              </div>
             </div>
             <div className="field">
               <label htmlFor="data_nascimento">Nascimento</label>

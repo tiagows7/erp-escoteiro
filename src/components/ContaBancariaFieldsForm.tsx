@@ -1,10 +1,14 @@
 import { useState } from 'react'
-import type { ContaBancariaFields } from '@/lib/contaBancariaFields'
+import type {
+  ApiPixProvedor,
+  ContaBancariaFields,
+} from '@/lib/contaBancariaFields'
+import { labelApiPixProvedor } from '@/lib/contaBancariaFields'
 
-type TabId = 'sicredi' | 'infinitepay'
+type TabId = 'pix' | 'infinitepay'
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: 'sicredi', label: 'Sicredi' },
+  { id: 'pix', label: 'PIX API' },
   { id: 'infinitepay', label: 'InfinitePay' },
 ]
 
@@ -15,19 +19,84 @@ type Props = {
   disabled?: boolean
 }
 
+function pixHints(provedor: ApiPixProvedor) {
+  if (provedor === 'bradesco') {
+    return {
+      ativoLabel: 'PIX Bradesco ativo nesta conta',
+      intro:
+        'Credenciais do Portal Bradesco Developers (produto PIX). Conta do grupo (sem ramo) = mensalidades; com ramo = atividades. Usado quando não houver tag InfinitePay.',
+      urlPlaceholder:
+        'Produção: qrpix.bradesco.com.br · Homologação: qrpix-h.bradesco.com.br',
+      urlHint: (
+        <>
+          Vazio = produção (<code>https://qrpix.bradesco.com.br</code>). Em
+          homologação use <code>https://qrpix-h.bradesco.com.br</code>. O
+          certificado público deve ser o mesmo cadastrado no portal (mTLS).
+        </>
+      ),
+      certHint:
+        'Certificado A1 ICP-Brasil (produção). Tem que começar com BEGIN CERTIFICATE. No portal, envie só o público; aqui cole o .crt/.cer aprovado.',
+      keyHint:
+        'Cole o .key sem senha (-----BEGIN PRIVATE KEY-----). Arquivo ENCRYPTED não funciona na API PIX Bradesco.',
+      clientIdPlaceholder: 'Client ID do Portal Bradesco Developers',
+      clientSecretPlaceholder: 'Client Secret (visível só por poucos dias no portal)',
+    }
+  }
+  return {
+    ativoLabel: 'PIX Sicredi ativo nesta conta',
+    intro:
+      'Conta do grupo (sem ramo) = mensalidades. Conta com ramo = atividades daquele ramo. Usado quando não houver tag InfinitePay.',
+    urlPlaceholder:
+      'Produção: api-pix.sicredi.com.br · Homologação: api-pix-h.sicredi.com.br',
+    urlHint: (
+      <>
+        Vazio = produção. Credenciais de homologação do portal exigem{' '}
+        <code>https://api-pix-h.sicredi.com.br</code> — senão o Sicredi responde
+        Access Denied.
+      </>
+    ),
+    certHint:
+      'Tem que começar com BEGIN CERTIFICATE. Não use o CSR (BEGIN CERTIFICATE REQUEST).',
+    keyHint:
+      'Cole o .key sem senha (-----BEGIN PRIVATE KEY-----). Arquivo ENCRYPTED não funciona no PIX Sicredi.',
+    clientIdPlaceholder: 'Client ID da API do banco',
+    clientSecretPlaceholder: 'Client Secret da API do banco',
+  }
+}
+
 export function ContaBancariaFieldsForm({
   idPrefix,
   value,
   onChange,
   disabled,
 }: Props) {
-  const [tab, setTab] = useState<TabId>('sicredi')
+  const [tab, setTab] = useState<TabId>('pix')
+  const hints = pixHints(value.api_pix_provedor)
+  const provedorLabel = labelApiPixProvedor(value.api_pix_provedor)
 
   function setField<K extends keyof ContaBancariaFields>(
     key: K,
     fieldValue: ContaBancariaFields[K],
   ) {
     onChange({ ...value, [key]: fieldValue })
+  }
+
+  function setProvedor(next: ApiPixProvedor) {
+    const patch: ContaBancariaFields = {
+      ...value,
+      api_pix_provedor: next,
+    }
+    // Se o nome do banco estiver vazio ou for o outro provedor, sugere o atual.
+    const banco = value.banco_nome.trim().toLowerCase()
+    if (
+      !banco ||
+      banco === 'sicredi' ||
+      banco === 'bradesco' ||
+      banco === 'banco bradesco'
+    ) {
+      patch.banco_nome = next === 'bradesco' ? 'Bradesco' : 'Sicredi'
+    }
+    onChange(patch)
   }
 
   return (
@@ -51,7 +120,7 @@ export function ContaBancariaFieldsForm({
             className="input"
             value={value.banco_nome}
             onChange={(e) => setField('banco_nome', e.target.value)}
-            placeholder="Ex.: Sicredi, Banco do Brasil"
+            placeholder="Ex.: Sicredi, Bradesco"
             disabled={disabled}
           />
         </div>
@@ -98,12 +167,24 @@ export function ContaBancariaFieldsForm({
         ))}
       </div>
 
-      {tab === 'sicredi' ? (
+      {tab === 'pix' ? (
         <div className="form-grid-2" role="tabpanel">
-          <p className="field-hint" style={{ gridColumn: '1 / -1', margin: 0 }}>
-            Conta do grupo (sem ramo) = mensalidades. Conta com ramo =
-            atividades daquele ramo. Usado quando não houver tag InfinitePay.
-          </p>
+          <div className="field" style={{ gridColumn: '1 / -1' }}>
+            <label htmlFor={`${idPrefix}-pix-provedor`}>Provedor PIX</label>
+            <select
+              id={`${idPrefix}-pix-provedor`}
+              className="select"
+              value={value.api_pix_provedor}
+              onChange={(e) =>
+                setProvedor(e.target.value === 'bradesco' ? 'bradesco' : 'sicredi')
+              }
+              disabled={disabled}
+            >
+              <option value="sicredi">Sicredi</option>
+              <option value="bradesco">Bradesco</option>
+            </select>
+            <span className="field-hint">{hints.intro}</span>
+          </div>
 
           <label
             className="sicredi-pix-ativo"
@@ -115,7 +196,7 @@ export function ContaBancariaFieldsForm({
               onChange={(e) => setField('api_pix_ativo', e.target.checked)}
               disabled={disabled}
             />
-            PIX Sicredi ativo nesta conta
+            {hints.ativoLabel}
           </label>
 
           <div className="field">
@@ -125,7 +206,7 @@ export function ContaBancariaFieldsForm({
               className="input"
               value={value.api_client_id}
               onChange={(e) => setField('api_client_id', e.target.value)}
-              placeholder="Client ID da API do banco"
+              placeholder={hints.clientIdPlaceholder}
               autoComplete="off"
               disabled={disabled}
             />
@@ -141,7 +222,7 @@ export function ContaBancariaFieldsForm({
               placeholder={
                 value.has_api_client_secret
                   ? '•••• já cadastrado — deixe vazio para manter'
-                  : 'Client Secret da API do banco'
+                  : hints.clientSecretPlaceholder
               }
               autoComplete="new-password"
               disabled={disabled}
@@ -166,15 +247,11 @@ export function ContaBancariaFieldsForm({
               className="input"
               value={value.api_pix_base_url}
               onChange={(e) => setField('api_pix_base_url', e.target.value)}
-              placeholder="Produção: api-pix.sicredi.com.br · Homologação: api-pix-h.sicredi.com.br"
+              placeholder={hints.urlPlaceholder}
               autoComplete="off"
               disabled={disabled}
             />
-            <span className="field-hint">
-              Vazio = produção. Credenciais de homologação do portal exigem{' '}
-              <code>https://api-pix-h.sicredi.com.br</code> — senão o Sicredi
-              responde Access Denied.
-            </span>
+            <span className="field-hint">{hints.urlHint}</span>
           </div>
           <div className="field" style={{ gridColumn: '1 / -1' }}>
             <label htmlFor={`${idPrefix}-api-cert`}>
@@ -194,8 +271,7 @@ export function ContaBancariaFieldsForm({
               disabled={disabled}
             />
             <span className="field-hint">
-              Tem que começar com <code>BEGIN CERTIFICATE</code>. Não use o CSR (
-              <code>BEGIN CERTIFICATE REQUEST</code>).
+              {hints.certHint}
               {value.has_api_pix_cert
                 ? ' O certificado atual não é exibido por segurança.'
                 : ''}
@@ -224,12 +300,12 @@ export function ContaBancariaFieldsForm({
                 -nocrypt antes de colar.
               </span>
             ) : (
-              <span className="field-hint">
-                Cole o .key <strong>sem senha</strong> (-----BEGIN PRIVATE
-                KEY-----). Arquivo ENCRYPTED não funciona no PIX Sicredi.
-              </span>
+              <span className="field-hint">{hints.keyHint}</span>
             )}
           </div>
+          <p className="field-hint" style={{ gridColumn: '1 / -1', margin: 0 }}>
+            Provedor selecionado: <strong>{provedorLabel}</strong>.
+          </p>
         </div>
       ) : null}
 
@@ -250,7 +326,8 @@ export function ContaBancariaFieldsForm({
             />
             <span className="field-hint">
               Se preenchida, eventos podem usar o checkout InfinitePay
-              (Pix/cartão). Se vazia, vale o PIX Sicredi da aba Sicredi.
+              (Pix/cartão). Se vazia, vale o PIX da aba PIX API (
+              {provedorLabel}).
             </span>
           </div>
         </div>

@@ -12,6 +12,7 @@ type VoluntarioPessoa = {
   registro_provisorio: boolean
   secaoNome: string | null
   funcaoNome: string | null
+  foto_url: string | null
 }
 
 type Coluna = {
@@ -94,7 +95,7 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
       supabase
         .from('associados')
         .select(
-          'associado_id, nome, registro, registro_provisorio, categoria, funcao, ramo, secao',
+          'associado_id, nome, registro, registro_provisorio, categoria, funcao, ramo, secao, foto_url',
         )
         .eq('empresa_id', empresaId)
         .or('ativo.is.null,ativo.eq.true')
@@ -147,6 +148,7 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
       funcao: number | null
       ramo: number | null
       secao: number | null
+      foto_url: string | null
     }
 
     for (const row of (assocRes.data as Row[]) ?? []) {
@@ -175,6 +177,7 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
             ? (secaoMap.get(row.secao) ?? `Seção ${row.secao}`)
             : null,
         funcaoNome: funcNome,
+        foto_url: row.foto_url ?? null,
       }
 
       if (isDirigente) {
@@ -281,34 +284,51 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
                   key={`${col.id}-${pessoa.associado_id}`}
                   className="conquistas-lista-item"
                 >
-                  <div className="conquista-pessoa-card">
-                    <div className="conquistas-lista-nome">
-                      {canOpenAssociado ? (
-                        <Link to={`/associados/${pessoa.associado_id}`}>
-                          {pessoa.nome}
-                        </Link>
-                      ) : (
-                        pessoa.nome
-                      )}
-                      {pessoa.registro_provisorio ? (
-                        <RegistroProvisorioBadge />
+                  <div className="conquista-pessoa-card voluntario-pessoa-card">
+                    {pessoa.foto_url ? (
+                      <img
+                        className="voluntario-foto"
+                        src={pessoa.foto_url}
+                        alt=""
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div
+                        className="voluntario-foto voluntario-foto--empty"
+                        aria-hidden
+                      >
+                        {(pessoa.nome.trim()[0] ?? '?').toUpperCase()}
+                      </div>
+                    )}
+                    <div className="voluntario-pessoa-info">
+                      <div className="conquistas-lista-nome">
+                        {canOpenAssociado ? (
+                          <Link to={`/associados/${pessoa.associado_id}`}>
+                            {pessoa.nome}
+                          </Link>
+                        ) : (
+                          pessoa.nome
+                        )}
+                        {pessoa.registro_provisorio ? (
+                          <RegistroProvisorioBadge />
+                        ) : null}
+                      </div>
+                      {pessoa.funcaoNome ? (
+                        <span className="conquistas-lista-secao">
+                          {pessoa.funcaoNome}
+                        </span>
+                      ) : null}
+                      {pessoa.secaoNome ? (
+                        <span className="conquistas-lista-secao muted">
+                          {pessoa.secaoNome}
+                        </span>
+                      ) : null}
+                      {pessoa.registro != null ? (
+                        <span className="conquistas-lista-data muted">
+                          Reg. {pessoa.registro}
+                        </span>
                       ) : null}
                     </div>
-                    {pessoa.funcaoNome ? (
-                      <span className="conquistas-lista-secao">
-                        {pessoa.funcaoNome}
-                      </span>
-                    ) : null}
-                    {pessoa.secaoNome ? (
-                      <span className="conquistas-lista-secao muted">
-                        {pessoa.secaoNome}
-                      </span>
-                    ) : null}
-                    {pessoa.registro != null ? (
-                      <span className="conquistas-lista-data muted">
-                        Reg. {pessoa.registro}
-                      </span>
-                    ) : null}
                   </div>
                 </li>
               ))}

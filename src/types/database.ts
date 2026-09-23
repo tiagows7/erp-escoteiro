@@ -51,6 +51,7 @@ export type Associado = {
   lgpd_aceite_por: string | null
   lgpd_aceite_versao: string | null
   lgpd_aceite_texto: string | null
+  foto_url: string | null
 }
 
 export type Profile = {
@@ -129,10 +130,12 @@ export type EmpresaContaBancaria = {
   api_client_secret?: string | null
   api_pix_chave: string | null
   api_pix_ativo: boolean
+  /** Provedor da API PIX: sicredi | bradesco */
+  api_pix_provedor?: 'sicredi' | 'bradesco' | null
   api_pix_cert?: string | null
   api_pix_key?: string | null
   api_pix_base_url: string | null
-  /** InfiniteTag (sem $). Null = usa PIX Sicredi da conta. */
+  /** InfiniteTag (sem $). Null = usa PIX da conta. */
   infinitepay_handle: string | null
   has_api_client_secret?: boolean
   has_api_pix_cert?: boolean

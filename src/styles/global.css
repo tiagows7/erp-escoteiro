@@ -900,6 +900,55 @@ button {
   height: 100%;
 }
 
+.voluntario-pessoa-card {
+  display: grid;
+  grid-template-columns: 2.6rem 1fr;
+  gap: 0.4rem;
+  align-items: start;
+}
+
+.voluntario-pessoa-info {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.voluntario-foto {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid color-mix(in srgb, currentColor 22%, var(--line));
+  background: color-mix(in srgb, #fff 80%, transparent);
+  flex-shrink: 0;
+}
+
+.voluntario-foto--empty {
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: color-mix(in srgb, currentColor 70%, #333);
+}
+
+.associado-foto-preview {
+  width: 7rem;
+  height: 7rem;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+
+.associado-foto-placeholder {
+  width: 7rem;
+  height: 7rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+}
+
 @media (max-width: 560px) {
   .voluntarios-grid .conquistas-lista-item {
     flex: 1 1 100%;

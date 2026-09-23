@@ -85,7 +85,9 @@ export function ContaBancariaModal({
       }
       if (cert.includes('BEGIN CERTIFICATE REQUEST')) {
         setError(
-          'No certificado você colou o CSR (pedido). Baixe no Portal Sicredi o .crt/.cer aprovado (BEGIN CERTIFICATE, sem REQUEST).',
+          fields.api_pix_provedor === 'bradesco'
+            ? 'No certificado você colou o CSR (pedido). Use o .crt/.cer A1 aprovado (BEGIN CERTIFICATE, sem REQUEST) e o mesmo par cadastrado no Portal Bradesco Developers.'
+            : 'No certificado você colou o CSR (pedido). Baixe no Portal Sicredi o .crt/.cer aprovado (BEGIN CERTIFICATE, sem REQUEST).',
         )
         return
       }
@@ -175,9 +177,9 @@ export function ContaBancariaModal({
               {editing ? 'Editar conta bancária' : 'Cadastrar banco'}
             </h3>
             <p className="muted">
-              Informe os dados da conta e, nas abas, as integrações Sicredi e
-              InfinitePay. Sem ramo = mensalidades do grupo; com ramo =
-              atividades.
+              Informe os dados da conta e, nas abas, PIX API (Sicredi ou
+              Bradesco) e InfinitePay. Sem ramo = mensalidades do grupo; com
+              ramo = atividades.
             </p>
           </div>
           <button type="button" className="btn btn-soft" onClick={onClose}>
@@ -275,6 +277,8 @@ function normalizeRow(data: Record<string, unknown>): ContaBancariaRow {
       api_client_id: (data.api_client_id as string | null) ?? '',
       api_pix_chave: (data.api_pix_chave as string | null) ?? '',
       api_pix_ativo: data.api_pix_ativo === true,
+      api_pix_provedor:
+        data.api_pix_provedor === 'bradesco' ? 'bradesco' : 'sicredi',
       api_pix_base_url: (data.api_pix_base_url as string | null) ?? '',
       infinitepay_handle: (data.infinitepay_handle as string | null) ?? '',
       has_api_client_secret: data.has_api_client_secret === true,

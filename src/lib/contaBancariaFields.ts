@@ -1,3 +1,5 @@
+export type ApiPixProvedor = 'sicredi' | 'bradesco'
+
 export type ContaBancariaFields = {
   descricao: string
   banco_nome: string
@@ -7,10 +9,11 @@ export type ContaBancariaFields = {
   api_client_secret: string
   api_pix_chave: string
   api_pix_ativo: boolean
+  api_pix_provedor: ApiPixProvedor
   api_pix_cert: string
   api_pix_key: string
   api_pix_base_url: string
-  /** InfiniteTag da InfinitePay (sem $). Vazio = usa PIX Sicredi. */
+  /** InfiniteTag da InfinitePay (sem $). Vazio = usa PIX da conta. */
   infinitepay_handle: string
   /** Segredos já existem no banco (não são lidos pelo client). */
   has_api_client_secret?: boolean
@@ -21,6 +24,16 @@ export type ContaBancariaFields = {
 /** Normaliza a InfiniteTag: remove $ e espaços. */
 export function normalizeInfinitePayHandle(value: string): string {
   return value.trim().replace(/^\$+/, '').trim()
+}
+
+export function normalizeApiPixProvedor(
+  value: string | null | undefined,
+): ApiPixProvedor {
+  return value === 'bradesco' ? 'bradesco' : 'sicredi'
+}
+
+export function labelApiPixProvedor(provedor: ApiPixProvedor): string {
+  return provedor === 'bradesco' ? 'Bradesco' : 'Sicredi'
 }
 
 export type ContaBancariaRow = ContaBancariaFields & {
@@ -39,6 +52,7 @@ export const emptyContaBancariaFields = (): ContaBancariaFields => ({
   api_client_secret: '',
   api_pix_chave: '',
   api_pix_ativo: false,
+  api_pix_provedor: 'sicredi',
   api_pix_cert: '',
   api_pix_key: '',
   api_pix_base_url: '',
@@ -61,6 +75,7 @@ export function contaBancariaFromRow(
     api_client_secret: '',
     api_pix_chave: row?.api_pix_chave ?? '',
     api_pix_ativo: row?.api_pix_ativo === true,
+    api_pix_provedor: normalizeApiPixProvedor(row?.api_pix_provedor),
     api_pix_cert: '',
     api_pix_key: '',
     api_pix_base_url: row?.api_pix_base_url ?? '',
@@ -87,6 +102,7 @@ export function contaBancariaToDb(
     api_client_id: fields.api_client_id.trim() || null,
     api_pix_chave: fields.api_pix_chave.trim() || null,
     api_pix_ativo: fields.api_pix_ativo === true,
+    api_pix_provedor: normalizeApiPixProvedor(fields.api_pix_provedor),
     api_pix_base_url: fields.api_pix_base_url.trim() || null,
     infinitepay_handle: handle || null,
   }
@@ -125,4 +141,4 @@ export function contaBancariaHasData(fields: ContaBancariaFields): boolean {
 
 /** Colunas seguras ao ler conta bancária (sem PEM/secrets). */
 export const CONTA_BANCARIA_SELECT =
-  'id, empresa_id, ramo_id, secao_id, descricao, banco_nome, agencia, conta, api_client_id, api_pix_chave, api_pix_ativo, api_pix_base_url, infinitepay_handle, has_api_client_secret, has_api_pix_cert, has_api_pix_key'
+  'id, empresa_id, ramo_id, secao_id, descricao, banco_nome, agencia, conta, api_client_id, api_pix_chave, api_pix_ativo, api_pix_provedor, api_pix_base_url, infinitepay_handle, has_api_client_secret, has_api_pix_cert, has_api_pix_key'

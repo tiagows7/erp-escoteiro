@@ -1265,6 +1265,7 @@ export function GrupoFormPage() {
                       <th>Banco</th>
                       <th>Agência</th>
                       <th>Conta</th>
+                      <th>PIX API</th>
                       <th>InfinitePay</th>
                       <th>Ramo / seção</th>
                       <th></th>
@@ -1277,6 +1278,13 @@ export function GrupoFormPage() {
                         <td>{conta.banco_nome || '—'}</td>
                         <td>{conta.agencia || '—'}</td>
                         <td>{conta.conta || '—'}</td>
+                        <td>
+                          {conta.api_pix_ativo
+                            ? conta.api_pix_provedor === 'bradesco'
+                              ? 'Bradesco'
+                              : 'Sicredi'
+                            : '—'}
+                        </td>
                         <td>
                           {conta.infinitepay_handle
                             ? `$${conta.infinitepay_handle}`

@@ -109,6 +109,7 @@ type SicrediConfig = {
   oauthPath: string
   apiPath: string
   source: string
+  provider: 'sicredi' | 'bradesco'
 }
 
 type DbSicrediRow = {
@@ -132,6 +133,7 @@ type DbContaBancariaPix = {
   api_pix_key?: string | null
   api_pix_base_url?: string | null
   api_pix_ativo?: boolean | null
+  api_pix_provedor?: string | null
 }
 
 function json(body: unknown, status = 200) {
@@ -234,6 +236,7 @@ function configFromDbRow(
     oauthPath: Deno.env.get('SICREDI_PIX_OAUTH_PATH') ?? '/oauth/token',
     apiPath: Deno.env.get('SICREDI_PIX_API_PATH') ?? '/api/v2',
     source,
+    provider: 'sicredi',
   }
 }
 
@@ -243,18 +246,41 @@ function configFromContaBancaria(
 ): SicrediConfig | null {
   if (!row || row.api_pix_ativo !== true) return null
 
+  const provider =
+    (row.api_pix_provedor ?? '').trim().toLowerCase() === 'bradesco'
+      ? 'bradesco'
+      : 'sicredi'
+
   const clientId = (row.api_client_id ?? '').trim()
   const clientSecret = (row.api_client_secret ?? '').trim()
   const chave = (row.api_pix_chave ?? '').trim()
   const cert = (row.api_pix_cert ?? '').replace(/\\n/g, '\n').trim()
   const key = (row.api_pix_key ?? '').replace(/\\n/g, '\n').trim()
-  const baseUrl = (
-    row.api_pix_base_url?.trim() ||
-    Deno.env.get('SICREDI_PIX_BASE_URL') ||
-    'https://api-pix.sicredi.com.br'
-  ).replace(/\/$/, '')
+
+  const defaultBase =
+    provider === 'bradesco'
+      ? Deno.env.get('BRADESCO_PIX_BASE_URL') ||
+        'https://qrpix.bradesco.com.br'
+      : Deno.env.get('SICREDI_PIX_BASE_URL') ||
+        'https://api-pix.sicredi.com.br'
+
+  const baseUrl = (row.api_pix_base_url?.trim() || defaultBase).replace(
+    /\/$/,
+    '',
+  )
 
   if (!clientId || !clientSecret || !chave || !cert || !key) return null
+
+  const oauthPath =
+    provider === 'bradesco'
+      ? Deno.env.get('BRADESCO_PIX_OAUTH_PATH') ??
+        '/auth/server/oauth/token'
+      : Deno.env.get('SICREDI_PIX_OAUTH_PATH') ?? '/oauth/token'
+
+  const apiPath =
+    provider === 'bradesco'
+      ? Deno.env.get('BRADESCO_PIX_API_PATH') ?? ''
+      : Deno.env.get('SICREDI_PIX_API_PATH') ?? '/api/v2'
 
   return {
     clientId,
@@ -263,9 +289,10 @@ function configFromContaBancaria(
     cert,
     key,
     baseUrl,
-    oauthPath: Deno.env.get('SICREDI_PIX_OAUTH_PATH') ?? '/oauth/token',
-    apiPath: Deno.env.get('SICREDI_PIX_API_PATH') ?? '/api/v2',
+    oauthPath,
+    apiPath,
     source,
+    provider,
   }
 }
 
@@ -278,7 +305,7 @@ async function resolveConfigFromContas(
   const { data: contas, error } = await admin
     .from('empresa_conta_bancaria')
     .select(
-      'id, ramo_id, secao_id, api_client_id, api_client_secret, api_pix_chave, api_pix_cert, api_pix_key, api_pix_base_url, api_pix_ativo',
+      'id, ramo_id, secao_id, api_client_id, api_client_secret, api_pix_chave, api_pix_cert, api_pix_key, api_pix_base_url, api_pix_ativo, api_pix_provedor',
     )
     .eq('empresa_id', empresaId)
     .order('id', { ascending: true })
@@ -368,7 +395,7 @@ async function resolveConfigFromContas(
 
   return {
     cfg: null,
-    hint: 'Há conta bancária, mas nenhuma com "PIX Sicredi ativo" marcado.',
+    hint: 'Há conta bancária, mas nenhuma com "PIX ativo" marcado (Sicredi ou Bradesco).',
   }
 }
 
@@ -401,6 +428,7 @@ function readSicrediEnvConfig(): SicrediConfig | null {
     oauthPath: Deno.env.get('SICREDI_PIX_OAUTH_PATH') ?? '/oauth/token',
     apiPath: Deno.env.get('SICREDI_PIX_API_PATH') ?? '/api/v2',
     source: 'env',
+    provider: 'sicredi',
   }
 }
 
@@ -636,6 +664,7 @@ async function getAccessToken(cfg: SicrediConfig): Promise<string> {
         cfg.oauthPath,
         '/oauth/token',
         '/auth/openapi/token',
+        '/auth/server/oauth/token',
       ].filter(Boolean),
     ),
   )
@@ -2607,10 +2636,10 @@ Deno.serve(async (req) => {
 
       return json({
         configured: !!resolved.cfg,
-        provider: 'sicredi',
+        provider: resolved.cfg?.provider ?? 'sicredi',
         source: resolved.cfg?.source ?? null,
         message: resolved.cfg
-          ? `PIX Sicredi configurado (${resolved.cfg.source}).`
+          ? `PIX ${resolved.cfg.provider === 'bradesco' ? 'Bradesco' : 'Sicredi'} configurado (${resolved.cfg.source}).`
           : resolved.hint ||
             'Cadastre uma conta bancária com PIX ativo em Cadastrar banco.',
       })
