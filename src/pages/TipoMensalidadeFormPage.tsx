@@ -219,7 +219,7 @@ export function TipoMensalidadeFormPage() {
             />
           </div>
           <div className="field">
-            <label htmlFor="valor">Valor</label>
+            <label htmlFor="valor">Valor (R$)</label>
             <input
               id="valor"
               className="input"
@@ -232,7 +232,6 @@ export function TipoMensalidadeFormPage() {
               disabled={disabled}
               required
             />
-            <span className="field-hint">Use vírgula ou ponto para centavos</span>
           </div>
         </div>
 

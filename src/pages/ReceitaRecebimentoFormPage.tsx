@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
+import { parseMoneyInput } from '@/lib/despesas'
 import {
   formatMoney,
   situacaoFromSaldo,
@@ -31,6 +32,8 @@ type PagamentoRow = {
   pagamento_id: number
   data_pagamento: string
   valor: number
+  desconto: number | null
+  acrescimo: number | null
   observacao: string | null
   tipo_pagamento: { nome: string } | null
 }
@@ -44,6 +47,10 @@ function formatDate(value: string | null) {
   const [y, m, d] = value.slice(0, 10).split('-')
   if (!y || !m || !d) return value
   return `${d}/${m}/${y}`
+}
+
+function roundMoney(n: number) {
+  return Math.round(n * 100) / 100
 }
 
 export function ReceitaRecebimentoFormPage() {
@@ -70,7 +77,9 @@ export function ReceitaRecebimentoFormPage() {
   const [tipos, setTipos] = useState<TipoPagamento[]>([])
   const [atividades, setAtividades] = useState<AtividadeLookup[]>([])
   const [atividadeId, setAtividadeId] = useState('')
-  const [valorPago, setValorPago] = useState('')
+  const [valorBaixar, setValorBaixar] = useState('')
+  const [desconto, setDesconto] = useState('')
+  const [acrescimo, setAcrescimo] = useState('')
   const [dataPagamento, setDataPagamento] = useState(todayISO())
   const [tipopagtoId, setTipopagtoId] = useState('')
   const [observacao, setObservacao] = useState('')
@@ -103,7 +112,7 @@ export function ReceitaRecebimentoFormPage() {
         supabase
           .from('receita_pagamento')
           .select(
-            'pagamento_id, data_pagamento, valor, observacao, tipo_pagamento(nome)',
+            'pagamento_id, data_pagamento, valor, desconto, acrescimo, observacao, tipo_pagamento(nome)',
           )
           .eq('receita_id', Number(id))
           .eq('empresa_id', empresaId)
@@ -165,7 +174,9 @@ export function ReceitaRecebimentoFormPage() {
           )?.registro_provisorio === true,
       })
       setAtividadeId(row.atividade_id?.toString() ?? '')
-      setValorPago(saldo > 0 ? String(saldo) : '')
+      setValorBaixar(saldo > 0 ? String(saldo).replace('.', ',') : '')
+      setDesconto('')
+      setAcrescimo('')
       setTipos((t.data as TipoPagamento[]) ?? [])
       setHistorico((h.data as unknown as PagamentoRow[]) ?? [])
       setAtividades(ativ.data)
@@ -190,17 +201,45 @@ export function ReceitaRecebimentoFormPage() {
     return list
   }, [atividades, receita])
 
+  const valorBaixarNum = useMemo(
+    () => roundMoney(parseMoneyInput(valorBaixar)),
+    [valorBaixar],
+  )
+  const descontoNum = useMemo(
+    () => roundMoney(parseMoneyInput(desconto)),
+    [desconto],
+  )
+  const acrescimoNum = useMemo(
+    () => roundMoney(parseMoneyInput(acrescimo)),
+    [acrescimo],
+  )
+  const valorPagoNum = useMemo(
+    () => roundMoney(valorBaixarNum - descontoNum + acrescimoNum),
+    [valorBaixarNum, descontoNum, acrescimoNum],
+  )
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     if (!canWrite || !empresaId || !receita) return
 
-    const valor = Number(String(valorPago).replace(',', '.'))
-    if (!Number.isFinite(valor) || valor <= 0) {
-      setError('Informe um valor de recebimento válido.')
+    if (!Number.isFinite(valorBaixarNum) || valorBaixarNum <= 0) {
+      setError('Informe o valor a baixar da receita.')
       return
     }
-    if (valor > receita.receita_saldo + 0.001) {
-      setError('O valor não pode ser maior que o saldo em aberto.')
+    if (valorBaixarNum > receita.receita_saldo + 0.001) {
+      setError('O valor a baixar não pode ser maior que o saldo em aberto.')
+      return
+    }
+    if (descontoNum < 0 || acrescimoNum < 0) {
+      setError('Desconto e acréscimo não podem ser negativos.')
+      return
+    }
+    if (descontoNum > valorBaixarNum + 0.001) {
+      setError('O desconto não pode ser maior que o valor a baixar.')
+      return
+    }
+    if (valorPagoNum < -0.001) {
+      setError('O valor pago ficou negativo. Ajuste desconto e acréscimo.')
       return
     }
     if (!dataPagamento) {
@@ -211,14 +250,18 @@ export function ReceitaRecebimentoFormPage() {
     setSaving(true)
     setError(null)
 
-    const { error: insertError } = await supabase.from('receita_pagamento').insert({
-      empresa_id: empresaId,
-      receita_id: receita.receita_id,
-      tipopagto_id: tipopagtoId ? Number(tipopagtoId) : null,
-      data_pagamento: dataPagamento,
-      valor,
-      observacao: observacao.trim() || null,
-    })
+    const { error: insertError } = await supabase
+      .from('receita_pagamento')
+      .insert({
+        empresa_id: empresaId,
+        receita_id: receita.receita_id,
+        tipopagto_id: tipopagtoId ? Number(tipopagtoId) : null,
+        data_pagamento: dataPagamento,
+        valor: Math.max(0, valorPagoNum),
+        desconto: descontoNum,
+        acrescimo: acrescimoNum,
+        observacao: observacao.trim() || null,
+      })
 
     if (insertError) {
       setSaving(false)
@@ -228,7 +271,7 @@ export function ReceitaRecebimentoFormPage() {
 
     const newSaldo = Math.max(
       0,
-      Number((receita.receita_saldo - valor).toFixed(2)),
+      roundMoney(receita.receita_saldo - valorBaixarNum),
     )
     const { error: updateError } = await supabase
       .from('receitas')
@@ -382,16 +425,56 @@ export function ReceitaRecebimentoFormPage() {
               </select>
             </div>
             <div className="field">
-              <label htmlFor="valorPago">Valor recebido</label>
+              <label htmlFor="valorBaixar">Valor a baixar</label>
               <input
-                id="valorPago"
+                id="valorBaixar"
                 className="input"
                 inputMode="decimal"
-                value={valorPago}
-                onChange={(e) => setValorPago(e.target.value)}
+                value={valorBaixar}
+                onChange={(e) => setValorBaixar(e.target.value)}
                 disabled={disabled}
                 required
               />
+              <span className="field-hint">
+                Parte do saldo que será quitada neste recebimento.
+              </span>
+            </div>
+            <div className="field">
+              <label htmlFor="desconto">Desconto</label>
+              <input
+                id="desconto"
+                className="input"
+                inputMode="decimal"
+                value={desconto}
+                onChange={(e) => setDesconto(e.target.value)}
+                disabled={disabled}
+                placeholder="0"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="acrescimo">Acréscimo</label>
+              <input
+                id="acrescimo"
+                className="input"
+                inputMode="decimal"
+                value={acrescimo}
+                onChange={(e) => setAcrescimo(e.target.value)}
+                disabled={disabled}
+                placeholder="0"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="valorPago">Valor pago</label>
+              <input
+                id="valorPago"
+                className="input"
+                value={formatMoney(valorPagoNum)}
+                disabled
+                readOnly
+              />
+              <span className="field-hint">
+                Valor a baixar − desconto + acréscimo.
+              </span>
             </div>
             <div className="field">
               <label htmlFor="dataPagamento">Data</label>
@@ -438,7 +521,11 @@ export function ReceitaRecebimentoFormPage() {
 
           <div className="form-actions">
             {canWrite ? (
-              <button className="btn btn-primary" type="submit" disabled={saving}>
+              <button
+                className="btn btn-primary"
+                type="submit"
+                disabled={saving}
+              >
                 {saving ? 'Salvando…' : 'Confirmar recebimento'}
               </button>
             ) : (
@@ -466,7 +553,9 @@ export function ReceitaRecebimentoFormPage() {
                 <tr>
                   <th>Data</th>
                   <th>Tipo</th>
-                  <th>Valor</th>
+                  <th>Desconto</th>
+                  <th>Acréscimo</th>
+                  <th>Valor pago</th>
                   <th>Observação</th>
                 </tr>
               </thead>
@@ -475,6 +564,8 @@ export function ReceitaRecebimentoFormPage() {
                   <tr key={row.pagamento_id}>
                     <td>{formatDate(row.data_pagamento)}</td>
                     <td>{row.tipo_pagamento?.nome || '—'}</td>
+                    <td>{formatMoney(row.desconto ?? 0)}</td>
+                    <td>{formatMoney(row.acrescimo ?? 0)}</td>
                     <td>{formatMoney(row.valor)}</td>
                     <td>{row.observacao || '—'}</td>
                   </tr>

@@ -3783,6 +3783,8 @@ table.data .badge {
   display: grid;
   gap: 0.25rem;
   margin-bottom: 0.7rem;
+  align-content: start;
+  align-items: start;
 }
 
 .field label {
@@ -4459,6 +4461,7 @@ table.data .badge {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 0.9rem;
+  align-items: start;
 }
 
 .form-grid-2 {
