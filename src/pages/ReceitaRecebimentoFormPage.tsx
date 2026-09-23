@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
-import { parseMoneyInput } from '@/lib/despesas'
+import { formatMoneyInput, maskMoneyInput, parseMoneyInput } from '@/lib/despesas'
 import {
   formatMoney,
   situacaoFromSaldo,
@@ -77,9 +77,9 @@ export function ReceitaRecebimentoFormPage() {
   const [tipos, setTipos] = useState<TipoPagamento[]>([])
   const [atividades, setAtividades] = useState<AtividadeLookup[]>([])
   const [atividadeId, setAtividadeId] = useState('')
-  const [valorBaixar, setValorBaixar] = useState('')
-  const [desconto, setDesconto] = useState('')
-  const [acrescimo, setAcrescimo] = useState('')
+  const [valorBaixar, setValorBaixar] = useState('0,00')
+  const [desconto, setDesconto] = useState('0,00')
+  const [acrescimo, setAcrescimo] = useState('0,00')
   const [dataPagamento, setDataPagamento] = useState(todayISO())
   const [tipopagtoId, setTipopagtoId] = useState('')
   const [observacao, setObservacao] = useState('')
@@ -174,9 +174,9 @@ export function ReceitaRecebimentoFormPage() {
           )?.registro_provisorio === true,
       })
       setAtividadeId(row.atividade_id?.toString() ?? '')
-      setValorBaixar(saldo > 0 ? String(saldo).replace('.', ',') : '')
-      setDesconto('')
-      setAcrescimo('')
+      setValorBaixar(saldo > 0 ? formatMoneyInput(saldo) : '0,00')
+      setDesconto('0,00')
+      setAcrescimo('0,00')
       setTipos((t.data as TipoPagamento[]) ?? [])
       setHistorico((h.data as unknown as PagamentoRow[]) ?? [])
       setAtividades(ativ.data)
@@ -429,9 +429,9 @@ export function ReceitaRecebimentoFormPage() {
               <input
                 id="valorBaixar"
                 className="input"
-                inputMode="decimal"
+                inputMode="numeric"
                 value={valorBaixar}
-                onChange={(e) => setValorBaixar(e.target.value)}
+                onChange={(e) => setValorBaixar(maskMoneyInput(e.target.value))}
                 disabled={disabled}
                 required
               />
@@ -444,11 +444,11 @@ export function ReceitaRecebimentoFormPage() {
               <input
                 id="desconto"
                 className="input"
-                inputMode="decimal"
+                inputMode="numeric"
                 value={desconto}
-                onChange={(e) => setDesconto(e.target.value)}
+                onChange={(e) => setDesconto(maskMoneyInput(e.target.value))}
                 disabled={disabled}
-                placeholder="0"
+                placeholder="0,00"
               />
             </div>
             <div className="field">
@@ -456,11 +456,11 @@ export function ReceitaRecebimentoFormPage() {
               <input
                 id="acrescimo"
                 className="input"
-                inputMode="decimal"
+                inputMode="numeric"
                 value={acrescimo}
-                onChange={(e) => setAcrescimo(e.target.value)}
+                onChange={(e) => setAcrescimo(maskMoneyInput(e.target.value))}
                 disabled={disabled}
-                placeholder="0"
+                placeholder="0,00"
               />
             </div>
             <div className="field">
