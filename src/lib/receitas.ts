@@ -1,3 +1,5 @@
+import { supabase } from '@/lib/supabase'
+
 /** Situação de títulos financeiros (despesa / receita) */
 export const TITULO_SITUACAO = {
   ABERTO: 1,
@@ -107,4 +109,82 @@ export function isTituloEmAtraso(input: {
   const venc = input.receita_vencimento?.slice(0, 10)
   if (!venc || !/^\d{4}-\d{2}-\d{2}$/.test(venc)) return false
   return venc < todayLocalISO()
+}
+
+/**
+ * Exclui a receita e os movimentos de recebimento/PIX ligados a ela.
+ * Relacionamentos com on delete set null (loja, atividade, evento) só perdem a referência.
+ */
+export async function deleteReceitaCompleta(opts: {
+  empresaId: number
+  receitaId: number
+}): Promise<{ ok: true } | { error: string }> {
+  const { empresaId, receitaId } = opts
+  if (!empresaId || !receitaId) {
+    return { error: 'Receita inválida para exclusão.' }
+  }
+
+  const { error: pagError } = await supabase
+    .from('receita_pagamento')
+    .delete()
+    .eq('empresa_id', empresaId)
+    .eq('receita_id', receitaId)
+
+  if (pagError) {
+    return { error: `Falha ao excluir recebimentos: ${pagError.message}` }
+  }
+
+  // PIX que referencia esta receita (array receita_ids)
+  const { data: pixRows, error: pixListError } = await supabase
+    .from('pix_cobrancas')
+    .select('id, receita_ids')
+    .eq('empresa_id', empresaId)
+    .contains('receita_ids', [receitaId])
+
+  if (pixListError) {
+    return { error: `Falha ao localizar cobranças PIX: ${pixListError.message}` }
+  }
+
+  for (const row of pixRows ?? []) {
+    const ids = Array.isArray(row.receita_ids)
+      ? (row.receita_ids as number[]).map(Number).filter((n) => n > 0)
+      : []
+    const remaining = ids.filter((n) => n !== receitaId)
+
+    if (remaining.length === 0) {
+      const { error: pixDelError } = await supabase
+        .from('pix_cobrancas')
+        .delete()
+        .eq('id', row.id)
+        .eq('empresa_id', empresaId)
+      if (pixDelError) {
+        return {
+          error: `Falha ao excluir cobrança PIX: ${pixDelError.message}`,
+        }
+      }
+    } else {
+      const { error: pixUpdError } = await supabase
+        .from('pix_cobrancas')
+        .update({ receita_ids: remaining })
+        .eq('id', row.id)
+        .eq('empresa_id', empresaId)
+      if (pixUpdError) {
+        return {
+          error: `Falha ao atualizar cobrança PIX: ${pixUpdError.message}`,
+        }
+      }
+    }
+  }
+
+  const { error: delError } = await supabase
+    .from('receitas')
+    .delete()
+    .eq('receita_id', receitaId)
+    .eq('empresa_id', empresaId)
+
+  if (delError) {
+    return { error: delError.message }
+  }
+
+  return { ok: true }
 }

@@ -16,6 +16,7 @@ import {
 } from '@/components/ReceitaReciboPrint'
 import {
   RECEITA_ORIGEM,
+  deleteReceitaCompleta,
   formatMoney,
   situacaoFromSaldo,
   situacaoTituloLabel,
@@ -883,17 +884,17 @@ export function ReceitaFormPage() {
 
   async function onDelete() {
     if (!canWrite || !empresaId || isNew) return
-    if (
+
+    const temRecebimento =
+      paidAmount > 0.001 ||
       situacao === TITULO_SITUACAO.PAGO ||
       situacao === TITULO_SITUACAO.PARCIAL
-    ) {
-      setError('Não é possível excluir receita com recebimento registrado.')
-      return
-    }
 
     const ok = await toast.confirm({
       title: 'Excluir receita?',
-      message: `Tem certeza que deseja excluir "${form.receita_descricao}"?`,
+      message: temRecebimento
+        ? `A receita "${form.receita_descricao}" já possui recebimento. Excluir remove a inclusão, os recebimentos e cobranças PIX ligadas a ela. Esta ação não pode ser desfeita.`
+        : `Tem certeza que deseja excluir "${form.receita_descricao}"?`,
       confirmLabel: 'Sim, excluir',
       cancelLabel: 'Não',
       danger: true,
@@ -902,21 +903,21 @@ export function ReceitaFormPage() {
 
     setSaving(true)
     setError(null)
-    const { error: deleteError } = await supabase
-      .from('receitas')
-      .delete()
-      .eq('receita_id', Number(id))
-      .eq('empresa_id', empresaId)
+
+    const result = await deleteReceitaCompleta({
+      empresaId,
+      receitaId: Number(id),
+    })
 
     setSaving(false)
-    if (deleteError) {
-      setError(deleteError.message)
+    if ('error' in result) {
+      setError(result.error)
       return
     }
 
     clearDraft()
     navigate('/receitas/inclusao', {
-      state: { flashSuccess: 'Excluído com sucesso!' },
+      state: { flashSuccess: 'Receita e movimentos excluídos com sucesso!' },
     })
   }
 
@@ -1423,9 +1424,17 @@ export function ReceitaFormPage() {
               >
                 {saving ? 'Enviando…' : 'Salvar documentos'}
               </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                disabled={saving}
+                onClick={() => void onDelete()}
+              >
+                Excluir
+              </button>
               <p className="muted" style={{ margin: 0 }}>
                 Receita quitada — demais campos bloqueados; você pode anexar
-                documentos.
+                documentos ou excluir a receita e os recebimentos.
               </p>
             </>
           ) : (
