@@ -24,10 +24,27 @@ export type NavGroupItem = {
   label: string
   /** Mostra o grupo se o usuário tiver qualquer uma destas permissões */
   anyOf?: Permission[]
-  children: NavLinkItem[]
+  /** Links e, no máximo, um nível de subgrupo (ex.: Documentos dentro de Grupo). */
+  children: Array<NavLinkItem | NavGroupItem>
 }
 
 export type NavItem = NavLinkItem | NavGroupItem
+
+function isNavLink(item: NavLinkItem | NavGroupItem): item is NavLinkItem {
+  return item.type === 'link'
+}
+
+/** Todos os links de um grupo (inclui filhos de subgrupos). */
+export function flattenGroupLinks(
+  children: Array<NavLinkItem | NavGroupItem>,
+): NavLinkItem[] {
+  const links: NavLinkItem[] = []
+  for (const child of children) {
+    if (isNavLink(child)) links.push(child)
+    else links.push(...flattenGroupLinks(child.children))
+  }
+  return links
+}
 
 /**
  * Menu alinhado ao Delphi (unit_main / SideMenu).
@@ -41,49 +58,57 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'dashboard.view',
   },
   {
-    type: 'link',
-    to: '/calendario',
-    label: 'Calendário',
-    permission: 'dashboard.view',
+    type: 'group',
+    id: 'grupo',
+    label: 'Grupo',
+    anyOf: ['dashboard.view'],
+    children: [
+      {
+        type: 'link',
+        to: '/calendario',
+        label: 'Calendário',
+        permission: 'dashboard.view',
+      },
+      {
+        type: 'link',
+        to: '/conquistas',
+        label: 'Conquistas',
+        permission: 'dashboard.view',
+      },
+      {
+        type: 'link',
+        to: '/voluntarios',
+        label: 'Voluntários',
+        permission: 'dashboard.view',
+      },
+      {
+        type: 'group',
+        id: 'documentos',
+        label: 'Documentos',
+        anyOf: ['dashboard.view'],
+        children: [
+          {
+            type: 'link',
+            to: '/regimento-interno',
+            label: 'Regimento interno',
+            permission: 'dashboard.view',
+          },
+          {
+            type: 'link',
+            to: '/documentos/por-online',
+            label: 'P.O.R online',
+            permission: 'dashboard.view',
+            externalUrl: 'https://www.guiadecola.com.br/por/',
+          },
+        ],
+      },
+    ],
   },
   {
     type: 'link',
     to: '/portal-transparencia',
     label: 'Portal da Transparência',
     permission: 'portal.view',
-  },
-  {
-    type: 'link',
-    to: '/conquistas',
-    label: 'Conquistas',
-    permission: 'dashboard.view',
-  },
-  {
-    type: 'link',
-    to: '/voluntarios',
-    label: 'Voluntários',
-    permission: 'dashboard.view',
-  },
-  {
-    type: 'group',
-    id: 'documentos',
-    label: 'Documentos',
-    anyOf: ['dashboard.view'],
-    children: [
-      {
-        type: 'link',
-        to: '/regimento-interno',
-        label: 'Regimento interno',
-        permission: 'dashboard.view',
-      },
-      {
-        type: 'link',
-        to: '/documentos/por-online',
-        label: 'P.O.R online',
-        permission: 'dashboard.view',
-        externalUrl: 'https://www.guiadecola.com.br/por/',
-      },
-    ],
   },
   {
     type: 'group',
@@ -227,6 +252,12 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     type: 'link',
+    to: '/solicitacoes',
+    label: 'Solicitações',
+    permission: 'solicitacoes.view',
+  },
+  {
+    type: 'link',
     to: '/competicoes',
     label: 'Competições',
     permission: 'competicoes.view',
@@ -367,10 +398,51 @@ export function navItemsForProfile(
         permission: 'dashboard.view',
       },
       {
-        type: 'link',
-        to: '/calendario',
-        label: 'Calendário',
-        permission: 'dashboard.view',
+        type: 'group',
+        id: 'grupo',
+        label: 'Grupo',
+        anyOf: ['dashboard.view'],
+        children: [
+          {
+            type: 'link',
+            to: '/calendario',
+            label: 'Calendário',
+            permission: 'dashboard.view',
+          },
+          {
+            type: 'link',
+            to: '/conquistas',
+            label: 'Conquistas',
+            permission: 'dashboard.view',
+          },
+          {
+            type: 'link',
+            to: '/voluntarios',
+            label: 'Voluntários',
+            permission: 'dashboard.view',
+          },
+          {
+            type: 'group',
+            id: 'documentos',
+            label: 'Documentos',
+            anyOf: ['dashboard.view'],
+            children: [
+              {
+                type: 'link',
+                to: '/regimento-interno',
+                label: 'Regimento interno',
+                permission: 'dashboard.view',
+              },
+              {
+                type: 'link',
+                to: '/documentos/por-online',
+                label: 'P.O.R online',
+                permission: 'dashboard.view',
+                externalUrl: 'https://www.guiadecola.com.br/por/',
+              },
+            ],
+          },
+        ],
       },
       {
         type: 'link',
@@ -380,36 +452,9 @@ export function navItemsForProfile(
       },
       {
         type: 'link',
-        to: '/conquistas',
-        label: 'Conquistas',
-        permission: 'dashboard.view',
-      },
-      {
-        type: 'link',
-        to: '/voluntarios',
-        label: 'Voluntários',
-        permission: 'dashboard.view',
-      },
-      {
-        type: 'group',
-        id: 'documentos',
-        label: 'Documentos',
-        anyOf: ['dashboard.view'],
-        children: [
-          {
-            type: 'link',
-            to: '/regimento-interno',
-            label: 'Regimento interno',
-            permission: 'dashboard.view',
-          },
-          {
-            type: 'link',
-            to: '/documentos/por-online',
-            label: 'P.O.R online',
-            permission: 'dashboard.view',
-            externalUrl: 'https://www.guiadecola.com.br/por/',
-          },
-        ],
+        to: '/solicitacoes',
+        label: 'Solicitações',
+        permission: 'solicitacoes.view',
       },
       {
         type: 'link',
@@ -454,12 +499,36 @@ export function navItemsForProfile(
         '/voluntarios',
         '/regimento-interno',
         '/documentos/por-online',
+        '/solicitacoes',
         '/projetos',
         '/vendas/eventos',
         '/vendas/loja-online',
       ] as const
 
       const filtered: NavItem[] = []
+
+      function filterGroupChildren(
+        children: Array<NavLinkItem | NavGroupItem>,
+      ): Array<NavLinkItem | NavGroupItem> {
+        const next: Array<NavLinkItem | NavGroupItem> = []
+        for (const child of children) {
+          if (child.type === 'link') {
+            if (
+              keySet.has(child.to) ||
+              alwaysTo.includes(child.to as (typeof alwaysTo)[number])
+            ) {
+              next.push(child)
+            }
+            continue
+          }
+          const nested = filterGroupChildren(child.children)
+          if (nested.length > 0) {
+            next.push({ ...child, children: nested })
+          }
+        }
+        return next
+      }
+
       for (const item of associadoMenus) {
         if (item.type === 'link') {
           if (
@@ -470,33 +539,30 @@ export function navItemsForProfile(
           }
           continue
         }
-        const children = item.children.filter(
-          (child) =>
-            keySet.has(child.to) ||
-            alwaysTo.includes(child.to as (typeof alwaysTo)[number]),
-        )
+        const children = filterGroupChildren(item.children)
         if (children.length > 0) {
           filtered.push({ ...item, children })
         }
       }
 
       // Garante itens alwaysTo que ainda não entraram (links avulsos).
+      const filteredTos = new Set(
+        filtered.flatMap((entry) =>
+          entry.type === 'link'
+            ? [entry.to]
+            : flattenGroupLinks(entry.children).map((c) => c.to),
+        ),
+      )
       for (const to of alwaysTo) {
-        const already = filtered.some(
-          (item) =>
-            (item.type === 'link' && item.to === to) ||
-            (item.type === 'group' &&
-              item.children.some((c) => c.to === to)),
-        )
-        if (already) continue
+        if (filteredTos.has(to)) continue
         const fromMenus = associadoMenus.find(
           (entry) => entry.type === 'link' && entry.to === to,
         )
         if (fromMenus) filtered.push(fromMenus)
       }
 
-      // Ordem fixa: Dashboard → Calendário → demais.
-      const ordemTopo = ['/dashboard', '/calendario'] as const
+      // Ordem fixa: Dashboard → Grupo → demais.
+      const ordemTopo = ['/dashboard', 'grupo'] as const
       filtered.sort((a, b) => {
         const toOf = (item: NavItem) =>
           item.type === 'link' ? item.to : item.id
@@ -519,11 +585,24 @@ export function navItemsForProfile(
   const items = NAV_ITEMS.map((item) => {
     if (item.type !== 'group') return item
     // Itens só de admin do grupo (ex.: Função); associados e demais papéis não veem.
+    function filterAdminOnly(
+      children: Array<NavLinkItem | NavGroupItem>,
+    ): Array<NavLinkItem | NavGroupItem> {
+      return children
+        .map((child) => {
+          if (child.type === 'link') {
+            return !child.grupoAdminOnly || isGrupoAdmin(profile?.role)
+              ? child
+              : null
+          }
+          const nested = filterAdminOnly(child.children)
+          return nested.length > 0 ? { ...child, children: nested } : null
+        })
+        .filter((c): c is NavLinkItem | NavGroupItem => c != null)
+    }
     return {
       ...item,
-      children: item.children.filter(
-        (child) => !child.grupoAdminOnly || isGrupoAdmin(profile?.role),
-      ),
+      children: filterAdminOnly(item.children),
     }
   }).filter((item) => {
     // Super admin: lista de grupos + backup + mensalidade plataforma.
@@ -558,7 +637,8 @@ export function navItemsForProfile(
     return {
       ...item,
       children: item.children.filter(
-        (child) => child.to !== '/receitas/gera-mensalidade',
+        (child) =>
+          child.type !== 'link' || child.to !== '/receitas/gera-mensalidade',
       ),
     }
   })

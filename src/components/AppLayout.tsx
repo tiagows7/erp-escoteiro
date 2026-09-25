@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import {
+  flattenGroupLinks,
   navItemsForProfile,
   type NavGroupItem,
   type NavItem,
@@ -12,15 +13,64 @@ import {
   profileUsesMenuKeys,
 } from '@/lib/menuAccess'
 import { useAssociadoAcaoEntreAmigos } from '@/hooks/useAssociadoAcaoEntreAmigos'
+import { useVoluntarioNaoBeneficiario } from '@/hooks/useVoluntarioNaoBeneficiario'
 import { isAssociadoLogin } from '@/lib/roles'
 import { PlataformaAcessoBanner } from '@/components/PlataformaAcessoGate'
+
+function childLinkVisible(
+  child: NavLinkItem | NavGroupItem,
+  hasPermission: (p: NonNullable<NavLinkItem['permission']>) => boolean,
+  menuKeys: string[] | null,
+): boolean {
+  if (child.type === 'link') {
+    if (!child.permission) return true
+    if (hasPermission(child.permission)) return true
+    return menuKeys != null && menuKeys.includes(child.to)
+  }
+  return child.children.some((nested) =>
+    childLinkVisible(nested, hasPermission, menuKeys),
+  )
+}
 
 function groupHasVisibleChild(
   group: NavGroupItem,
   hasPermission: (p: NonNullable<NavLinkItem['permission']>) => boolean,
+  menuKeys: string[] | null = null,
 ) {
-  return group.children.some(
-    (child) => !child.permission || hasPermission(child.permission),
+  return group.children.some((child) =>
+    childLinkVisible(child, hasPermission, menuKeys),
+  )
+}
+
+function filterGroupChildrenByAccess(
+  children: Array<NavLinkItem | NavGroupItem>,
+  hasPermission: (p: NonNullable<NavLinkItem['permission']>) => boolean,
+  menuKeys: string[] | null,
+): Array<NavLinkItem | NavGroupItem> {
+  const next: Array<NavLinkItem | NavGroupItem> = []
+  for (const child of children) {
+    if (child.type === 'link') {
+      if (childLinkVisible(child, hasPermission, menuKeys)) next.push(child)
+      continue
+    }
+    const nested = filterGroupChildrenByAccess(
+      child.children,
+      hasPermission,
+      menuKeys,
+    )
+    if (nested.length > 0) next.push({ ...child, children: nested })
+  }
+  return next
+}
+
+function groupHasActivePath(
+  group: NavGroupItem,
+  pathname: string,
+  search: string,
+): boolean {
+  return flattenGroupLinks(group.children).some(
+    (link) =>
+      !link.externalUrl && navLinkActive(pathname, search, link.to),
   )
 }
 
@@ -56,6 +106,8 @@ export function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   const { loading: acaoMenuLoading, temAcao } = useAssociadoAcaoEntreAmigos()
+  const { loading: volMenuLoading, allowed: voluntarioNaoBeneficiario } =
+    useVoluntarioNaoBeneficiario()
 
   useEffect(() => {
     if (!isSuperAdmin) return
@@ -122,39 +174,38 @@ export function AppLayout() {
         ) {
           return false
         }
+        if (
+          item.to === '/solicitacoes' &&
+          (volMenuLoading || !voluntarioNaoBeneficiario)
+        ) {
+          return false
+        }
         if (!item.permission) return true
         if (hasPermission(item.permission)) return true
         // Menu marcado no cadastro: libera visualização mesmo se o papel base não tiver.
         return menuKeys != null && menuKeys.includes(item.to)
       }
       if (item.anyOf && item.anyOf.some((p) => hasPermission(p))) {
-        return groupHasVisibleChild(item, hasPermission) ||
-          (menuKeys != null &&
-            item.children.some((c) => menuKeys.includes(c.to)))
+        return groupHasVisibleChild(item, hasPermission, menuKeys)
       }
       // Grupo sem anyOf liberado pelo papel: ainda mostra filhos marcados em menu_keys.
       if (menuKeys != null) {
-        const children = item.children.filter(
-          (child) =>
-            (!child.permission ||
-              hasPermission(child.permission) ||
-              menuKeys.includes(child.to)),
-        )
-        return children.length > 0
+        return groupHasVisibleChild(item, hasPermission, menuKeys)
       }
-      return groupHasVisibleChild(item, hasPermission)
+      return groupHasVisibleChild(item, hasPermission, null)
     })
 
     // Quando menu_keys liberou filhos sem permissão do papel, reescreve o grupo.
     const withGrantedChildren = filtered.map((item) => {
       if (item.type !== 'group' || menuKeys == null) return item
-      const children = item.children.filter(
-        (child) =>
-          !child.permission ||
-          hasPermission(child.permission) ||
-          menuKeys.includes(child.to),
-      )
-      return { ...item, children }
+      return {
+        ...item,
+        children: filterGroupChildrenByAccess(
+          item.children,
+          hasPermission,
+          menuKeys,
+        ),
+      }
     })
 
     const next = [...withGrantedChildren]
@@ -184,7 +235,9 @@ export function AppLayout() {
         (item) =>
           (item.type === 'link' && item.to === '/vendas/eventos') ||
           (item.type === 'group' &&
-            item.children.some((c) => c.to === '/vendas/eventos')),
+            flattenGroupLinks(item.children).some(
+              (c) => c.to === '/vendas/eventos',
+            )),
       )
       if (!hasEventosLink) {
         next.push({
@@ -196,32 +249,40 @@ export function AppLayout() {
       }
     }
 
-    // Ordem fixa no topo: Dashboard → Calendário.
-    const ordemTopo = ['/dashboard', '/calendario'] as const
+    // Ordem fixa no topo: Dashboard → Grupo.
+    const ordemTopo = ['/dashboard', 'grupo'] as const
     const topo = ordemTopo
-      .map((to) =>
-        next.find((item) => item.type === 'link' && item.to === to),
+      .map((key) =>
+        next.find((item) =>
+          item.type === 'link'
+            ? item.to === key
+            : item.id === key,
+        ),
       )
       .filter((item): item is (typeof next)[number] => item != null)
     const resto = next.filter(
       (item) =>
         !(
-          item.type === 'link' &&
-          (item.to === '/dashboard' || item.to === '/calendario')
+          (item.type === 'link' && item.to === '/dashboard') ||
+          (item.type === 'group' && item.id === 'grupo')
         ),
     )
     return [...topo, ...resto]
-  }, [allItems, hasPermission, profile, acaoMenuLoading, temAcao])
+  }, [allItems, hasPermission, profile, acaoMenuLoading, temAcao, volMenuLoading, voluntarioNaoBeneficiario])
 
   useEffect(() => {
     setOpenGroups((prev) => {
       const next = { ...prev }
+      function openActiveGroups(group: NavGroupItem) {
+        if (groupHasActivePath(group, location.pathname, location.search)) {
+          next[group.id] = true
+        }
+        for (const child of group.children) {
+          if (child.type === 'group') openActiveGroups(child)
+        }
+      }
       for (const item of allItems) {
-        if (item.type !== 'group') continue
-        const childActive = item.children.some((child) =>
-          navLinkActive(location.pathname, location.search, child.to),
-        )
-        if (childActive) next[item.id] = true
+        if (item.type === 'group') openActiveGroups(item)
       }
       return next
     })
@@ -378,19 +439,99 @@ export function AppLayout() {
                 }
 
                 const open = !!openGroups[item.id]
-                const childActive = item.children.some(
-                  (child) =>
-                    !child.externalUrl &&
-                    navLinkActive(
+                const childActive = groupHasActivePath(
+                  item,
+                  location.pathname,
+                  location.search,
+                )
+                const visibleChildren = filterGroupChildrenByAccess(
+                  item.children,
+                  hasPermission,
+                  null,
+                )
+
+                function renderNavChild(
+                  child: NavLinkItem | NavGroupItem,
+                  nested: boolean,
+                ) {
+                  if (child.type === 'group') {
+                    const nestedOpen = !!openGroups[child.id]
+                    const nestedActive = groupHasActivePath(
+                      child,
                       location.pathname,
                       location.search,
-                      child.to,
-                    ),
-                )
-                const visibleChildren = item.children.filter(
-                  (child) =>
-                    !child.permission || hasPermission(child.permission),
-                )
+                    )
+                    const nestedChildren = filterGroupChildrenByAccess(
+                      child.children,
+                      hasPermission,
+                      null,
+                    )
+                    return (
+                      <div
+                        key={child.id}
+                        className={`nav-submenu nav-submenu-nested${nestedOpen ? ' open' : ''}${nestedActive ? ' has-active' : ''}`}
+                      >
+                        <button
+                          type="button"
+                          className={`nav-group-toggle nav-group-toggle-nested${nestedActive ? ' active' : ''}`}
+                          aria-expanded={nestedOpen}
+                          onClick={() => toggleGroup(child.id)}
+                        >
+                          <span>{child.label}</span>
+                          <span className="nav-caret" aria-hidden="true">
+                            {nestedOpen ? '▾' : '▸'}
+                          </span>
+                        </button>
+                        {nestedOpen ? (
+                          <div className="nav-submenu-items">
+                            {nestedChildren.map((nestedChild) =>
+                              renderNavChild(nestedChild, true),
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    )
+                  }
+
+                  const linkClass = nested
+                    ? 'nav-link nav-sublink'
+                    : 'nav-link nav-sublink'
+
+                  if (child.externalUrl) {
+                    return (
+                      <a
+                        key={child.to}
+                        className={linkClass}
+                        href={child.externalUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {child.label}
+                      </a>
+                    )
+                  }
+
+                  return (
+                    <NavLink
+                      key={child.to}
+                      to={child.to}
+                      end={child.end}
+                      className={() =>
+                        `${linkClass}${
+                          navLinkActive(
+                            location.pathname,
+                            location.search,
+                            child.to,
+                          )
+                            ? ' active'
+                            : ''
+                        }`
+                      }
+                    >
+                      {child.label}
+                    </NavLink>
+                  )
+                }
 
                 return (
                   <div
@@ -411,36 +552,7 @@ export function AppLayout() {
                     {open ? (
                       <div className="nav-submenu-items">
                         {visibleChildren.map((child) =>
-                          child.externalUrl ? (
-                            <a
-                              key={child.to}
-                              className="nav-link nav-sublink"
-                              href={child.externalUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              {child.label}
-                            </a>
-                          ) : (
-                            <NavLink
-                              key={child.to}
-                              to={child.to}
-                              end={child.end}
-                              className={() =>
-                                `nav-link nav-sublink${
-                                  navLinkActive(
-                                    location.pathname,
-                                    location.search,
-                                    child.to,
-                                  )
-                                    ? ' active'
-                                    : ''
-                                }`
-                              }
-                            >
-                              {child.label}
-                            </NavLink>
-                          ),
+                          renderNavChild(child, false),
                         )}
                       </div>
                     ) : null}

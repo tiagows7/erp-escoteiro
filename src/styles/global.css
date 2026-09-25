@@ -185,6 +185,17 @@ button {
   border-left: 1px solid rgba(238, 244, 251, 0.12);
 }
 
+.nav-submenu-nested {
+  margin-top: 0.1rem;
+}
+
+.nav-group-toggle-nested {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.4rem 0.65rem;
+  color: rgba(238, 244, 251, 0.82);
+}
+
 .nav-sublink {
   padding: 0.4rem 0.65rem;
   font-size: 0.78rem;

@@ -251,6 +251,20 @@ export type CompeticaoPontuacao = {
   updated_at: string | null
 }
 
+export type Solicitacao = {
+  solicitacao_id: number
+  empresa_id: number
+  ramo_id: number
+  secao_id: number
+  texto: string
+  data_solicitacao: string
+  resolvida: boolean
+  data_resolvida: string | null
+  user_id: string | null
+  user_nome: string | null
+  created_at: string
+}
+
 export type CalendarioGrupoEvento = {
   id: number
   empresa_id: number
@@ -481,6 +495,11 @@ export type Database = {
         Row: CompeticaoPontuacao
         Insert: Partial<CompeticaoPontuacao>
         Update: Partial<CompeticaoPontuacao>
+      }
+      solicitacoes: {
+        Row: Solicitacao
+        Insert: Partial<Solicitacao>
+        Update: Partial<Solicitacao>
       }
     }
     Functions: {

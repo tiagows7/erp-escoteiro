@@ -51,6 +51,7 @@ export const AUDITORIA_TABELA_LABELS: Record<string, string> = {
   competicao_participante: 'Participantes (competição)',
   competicao_prova: 'Provas (competição)',
   competicao_pontuacao: 'Pontuação (competição)',
+  solicitacoes: 'Solicitações',
   sugestao_melhoria: 'Sugestões de melhoria',
 }
 

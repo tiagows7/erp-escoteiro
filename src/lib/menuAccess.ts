@@ -24,6 +24,7 @@ export const ASSOCIADO_PORTAL_MENU_KEYS = [
   '/voluntarios',
   '/regimento-interno',
   '/documentos/por-online',
+  '/solicitacoes',
   '/atividades',
   '/projetos',
   // Ação entre amigos: menu só se o associado tiver faixa (AppLayout).
@@ -43,42 +44,37 @@ export function associadoPortalMenuKeys(): string[] {
 export function menuAccessCatalog(): MenuAccessOption[] {
   const options: MenuAccessOption[] = []
 
-  for (const item of NAV_ITEMS) {
-    if (item.type === 'link') {
-      // Reservados à plataforma / admin do grupo via papel.
-      if (
-        item.to === '/grupos' ||
-        item.to === '/backup' ||
-        item.to === '/grupos/meu' ||
-        item.to === '/mensalidade-plataforma' ||
-        item.to.startsWith('/plataforma/')
-      ) {
+  function walk(items: NavItem[], groupLabel: string) {
+    for (const item of items) {
+      if (item.type === 'link') {
+        // Reservados à plataforma / admin do grupo via papel.
+        if (
+          item.to === '/grupos' ||
+          item.to === '/backup' ||
+          item.to === '/grupos/meu' ||
+          item.to === '/mensalidade-plataforma' ||
+          item.to.startsWith('/plataforma/')
+        ) {
+          continue
+        }
+        options.push({
+          key: item.to,
+          label: item.label,
+          group: groupLabel,
+          permission: item.permission,
+          grupoAdminOnly: item.grupoAdminOnly,
+        })
         continue
       }
-      options.push({
-        key: item.to,
-        label: item.label,
-        group: 'Geral',
-        permission: item.permission,
-        grupoAdminOnly: item.grupoAdminOnly,
-      })
-      continue
-    }
 
-    // Grupo "Mensalidade plataforma" só para super_admin.
-    if (item.id === 'plataforma') continue
+      // Grupo "Mensalidade plataforma" só para super_admin.
+      if (item.id === 'plataforma') continue
 
-    for (const child of item.children) {
-      options.push({
-        key: child.to,
-        label: child.label,
-        group: item.label,
-        permission: child.permission,
-        grupoAdminOnly: child.grupoAdminOnly,
-      })
+      walk(item.children, item.label)
     }
   }
 
+  walk(NAV_ITEMS, 'Geral')
   return options
 }
 
@@ -172,6 +168,7 @@ export function pathMatchesMenuKey(pathname: string, menuKey: string): boolean {
 /** Menus sempre liberados mesmo com menu_keys restrito (equipe e associado). */
 export const ALWAYS_VISIBLE_MENU_KEYS = [
   '/dashboard',
+  '/calendario',
   '/competicoes',
   '/conquistas',
   '/voluntarios',
@@ -194,6 +191,7 @@ export const ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS = [
   '/voluntarios',
   '/regimento-interno',
   '/documentos/por-online',
+  '/solicitacoes',
   '/projetos',
   '/vendas/eventos',
   '/vendas/loja-online',
@@ -280,21 +278,21 @@ export function filterNavItemsByMenuKeys(
   if (menuKeys == null) return items
   const associadoLogin = opts?.associadoLogin === true
 
-  return items
-    .map((item) => {
-      if (item.type === 'link') {
-        return menuKeys.includes(item.to) ||
-          isAlwaysVisibleMenuKey(item.to, associadoLogin)
-          ? item
-          : null
-      }
-      const children = item.children.filter(
-        (child) =>
-          menuKeys.includes(child.to) ||
-          isAlwaysVisibleMenuKey(child.to, associadoLogin),
-      )
-      if (children.length === 0) return null
-      return { ...item, children }
-    })
-    .filter((item): item is NavItem => item != null)
+  function filterItems(list: NavItem[]): NavItem[] {
+    return list
+      .map((item) => {
+        if (item.type === 'link') {
+          return menuKeys.includes(item.to) ||
+            isAlwaysVisibleMenuKey(item.to, associadoLogin)
+            ? item
+            : null
+        }
+        const children = filterItems(item.children)
+        if (children.length === 0) return null
+        return { ...item, children }
+      })
+      .filter((item): item is NavItem => item != null)
+  }
+
+  return filterItems(items)
 }
