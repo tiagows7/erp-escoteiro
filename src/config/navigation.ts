@@ -58,6 +58,12 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'dashboard.view',
   },
   {
+    type: 'link',
+    to: '/portal-transparencia',
+    label: 'Portal da Transparência',
+    permission: 'portal.view',
+  },
+  {
     type: 'group',
     id: 'grupo',
     label: 'Grupo',
@@ -95,6 +101,12 @@ export const NAV_ITEMS: NavItem[] = [
           },
           {
             type: 'link',
+            to: '/estatuto',
+            label: 'Estatuto',
+            permission: 'dashboard.view',
+          },
+          {
+            type: 'link',
             to: '/documentos/por-online',
             label: 'P.O.R online',
             permission: 'dashboard.view',
@@ -103,12 +115,6 @@ export const NAV_ITEMS: NavItem[] = [
         ],
       },
     ],
-  },
-  {
-    type: 'link',
-    to: '/portal-transparencia',
-    label: 'Portal da Transparência',
-    permission: 'portal.view',
   },
   {
     type: 'group',
@@ -174,53 +180,61 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     type: 'group',
-    id: 'despesas',
-    label: 'Despesas',
+    id: 'financeiro',
+    label: 'Financeiro',
     anyOf: ['financeiro.view'],
     children: [
       {
-        type: 'link',
-        to: '/despesas/inclusao',
-        label: 'Inclusão',
-        permission: 'financeiro.view',
+        type: 'group',
+        id: 'despesas',
+        label: 'Despesas',
+        anyOf: ['financeiro.view'],
+        children: [
+          {
+            type: 'link',
+            to: '/despesas/inclusao',
+            label: 'Inclusão',
+            permission: 'financeiro.view',
+          },
+          {
+            type: 'link',
+            to: '/despesas/pagamento',
+            label: 'Pagamento',
+            permission: 'financeiro.view',
+          },
+          {
+            type: 'link',
+            to: '/despesas/relatorio',
+            label: 'Relatório',
+            permission: 'financeiro.view',
+          },
+        ],
       },
       {
-        type: 'link',
-        to: '/despesas/pagamento',
-        label: 'Pagamento',
-        permission: 'financeiro.view',
-      },
-      {
-        type: 'link',
-        to: '/despesas/relatorio',
-        label: 'Relatório',
-        permission: 'financeiro.view',
-      },
-    ],
-  },
-  {
-    type: 'group',
-    id: 'receitas',
-    label: 'Receitas',
-    anyOf: ['financeiro.view'],
-    children: [
-      {
-        type: 'link',
-        to: '/receitas/inclusao',
-        label: 'Inclusão',
-        permission: 'financeiro.view',
-      },
-      {
-        type: 'link',
-        to: '/receitas/gera-mensalidade',
-        label: 'Gera Mensalidade',
-        permission: 'financeiro.view',
-      },
-      {
-        type: 'link',
-        to: '/receitas/relatorio',
-        label: 'Relatório',
-        permission: 'financeiro.view',
+        type: 'group',
+        id: 'receitas',
+        label: 'Receitas',
+        anyOf: ['financeiro.view'],
+        children: [
+          {
+            type: 'link',
+            to: '/receitas/inclusao',
+            label: 'Inclusão',
+            permission: 'financeiro.view',
+          },
+          {
+            type: 'link',
+            to: '/receitas/gera-mensalidade',
+            label: 'Gera Mensalidade',
+            permission: 'financeiro.view',
+          },
+          {
+            type: 'link',
+            to: '/receitas/relatorio',
+            label: 'Relatório',
+            permission: 'financeiro.view',
+          },
+        ],
       },
     ],
   },
@@ -398,6 +412,12 @@ export function navItemsForProfile(
         permission: 'dashboard.view',
       },
       {
+        type: 'link',
+        to: '/portal-transparencia',
+        label: 'Portal da Transparência',
+        permission: 'portal.view',
+      },
+      {
         type: 'group',
         id: 'grupo',
         label: 'Grupo',
@@ -435,6 +455,12 @@ export function navItemsForProfile(
               },
               {
                 type: 'link',
+                to: '/estatuto',
+                label: 'Estatuto',
+                permission: 'dashboard.view',
+              },
+              {
+                type: 'link',
                 to: '/documentos/por-online',
                 label: 'P.O.R online',
                 permission: 'dashboard.view',
@@ -443,12 +469,6 @@ export function navItemsForProfile(
             ],
           },
         ],
-      },
-      {
-        type: 'link',
-        to: '/portal-transparencia',
-        label: 'Portal da Transparência',
-        permission: 'portal.view',
       },
       {
         type: 'link',
@@ -498,6 +518,7 @@ export function navItemsForProfile(
         '/conquistas',
         '/voluntarios',
         '/regimento-interno',
+        '/estatuto',
         '/documentos/por-online',
         '/solicitacoes',
         '/projetos',
@@ -561,8 +582,8 @@ export function navItemsForProfile(
         if (fromMenus) filtered.push(fromMenus)
       }
 
-      // Ordem fixa: Dashboard → Grupo → demais.
-      const ordemTopo = ['/dashboard', 'grupo'] as const
+      // Ordem fixa: Dashboard → Portal → Grupo → demais.
+      const ordemTopo = ['/dashboard', '/portal-transparencia', 'grupo'] as const
       filtered.sort((a, b) => {
         const toOf = (item: NavItem) =>
           item.type === 'link' ? item.to : item.id
@@ -632,14 +653,27 @@ export function navItemsForProfile(
   if (!isRamoFinanceiroScoped(profile)) return items
 
   // Login e-mail com ramo: financeiro sem gera mensalidade (só próprio ramo/seção).
+  function stripGeraMensalidade(
+    children: Array<NavLinkItem | NavGroupItem>,
+  ): Array<NavLinkItem | NavGroupItem> {
+    return children.map((child) => {
+      if (child.type !== 'group') return child
+      if (child.id === 'receitas') {
+        return {
+          ...child,
+          children: child.children.filter(
+            (nested) =>
+              nested.type !== 'link' ||
+              nested.to !== '/receitas/gera-mensalidade',
+          ),
+        }
+      }
+      return { ...child, children: stripGeraMensalidade(child.children) }
+    })
+  }
+
   return items.map((item) => {
-    if (item.type !== 'group' || item.id !== 'receitas') return item
-    return {
-      ...item,
-      children: item.children.filter(
-        (child) =>
-          child.type !== 'link' || child.to !== '/receitas/gera-mensalidade',
-      ),
-    }
+    if (item.type !== 'group') return item
+    return { ...item, children: stripGeraMensalidade(item.children) }
   })
 }

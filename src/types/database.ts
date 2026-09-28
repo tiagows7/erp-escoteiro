@@ -94,6 +94,8 @@ export type Empresa = {
   dia_vencimento_mensalidade?: number | null
   /** Ref do PDF do regimento (empresa-regimento:…). */
   regimento_interno?: string | null
+  /** Ref do PDF do estatuto (empresa-regimento:…). */
+  estatuto?: string | null
   sicredi_pix_client_id?: string | null
   sicredi_pix_client_secret?: string | null
   sicredi_pix_chave?: string | null

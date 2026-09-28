@@ -9,10 +9,14 @@ function isPdf(file: File): boolean {
   return file.name.toLowerCase().endsWith('.pdf')
 }
 
-/** Envia o PDF do regimento e grava a ref em empresa.regimento_interno. */
-export async function uploadRegimentoInterno(
+export type EmpresaDocumentoColumn = 'regimento_interno' | 'estatuto'
+
+/** Envia o PDF e grava a ref na coluna da empresa. */
+export async function uploadEmpresaDocumentoPdf(
   empresaId: number,
   file: File,
+  column: EmpresaDocumentoColumn,
+  fileName: string,
 ): Promise<{ ref: string } | { error: string }> {
   if (!isPdf(file)) {
     return { error: 'Envie um arquivo PDF (máx. 10 MB).' }
@@ -21,7 +25,7 @@ export async function uploadRegimentoInterno(
     return { error: 'O PDF deve ter no máximo 10 MB.' }
   }
 
-  const path = `${empresaId}/regimento.pdf`
+  const path = `${empresaId}/${fileName}`
   const { error: uploadError } = await supabase.storage
     .from(REGIMENTO_BUCKET)
     .upload(path, file, {
@@ -37,7 +41,7 @@ export async function uploadRegimentoInterno(
   const ref = toStorageRef(REGIMENTO_BUCKET, path)
   const { error: updateError } = await supabase
     .from('empresa')
-    .update({ regimento_interno: ref })
+    .update({ [column]: ref })
     .eq('id', empresaId)
 
   if (updateError) {
@@ -48,28 +52,27 @@ export async function uploadRegimentoInterno(
 }
 
 /** Remove o PDF do storage e limpa a coluna na empresa. */
-export async function removeRegimentoInterno(
+export async function removeEmpresaDocumentoPdf(
   empresaId: number,
+  column: EmpresaDocumentoColumn,
+  fileName: string,
   currentRef: string | null | undefined,
 ): Promise<{ ok: true } | { error: string }> {
   const parsed = currentRef ? parseStorageRef(currentRef) : null
-  if (parsed?.bucket === REGIMENTO_BUCKET) {
-    const { error: removeError } = await supabase.storage
-      .from(REGIMENTO_BUCKET)
-      .remove([parsed.path])
-    if (removeError) {
-      return { error: removeError.message }
-    }
-  } else {
-    // Caminho padrão caso a ref esteja vazia/inválida.
-    await supabase.storage
-      .from(REGIMENTO_BUCKET)
-      .remove([`${empresaId}/regimento.pdf`])
+  const path =
+    parsed?.bucket === REGIMENTO_BUCKET
+      ? parsed.path
+      : `${empresaId}/${fileName}`
+  const { error: removeError } = await supabase.storage
+    .from(REGIMENTO_BUCKET)
+    .remove([path])
+  if (removeError) {
+    return { error: removeError.message }
   }
 
   const { error: updateError } = await supabase
     .from('empresa')
-    .update({ regimento_interno: null })
+    .update({ [column]: null })
     .eq('id', empresaId)
 
   if (updateError) {
@@ -77,4 +80,30 @@ export async function removeRegimentoInterno(
   }
 
   return { ok: true }
+}
+
+/** Envia o PDF do regimento e grava a ref em empresa.regimento_interno. */
+export async function uploadRegimentoInterno(
+  empresaId: number,
+  file: File,
+): Promise<{ ref: string } | { error: string }> {
+  return uploadEmpresaDocumentoPdf(
+    empresaId,
+    file,
+    'regimento_interno',
+    'regimento.pdf',
+  )
+}
+
+/** Remove o PDF do storage e limpa a coluna na empresa. */
+export async function removeRegimentoInterno(
+  empresaId: number,
+  currentRef: string | null | undefined,
+): Promise<{ ok: true } | { error: string }> {
+  return removeEmpresaDocumentoPdf(
+    empresaId,
+    'regimento_interno',
+    'regimento.pdf',
+    currentRef,
+  )
 }

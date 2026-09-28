@@ -5510,6 +5510,41 @@ form.panel .muted,
     display: block !important;
   }
 
+  body.print-lista-assembleia .lista-assembleia-print {
+    display: block !important;
+  }
+
+  .lista-assembleia-print h2,
+  .lista-assembleia-print h3,
+  .lista-assembleia-print p {
+    margin: 0 0 0.35rem;
+    color: #111;
+  }
+
+  .lista-assembleia-print h3 {
+    margin-top: 1rem;
+  }
+
+  .lista-assembleia-print table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.35rem;
+  }
+
+  .lista-assembleia-print th,
+  .lista-assembleia-print td {
+    border-bottom: 1px solid #ccc;
+    padding: 0.28rem 0.35rem;
+    text-align: left;
+    font-size: 11pt;
+    vertical-align: bottom;
+  }
+
+  .lista-assembleia-assinatura {
+    width: 28%;
+    min-height: 1.6rem;
+  }
+
   .app-shell {
     display: block;
   }

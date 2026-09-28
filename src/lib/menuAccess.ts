@@ -23,6 +23,7 @@ export const ASSOCIADO_PORTAL_MENU_KEYS = [
   '/conquistas',
   '/voluntarios',
   '/regimento-interno',
+  '/estatuto',
   '/documentos/por-online',
   '/solicitacoes',
   '/atividades',
@@ -173,6 +174,7 @@ export const ALWAYS_VISIBLE_MENU_KEYS = [
   '/conquistas',
   '/voluntarios',
   '/regimento-interno',
+  '/estatuto',
   '/documentos/por-online',
   // Cadastro novo: libera mesmo com menu_keys antigo (rota exige grupoAdmin).
   '/cadastros/funcao',
@@ -190,6 +192,7 @@ export const ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS = [
   '/conquistas',
   '/voluntarios',
   '/regimento-interno',
+  '/estatuto',
   '/documentos/por-online',
   '/solicitacoes',
   '/projetos',

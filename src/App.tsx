@@ -68,6 +68,7 @@ import { ConquistasPage } from '@/pages/ConquistasPage'
 import { ConquistaFormPage } from '@/pages/ConquistaFormPage'
 import { VoluntariosPage } from '@/pages/VoluntariosPage'
 import { RegimentoInternoPage } from '@/pages/RegimentoInternoPage'
+import { EstatutoPage } from '@/pages/EstatutoPage'
 import { PlataformaPlanosPage } from '@/pages/PlataformaPlanosPage'
 import { PlataformaCobrancasPage } from '@/pages/PlataformaCobrancasPage'
 import { GeraCobrancaPlataformaPage } from '@/pages/GeraCobrancaPlataformaPage'
@@ -716,6 +717,14 @@ export default function App() {
               element={
                 <RequirePermission permission="dashboard.view">
                   <RegimentoInternoPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="estatuto"
+              element={
+                <RequirePermission permission="dashboard.view">
+                  <EstatutoPage />
                 </RequirePermission>
               }
             />

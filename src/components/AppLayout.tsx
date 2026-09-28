@@ -249,8 +249,8 @@ export function AppLayout() {
       }
     }
 
-    // Ordem fixa no topo: Dashboard → Grupo.
-    const ordemTopo = ['/dashboard', 'grupo'] as const
+    // Ordem fixa no topo: Dashboard → Portal da Transparência → Grupo.
+    const ordemTopo = ['/dashboard', '/portal-transparencia', 'grupo'] as const
     const topo = ordemTopo
       .map((key) =>
         next.find((item) =>
@@ -263,7 +263,8 @@ export function AppLayout() {
     const resto = next.filter(
       (item) =>
         !(
-          (item.type === 'link' && item.to === '/dashboard') ||
+          (item.type === 'link' &&
+            (item.to === '/dashboard' || item.to === '/portal-transparencia')) ||
           (item.type === 'group' && item.id === 'grupo')
         ),
     )

@@ -12,6 +12,8 @@ import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import { useToast } from '@/contexts/ToastContext'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
+import { categoriaEhBeneficiario } from '@/lib/categoriaAssociado'
+import { RECEITA_ORIGEM } from '@/lib/receitas'
 import type { Associado, Ramo } from '@/types/database'
 
 type SecaoLite = { secao_id: number; nome: string; ramo: number | null }
@@ -20,6 +22,61 @@ type PatrulhaLite = {
   nome: string
   secao: number | null
   ramo: number | null
+}
+
+type AssembleiaPessoa = {
+  associado_id: number
+  registro: number | null
+  nome: string
+  ramo: string
+  secao: string
+}
+
+type AssembleiaLista = {
+  geradaEm: string
+  beneficiarios: AssembleiaPessoa[]
+  voluntarios: AssembleiaPessoa[]
+}
+
+function hojeIso() {
+  const d = new Date()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
+function sortNome(a: AssembleiaPessoa, b: AssembleiaPessoa) {
+  return a.nome.localeCompare(b.nome, 'pt-BR')
+}
+
+function AssembleiaTabela({ pessoas }: { pessoas: AssembleiaPessoa[] }) {
+  if (pessoas.length === 0) {
+    return <p>Nenhum nome nesta lista.</p>
+  }
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>Registro</th>
+          <th>Nome</th>
+          <th>Ramo</th>
+          <th>Seção</th>
+          <th className="lista-assembleia-assinatura">Assinatura</th>
+        </tr>
+      </thead>
+      <tbody>
+        {pessoas.map((pessoa) => (
+          <tr key={pessoa.associado_id}>
+            <td>{pessoa.registro ?? '—'}</td>
+            <td>{pessoa.nome}</td>
+            <td>{pessoa.ramo}</td>
+            <td>{pessoa.secao}</td>
+            <td />
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
 }
 
 function idadeFromNascimento(value: string | null | undefined): string {
@@ -91,6 +148,9 @@ export function AssociadosPage() {
   const [reloadToken, setReloadToken] = useState(0)
   const [page, setPage] = useState(1)
   const pageSize = 20
+  const [printingAssembleia, setPrintingAssembleia] = useState(false)
+  const [assembleia, setAssembleia] = useState<AssembleiaLista | null>(null)
+  const printAssembleiaRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -276,6 +336,117 @@ export function AssociadosPage() {
     }
   }
 
+  useEffect(() => {
+    if (!printAssembleiaRef.current || !assembleia) return
+    printAssembleiaRef.current = false
+    document.body.classList.add('print-lista-assembleia')
+    const cleanup = () => {
+      document.body.classList.remove('print-lista-assembleia')
+      window.removeEventListener('afterprint', cleanup)
+    }
+    window.addEventListener('afterprint', cleanup)
+    window.print()
+  }, [assembleia])
+
+  async function imprimirListaAssembleia() {
+    if (!empresaId || printingAssembleia) return
+    setPrintingAssembleia(true)
+    setError(null)
+    try {
+      const hoje = hojeIso()
+      const [catRes, assocRes, atrasoRes] = await Promise.all([
+        supabase.from('categoria').select('categoria_id, nome'),
+        supabase
+          .from('associados')
+          .select('associado_id, registro, nome, categoria, isento, ramo, secao, ativo')
+          .eq('empresa_id', empresaId)
+          .or('ativo.is.null,ativo.eq.true')
+          .order('nome')
+          .limit(5000),
+        supabase
+          .from('receitas')
+          .select('associado_id')
+          .eq('empresa_id', empresaId)
+          .eq('receita_origem', RECEITA_ORIGEM.MENSALIDADE)
+          .gt('receita_saldo', 0)
+          .lt('receita_vencimento', hoje)
+          .not('associado_id', 'is', null)
+          .limit(5000),
+      ])
+
+      if (catRes.error) throw new Error(catRes.error.message)
+      if (assocRes.error) throw new Error(assocRes.error.message)
+      if (atrasoRes.error) throw new Error(atrasoRes.error.message)
+
+      const catMap = new Map(
+        ((catRes.data ?? []) as { categoria_id: number; nome: string }[]).map(
+          (c) => [c.categoria_id, c.nome],
+        ),
+      )
+      const atrasados = new Set(
+        ((atrasoRes.data ?? []) as { associado_id: number | null }[])
+          .map((r) => r.associado_id)
+          .filter((id): id is number => id != null),
+      )
+
+      const beneficiarios: AssembleiaPessoa[] = []
+      const voluntarios: AssembleiaPessoa[] = []
+
+      type Row = {
+        associado_id: number
+        registro: number | null
+        nome: string | null
+        categoria: number | null
+        isento: boolean | null
+        ramo: number | null
+        secao: number | null
+      }
+
+      for (const row of (assocRes.data as Row[]) ?? []) {
+        const catNome =
+          row.categoria != null ? (catMap.get(row.categoria) ?? null) : null
+        const pessoa: AssembleiaPessoa = {
+          associado_id: row.associado_id,
+          registro: row.registro,
+          nome: row.nome?.trim() || `Associado #${row.associado_id}`,
+          ramo:
+            row.ramo != null
+              ? (ramos.find((r) => r.ramo_id === row.ramo)?.nome ??
+                `Ramo ${row.ramo}`)
+              : '—',
+          secao:
+            row.secao != null
+              ? (secoes.find((s) => s.secao_id === row.secao)?.nome ??
+                `Seção ${row.secao}`)
+              : '—',
+        }
+        if (categoriaEhBeneficiario(catNome)) {
+          const emDia = row.isento === true || !atrasados.has(row.associado_id)
+          if (emDia) beneficiarios.push(pessoa)
+        } else {
+          voluntarios.push(pessoa)
+        }
+      }
+
+      beneficiarios.sort(sortNome)
+      voluntarios.sort(sortNome)
+      printAssembleiaRef.current = true
+      setAssembleia({
+        geradaEm: new Date().toLocaleString('pt-BR'),
+        beneficiarios,
+        voluntarios,
+      })
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível montar a lista de assembleia.',
+      )
+    } finally {
+      setPrintingAssembleia(false)
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
   const pageSafe = Math.min(page, totalPages)
   const pageRows = useMemo(() => {
@@ -308,46 +479,90 @@ export function AssociadosPage() {
 
   return (
     <>
-      <header className="page-header">
+      <header className="page-header no-print">
         <div>
           <h2>Associados</h2>
           <p>
             Membros do grupo <strong>{empresa?.nome}</strong>
           </p>
         </div>
-        {canWrite ? (
-          <div className="page-header-actions actions-pair">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              hidden
-              onChange={(e) => void handleImportFile(e.target.files?.[0] ?? null)}
-            />
-            <button
-              type="button"
-              className="btn btn-excel btn-with-icon"
-              disabled={importing}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <ExcelIcon />
-              {importing ? 'Importando…' : 'Importar Excel'}
-            </button>
-            <Link className="btn btn-primary btn-with-icon" to="/associados/novo">
-              <AddIcon />
-              Novo associado
-            </Link>
-          </div>
-        ) : null}
+        <div className="page-header-actions">
+          <button
+            type="button"
+            className="btn btn-soft"
+            disabled={printingAssembleia || importing}
+            onClick={() => void imprimirListaAssembleia()}
+          >
+            {printingAssembleia ? 'Montando lista…' : 'Lista assembleia'}
+          </button>
+          {canWrite ? (
+            <div className="page-header-actions actions-pair">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                hidden
+                onChange={(e) =>
+                  void handleImportFile(e.target.files?.[0] ?? null)
+                }
+              />
+              <button
+                type="button"
+                className="btn btn-excel btn-with-icon"
+                disabled={importing}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <ExcelIcon />
+                {importing ? 'Importando…' : 'Importar Excel'}
+              </button>
+              <Link
+                className="btn btn-primary btn-with-icon"
+                to="/associados/novo"
+              >
+                <AddIcon />
+                Novo associado
+              </Link>
+            </div>
+          ) : null}
+        </div>
       </header>
 
       <WaitingOverlay
-        open={importing}
-        title="Aguarde — importação em andamento"
-        message="Lendo o arquivo Excel e gravando os associados. Isso pode levar alguns instantes…"
+        open={importing || printingAssembleia}
+        title={
+          printingAssembleia
+            ? 'Montando lista de assembleia'
+            : 'Aguarde — importação em andamento'
+        }
+        message={
+          printingAssembleia
+            ? 'Separando beneficiários com mensalidade em dia e voluntários…'
+            : 'Lendo o arquivo Excel e gravando os associados. Isso pode levar alguns instantes…'
+        }
       />
 
-      <section className="panel">
+      {assembleia ? (
+        <section className="print-only lista-assembleia-print">
+          <h2>Lista de assembleia</h2>
+          <p>
+            <strong>{empresa?.nome}</strong>
+            {' · '}
+            {assembleia.geradaEm}
+          </p>
+          <p>
+            Beneficiários ativos com mensalidade em dia (isentos ou sem título
+            vencido em aberto) e todos os voluntários ativos.
+          </p>
+
+          <h3>Beneficiários ({assembleia.beneficiarios.length})</h3>
+          <AssembleiaTabela pessoas={assembleia.beneficiarios} />
+
+          <h3>Voluntários ({assembleia.voluntarios.length})</h3>
+          <AssembleiaTabela pessoas={assembleia.voluntarios} />
+        </section>
+      ) : null}
+
+      <section className="panel no-print">
         <div className="toolbar filtros-associados">
           <input
             className="input"
