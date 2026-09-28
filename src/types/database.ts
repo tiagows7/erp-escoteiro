@@ -210,6 +210,13 @@ export type Atividade = {
   local: string | null
   valor: number
   data_atividade: string | null
+  valor_grupo?: number | null
+  valor_grupo_tipo?: 'percentual' | 'por_jovem' | null
+  encerrado_em?: string | null
+  repasse_grupo?: number | null
+  repasse_jovens?: number | null
+  repasse_base?: number | null
+  repasse_despesa_id?: number | null
   created_at: string | null
 }
 
@@ -381,6 +388,12 @@ export type VendaEvento = {
   imagem_url: string | null
   link_token: string
   encerrado_em: string | null
+  valor_grupo?: number | null
+  valor_grupo_tipo?: 'percentual' | 'por_jovem' | null
+  repasse_grupo?: number | null
+  repasse_jovens?: number | null
+  repasse_base?: number | null
+  repasse_despesa_id?: number | null
   created_at: string | null
 }
 

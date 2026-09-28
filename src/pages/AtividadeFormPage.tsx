@@ -10,7 +10,18 @@ import {
   usePersistedFormState,
 } from '@/hooks/usePersistedFormState'
 import { StaffAtividadesPanel } from '@/components/StaffAtividadesPanel'
-import { formatMoney, parseMoneyInput } from '@/lib/despesas'
+import { formatMoneyInput, parseMoneyInput } from '@/lib/despesas'
+import { isEncerrado } from '@/lib/encerrado'
+import {
+  calcRepasseGrupo,
+  isValorGrupoTipo,
+  repasseDespesaPath,
+  type ValorGrupoTipo,
+} from '@/lib/repasseGrupo'
+import {
+  RepasseGrupoCampos,
+  RepasseGrupoPainel,
+} from '@/components/RepasseGrupoPainel'
 import { empresaTemPixParaEscopo } from '@/lib/pixSicredi'
 import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
 import type { Ramo } from '@/types/database'
@@ -31,6 +42,8 @@ const emptyForm = {
   local: '',
   data_atividade: '',
   valor: '0,00',
+  valor_grupo: '0,00',
+  valor_grupo_tipo: 'por_jovem' as ValorGrupoTipo,
 }
 
 function unidadeLabel(ramoId: number | null): string {
@@ -83,6 +96,15 @@ export function AtividadeFormPage() {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
   const [pixEscopoOk, setPixEscopoOk] = useState<boolean | null>(null)
+  const [encerradoEm, setEncerradoEm] = useState<string | null>(null)
+  const [repasseSalvo, setRepasseSalvo] = useState<{
+    repasse: number
+    jovens: number
+    base: number
+  } | null>(null)
+  const [repasseDespesaId, setRepasseDespesaId] = useState<number | null>(null)
+  const [jovensLive, setJovensLive] = useState(0)
+  const [baseLive, setBaseLive] = useState(0)
 
   const ramoId = form.ramo ? Number(form.ramo) : null
   const secaoId = form.secao ? Number(form.secao) : null
@@ -164,7 +186,7 @@ export function AtividadeFormPage() {
       const { data, error: loadError } = await supabase
         .from('atividades')
         .select(
-          'atividade_id, ramo, secao, patrulha_matilha, descricao, local, valor, data_atividade',
+          'atividade_id, ramo, secao, patrulha_matilha, descricao, local, valor, data_atividade, valor_grupo, valor_grupo_tipo, encerrado_em, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id',
         )
         .eq('atividade_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -192,10 +214,27 @@ export function AtividadeFormPage() {
         data_atividade: data.data_atividade
           ? String(data.data_atividade).slice(0, 10)
           : '',
-        valor: formatMoney(Number(data.valor ?? 0))
-          .replace('R$', '')
-          .trim(),
+        valor: formatMoneyInput(Number(data.valor ?? 0)),
+        valor_grupo: formatMoneyInput(Number(data.valor_grupo ?? 0)),
+        valor_grupo_tipo: isValorGrupoTipo(data.valor_grupo_tipo)
+          ? data.valor_grupo_tipo
+          : 'por_jovem',
       })
+      setEncerradoEm((data.encerrado_em as string | null) ?? null)
+      if (data.repasse_grupo != null) {
+        setRepasseSalvo({
+          repasse: Number(data.repasse_grupo),
+          jovens: Number(data.repasse_jovens ?? 0),
+          base: Number(data.repasse_base ?? 0),
+        })
+      } else {
+        setRepasseSalvo(null)
+      }
+      setRepasseDespesaId(
+        data.repasse_despesa_id != null
+          ? Number(data.repasse_despesa_id)
+          : null,
+      )
       setLoading(false)
     })()
 
@@ -203,6 +242,43 @@ export function AtividadeFormPage() {
       mounted = false
     }
   }, [id, isNew, empresaId, ramoScoped])
+
+  useEffect(() => {
+    if (isNew || !empresaId || !id) return
+    let mounted = true
+    void (async () => {
+      const [confRes, recRes] = await Promise.all([
+        supabase
+          .from('atividade_confirmacao')
+          .select('confirmacao_id', { count: 'exact', head: true })
+          .eq('empresa_id', empresaId)
+          .eq('atividade_id', Number(id)),
+        supabase
+          .from('receitas')
+          .select('receita_valor, receita_saldo')
+          .eq('empresa_id', empresaId)
+          .eq('atividade_id', Number(id)),
+      ])
+      if (!mounted) return
+      setJovensLive(confRes.count ?? 0)
+      const base = ((recRes.data ?? []) as {
+        receita_valor: number | null
+        receita_saldo: number | null
+      }[]).reduce(
+        (sum, row) =>
+          sum +
+          Math.max(
+            0,
+            Number(row.receita_valor ?? 0) - Number(row.receita_saldo ?? 0),
+          ),
+        0,
+      )
+      setBaseLive(base)
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [id, isNew, empresaId])
 
   function update(field: keyof typeof emptyForm, value: string) {
     setForm((prev) => {
@@ -218,10 +294,60 @@ export function AtividadeFormPage() {
     })
   }
 
+  async function onEncerrar() {
+    if (!canWrite || isNew || !empresaId || isEncerrado(encerradoEm)) return
+    const ok = await toast.confirm({
+      title: 'Encerrar atividade?',
+      message:
+        'O valor a repassar ao grupo será calculado e gravado. Depois disso a atividade fica só para visualização.',
+      confirmLabel: 'Encerrar',
+      danger: true,
+    })
+    if (!ok) return
+
+    const tipo = form.valor_grupo_tipo
+    const calc = calcRepasseGrupo({
+      tipo,
+      valor: parseMoneyInput(form.valor_grupo),
+      jovens: jovensLive,
+      baseRecebida: baseLive,
+    })
+    const { error: upError, data } = await supabase
+      .from('atividades')
+      .update({
+        valor_grupo: parseMoneyInput(form.valor_grupo),
+        valor_grupo_tipo: tipo,
+        encerrado_em: new Date().toISOString(),
+        repasse_grupo: calc.repasse,
+        repasse_jovens: calc.jovens,
+        repasse_base: calc.base,
+      })
+      .eq('atividade_id', Number(id))
+      .eq('empresa_id', empresaId)
+      .select('encerrado_em, repasse_grupo, repasse_jovens, repasse_base')
+      .single()
+
+    if (upError || !data) {
+      setError(upError?.message ?? 'Não foi possível encerrar a atividade.')
+      return
+    }
+    setEncerradoEm((data.encerrado_em as string | null) ?? null)
+    setRepasseSalvo({
+      repasse: Number(data.repasse_grupo ?? calc.repasse),
+      jovens: Number(data.repasse_jovens ?? calc.jovens),
+      base: Number(data.repasse_base ?? calc.base),
+    })
+    toast.success('Atividade encerrada', 'Repasse ao grupo calculado.')
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     if (!canWrite) {
       setError('Sem permissão para alterar atividades.')
+      return
+    }
+    if (!isNew && isEncerrado(encerradoEm)) {
+      setError('Atividade encerrada — somente visualização.')
       return
     }
     if (!empresaId) {
@@ -258,6 +384,8 @@ export function AtividadeFormPage() {
       local: form.local.trim() || null,
       data_atividade: form.data_atividade || null,
       valor: parseMoneyInput(form.valor),
+      valor_grupo: parseMoneyInput(form.valor_grupo),
+      valor_grupo_tipo: form.valor_grupo_tipo,
     }
 
     const result = isNew
@@ -334,6 +462,27 @@ export function AtividadeFormPage() {
     )
   }
 
+  const encerrado = isEncerrado(encerradoEm)
+  const tipoGrupo = form.valor_grupo_tipo
+  const preview = calcRepasseGrupo({
+    tipo: tipoGrupo,
+    valor: parseMoneyInput(form.valor_grupo),
+    jovens: jovensLive,
+    baseRecebida: baseLive,
+  })
+  const repasseVista =
+    encerrado && repasseSalvo
+      ? {
+          tipo: tipoGrupo,
+          valor: parseMoneyInput(form.valor_grupo),
+          ...repasseSalvo,
+        }
+      : {
+          tipo: tipoGrupo,
+          valor: parseMoneyInput(form.valor_grupo),
+          ...preview,
+        }
+
   return (
     <>
       <WaitingOverlay
@@ -355,7 +504,7 @@ export function AtividadeFormPage() {
               Contas
             </Link>
           ) : null}
-          {!isNew && canFinanceiro ? (
+          {!isNew && canFinanceiro && !encerrado ? (
             <>
               <Link
                 className="btn btn-accent"
@@ -374,7 +523,16 @@ export function AtividadeFormPage() {
           <Link className="btn btn-soft" to="/atividades">
             Voltar
           </Link>
-          {!isNew && canWrite ? (
+          {!isNew && canWrite && !encerrado ? (
+            <button
+              type="button"
+              className="btn btn-soft"
+              onClick={() => void onEncerrar()}
+            >
+              Encerrar
+            </button>
+          ) : null}
+          {!isNew && canWrite && !encerrado ? (
             <button
               type="button"
               className="btn btn-danger"
@@ -407,7 +565,7 @@ export function AtividadeFormPage() {
                 className="select"
                 value={form.ramo}
                 onChange={(e) => update('ramo', e.target.value)}
-                disabled={!canWrite || ramoScoped != null}
+                disabled={!canWrite || encerrado || ramoScoped != null}
               >
                 <option value="">Grupo todo (todos os ramos)</option>
                 {ramos
@@ -484,7 +642,7 @@ export function AtividadeFormPage() {
                 className="input"
                 value={form.descricao}
                 onChange={(e) => update('descricao', e.target.value)}
-                disabled={!canWrite}
+                disabled={!canWrite || encerrado}
                 maxLength={200}
                 required
               />
@@ -498,7 +656,7 @@ export function AtividadeFormPage() {
                 type="date"
                 value={form.data_atividade}
                 onChange={(e) => update('data_atividade', e.target.value)}
-                disabled={!canWrite}
+                disabled={!canWrite || encerrado}
               />
               <span className="field-hint">
                 Aparece no calendário do grupo nesta data.
@@ -512,7 +670,7 @@ export function AtividadeFormPage() {
                 className="input"
                 value={form.local}
                 onChange={(e) => update('local', e.target.value)}
-                disabled={!canWrite}
+                disabled={!canWrite || encerrado}
                 maxLength={120}
               />
             </div>
@@ -525,18 +683,30 @@ export function AtividadeFormPage() {
                 inputMode="decimal"
                 value={form.valor}
                 onChange={(e) => update('valor', e.target.value)}
-                disabled={!canWrite}
+                disabled={!canWrite || encerrado}
               />
             </div>
+
+            <RepasseGrupoCampos
+              tipo={form.valor_grupo_tipo}
+              valor={form.valor_grupo}
+              disabled={!canWrite || encerrado}
+              onTipo={(tipo) => update('valor_grupo_tipo', tipo)}
+              onValor={(valor) => update('valor_grupo', valor)}
+            />
           </div>
 
           <div className="form-actions">
-            {canWrite ? (
+            {canWrite && !encerrado ? (
               <button type="submit" className="btn btn-primary" disabled={saving}>
                 {saving ? 'Salvando…' : 'Salvar'}
               </button>
             ) : (
-              <p className="muted">Modo leitura — sem permissão para salvar.</p>
+              <p className="muted">
+                {encerrado
+                  ? 'Atividade encerrada — somente visualização.'
+                  : 'Modo leitura — sem permissão para salvar.'}
+              </p>
             )}
             <Link className="btn btn-soft" to="/atividades">
               Cancelar
@@ -544,6 +714,34 @@ export function AtividadeFormPage() {
           </div>
         </form>
       </section>
+
+      {!isNew ? (
+        <RepasseGrupoPainel
+          encerrado={encerrado}
+          tipo={repasseVista.tipo}
+          valorConfigurado={repasseVista.valor}
+          repasse={repasseVista.repasse}
+          jovens={repasseVista.jovens}
+          base={repasseVista.base}
+          jovensLabel="Jovens confirmados"
+          acao={
+            encerrado && canFinanceiro && repasseVista.repasse > 0 ? (
+              <Link
+                className="btn btn-accent"
+                to={repasseDespesaPath({
+                  origem: 'atividade',
+                  origemId: Number(id),
+                  despesaId: repasseDespesaId,
+                })}
+              >
+                {repasseDespesaId
+                  ? 'Abrir despesa do repasse'
+                  : 'Lançar como despesa'}
+              </Link>
+            ) : null
+          }
+        />
+      ) : null}
 
       {!isNew && empresaId ? (
         <div style={{ marginTop: '1.25rem' }}>

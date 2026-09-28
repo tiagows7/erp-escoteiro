@@ -18,11 +18,22 @@ import {
 } from '@/hooks/usePersistedFormState'
 import {
   formatMoney,
+  formatMoneyInput,
   parseMoneyInput,
   situacaoDespesaLabel,
 } from '@/lib/despesas'
 import { DocumentosLinks } from '@/components/DocumentosLinks'
 import { isEncerrado } from '@/lib/encerrado'
+import {
+  calcRepasseGrupo,
+  isValorGrupoTipo,
+  repasseDespesaPath,
+  type ValorGrupoTipo,
+} from '@/lib/repasseGrupo'
+import {
+  RepasseGrupoCampos,
+  RepasseGrupoPainel,
+} from '@/components/RepasseGrupoPainel'
 import { situacaoTituloLabel } from '@/lib/receitas'
 import { totalConvitesEvento } from '@/lib/vendaEventos'
 import { uploadVendaEventoImagem } from '@/lib/uploadVendaEventoImagem'
@@ -76,6 +87,8 @@ const emptyForm = {
   numero_inicial: '1',
   numero_final: '100',
   data_evento: '',
+  valor_grupo: '0,00',
+  valor_grupo_tipo: 'por_jovem' as ValorGrupoTipo,
 }
 
 type TipoFormRow = {
@@ -131,6 +144,13 @@ export function VendaEventoFormPage() {
   const [imagemFile, setImagemFile] = useState<File | null>(null)
   const [imagemPreview, setImagemPreview] = useState<string | null>(null)
   const [encerradoEm, setEncerradoEm] = useState<string | null>(null)
+  const [jovensEvento, setJovensEvento] = useState(0)
+  const [repasseSalvo, setRepasseSalvo] = useState<{
+    repasse: number
+    jovens: number
+    base: number
+  } | null>(null)
+  const [repasseDespesaId, setRepasseDespesaId] = useState<number | null>(null)
   const imagemInputRef = useRef<HTMLInputElement>(null)
 
   const ramoId = form.ramo ? Number(form.ramo) : null
@@ -185,7 +205,7 @@ export function VendaEventoFormPage() {
       const { data, error: loadError } = await supabase
         .from('venda_eventos')
         .select(
-          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, encerrado_em',
+          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id',
         )
         .eq('evento_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -216,11 +236,29 @@ export function VendaEventoFormPage() {
         data_evento: data.data_evento
           ? String(data.data_evento).slice(0, 10)
           : '',
+        valor_grupo: formatMoneyInput(Number(data.valor_grupo ?? 0)),
+        valor_grupo_tipo: isValorGrupoTipo(data.valor_grupo_tipo)
+          ? data.valor_grupo_tipo
+          : 'por_jovem',
       })
       setImagemUrl(data.imagem_url ?? null)
       setImagemPreview(data.imagem_url ?? null)
       setImagemFile(null)
       setEncerradoEm((data.encerrado_em as string | null) ?? null)
+      if (data.repasse_grupo != null) {
+        setRepasseSalvo({
+          repasse: Number(data.repasse_grupo),
+          jovens: Number(data.repasse_jovens ?? 0),
+          base: Number(data.repasse_base ?? 0),
+        })
+      } else {
+        setRepasseSalvo(null)
+      }
+      setRepasseDespesaId(
+        data.repasse_despesa_id != null
+          ? Number(data.repasse_despesa_id)
+          : null,
+      )
 
       const { data: tiposData } = await supabase
         .from('venda_evento_tipo')
@@ -255,7 +293,7 @@ export function VendaEventoFormPage() {
         ])
       }
 
-      const [r, d] = await Promise.all([
+      const [r, d, convites] = await Promise.all([
         supabase
           .from('receitas')
           .select(
@@ -272,6 +310,12 @@ export function VendaEventoFormPage() {
           .eq('empresa_id', empresaId)
           .eq('evento_id', data.evento_id)
           .order('despesa_vencimento', { ascending: true }),
+        supabase
+          .from('venda_evento_convite')
+          .select('convite_id', { count: 'exact', head: true })
+          .eq('empresa_id', empresaId)
+          .eq('evento_id', data.evento_id)
+          .or('ativo.is.null,ativo.eq.true'),
       ])
 
       if (!mounted) return
@@ -284,6 +328,7 @@ export function VendaEventoFormPage() {
       } else {
         setReceitas((r.data as unknown as ReceitaRow[]) ?? [])
         setDespesas((d.data as unknown as DespesaRow[]) ?? [])
+        setJovensEvento(convites.count ?? 0)
       }
       setLoading(false)
     })()
@@ -388,18 +433,32 @@ export function VendaEventoFormPage() {
     const ok = await toast.confirm({
       title: 'Encerrar evento?',
       message:
-        'Depois de encerrado, não será possível vender convites nem lançar despesas/receitas — só visualizar.',
+        'O valor a repassar ao grupo será calculado e gravado. Depois de encerrado, não será possível vender convites nem lançar despesas/receitas — só visualizar.',
       confirmLabel: 'Encerrar',
       danger: true,
     })
     if (!ok) return
 
+    const tipo = form.valor_grupo_tipo
+    const calc = calcRepasseGrupo({
+      tipo,
+      valor: parseMoneyInput(form.valor_grupo),
+      jovens: jovensEvento,
+      baseRecebida: totais.recebido,
+    })
     const { error: upError, data } = await supabase
       .from('venda_eventos')
-      .update({ encerrado_em: new Date().toISOString() })
+      .update({
+        valor_grupo: parseMoneyInput(form.valor_grupo),
+        valor_grupo_tipo: tipo,
+        encerrado_em: new Date().toISOString(),
+        repasse_grupo: calc.repasse,
+        repasse_jovens: calc.jovens,
+        repasse_base: calc.base,
+      })
       .eq('evento_id', Number(id))
       .eq('empresa_id', empresaId)
-      .select('encerrado_em')
+      .select('encerrado_em, repasse_grupo, repasse_jovens, repasse_base')
       .single()
 
     if (upError || !data) {
@@ -407,7 +466,15 @@ export function VendaEventoFormPage() {
       return
     }
     setEncerradoEm((data.encerrado_em as string | null) ?? null)
-    toast.success('Evento encerrado', 'Agora só é possível visualizar.')
+    setRepasseSalvo({
+      repasse: Number(data.repasse_grupo ?? calc.repasse),
+      jovens: Number(data.repasse_jovens ?? calc.jovens),
+      base: Number(data.repasse_base ?? calc.base),
+    })
+    toast.success(
+      'Evento encerrado',
+      'Repasse ao grupo calculado. Agora só é possível visualizar.',
+    )
   }
 
   async function onSubmit(event: FormEvent) {
@@ -484,6 +551,8 @@ export function VendaEventoFormPage() {
       numero_final: numeroFinal,
       valor_convite: valorPadrao,
       data_evento: form.data_evento || null,
+      valor_grupo: parseMoneyInput(form.valor_grupo),
+      valor_grupo_tipo: form.valor_grupo_tipo,
     }
 
     const result = isNew
@@ -648,6 +717,15 @@ export function VendaEventoFormPage() {
   }
 
   const encerrado = isEncerrado(encerradoEm)
+  const repasseExibido =
+    encerrado && repasseSalvo
+      ? repasseSalvo.repasse
+      : calcRepasseGrupo({
+          tipo: form.valor_grupo_tipo,
+          valor: parseMoneyInput(form.valor_grupo),
+          jovens: jovensEvento,
+          baseRecebida: totais.recebido,
+        }).repasse
   const disabled = saving || !canWrite || encerrado
   const qtdePreview = totalConvitesEvento(
     Number(String(form.numero_inicial).replace(/\D/g, '')),
@@ -925,6 +1003,14 @@ export function VendaEventoFormPage() {
             </div>
           </div>
 
+          <RepasseGrupoCampos
+            tipo={form.valor_grupo_tipo}
+            valor={form.valor_grupo}
+            disabled={disabled}
+            onTipo={(tipo) => update('valor_grupo_tipo', tipo)}
+            onValor={(valor) => update('valor_grupo', valor)}
+          />
+
           <div className="field">
             <label htmlFor="numero_inicial">Convite inicial</label>
             <input
@@ -1079,6 +1165,38 @@ export function VendaEventoFormPage() {
               <p>{caixaLabel}</p>
             </div>
           </section>
+
+          {!associadoLogin ? (
+          <RepasseGrupoPainel
+            encerrado={encerrado}
+            tipo={form.valor_grupo_tipo}
+            valorConfigurado={parseMoneyInput(form.valor_grupo)}
+            repasse={repasseExibido}
+            jovens={
+              encerrado && repasseSalvo ? repasseSalvo.jovens : jovensEvento
+            }
+            base={
+              encerrado && repasseSalvo ? repasseSalvo.base : totais.recebido
+            }
+            jovensLabel="Jovens (convites ativos)"
+            acao={
+              encerrado && canFinanceiro && repasseExibido > 0 ? (
+                <Link
+                  className="btn btn-accent"
+                  to={repasseDespesaPath({
+                    origem: 'evento',
+                    origemId: Number(id),
+                    despesaId: repasseDespesaId,
+                  })}
+                >
+                  {repasseDespesaId
+                    ? 'Abrir despesa do repasse'
+                    : 'Lançar como despesa'}
+                </Link>
+              ) : null
+            }
+          />
+          ) : null}
 
           <section className="panel" style={{ marginBottom: '1rem' }}>
             <h3 style={{ marginTop: 0 }}>Receitas</h3>

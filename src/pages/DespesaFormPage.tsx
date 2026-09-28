@@ -16,6 +16,7 @@ import {
   situacaoDespesaLabel,
   situacaoFromSaldo,
 } from '@/lib/despesas'
+import { REPASSE_DESPESA_FINALIDADE } from '@/lib/repasseGrupo'
 import { isNotaImage, uploadDespesaNotas } from '@/lib/uploadDespesaNota'
 import {
   documentLabel,
@@ -80,6 +81,10 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function valorCampo(value: number): string {
+  return value.toFixed(2).replace('.', ',')
+}
+
 export function DespesaFormPage() {
   const { id } = useParams()
   const [searchParams] = useSearchParams()
@@ -94,6 +99,7 @@ export function DespesaFormPage() {
   const eventoIdParam = searchParams.get('evento_id')
   const acaoIdParam = searchParams.get('acao_id')
   const atividadeIdParam = searchParams.get('atividade_id')
+  const repasseParam = searchParams.get('repasse') === '1'
   const lockedByProjeto = isNew && !!projetoIdParam
   const lockedByEvento = isNew && !!eventoIdParam
   const lockedByAcao = isNew && !!acaoIdParam
@@ -386,7 +392,9 @@ export function DespesaFormPage() {
     const eid = Number(eventoIdParam)
     if (!Number.isFinite(eid) || eid <= 0) return
 
-    const fromList = eventos.find((e) => e.evento_id === eid)
+    const fromList = repasseParam
+      ? undefined
+      : eventos.find((e) => e.evento_id === eid)
     if (fromList) {
       setForm((prev) => ({
         ...prev,
@@ -406,18 +414,46 @@ export function DespesaFormPage() {
 
     void supabase
       .from('venda_eventos')
-      .select('evento_id, nome, ramo, secao, encerrado_em')
+      .select(
+        'evento_id, nome, ramo, secao, encerrado_em, repasse_grupo, repasse_despesa_id',
+      )
       .eq('empresa_id', empresaId)
       .eq('evento_id', eid)
       .maybeSingle()
       .then(({ data }) => {
         if (!data) return
-        if (data.encerrado_em) {
+        if (data.encerrado_em && !repasseParam) {
           setError(
             'Este evento está encerrado — não é possível lançar despesas.',
           )
           return
         }
+        if (repasseParam && data.repasse_despesa_id) {
+          navigate(`/despesas/inclusao/${data.repasse_despesa_id}`, {
+            replace: true,
+          })
+          return
+        }
+        const repasse = Number(data.repasse_grupo ?? 0)
+        if (repasseParam && !(repasse > 0)) {
+          setError('Não há valor de repasse calculado para este evento.')
+          return
+        }
+        setEventos((prev) =>
+          prev.some((e) => e.evento_id === data.evento_id)
+            ? prev
+            : [
+                ...prev,
+                {
+                  evento_id: data.evento_id as number,
+                  nome: data.nome as string,
+                  ramo: (data.ramo as number | null) ?? null,
+                  secao: (data.secao as number | null) ?? null,
+                  data_evento: null,
+                  encerrado_em: (data.encerrado_em as string | null) ?? null,
+                },
+              ],
+        )
         setForm((prev) => ({
           ...prev,
           evento_id: String(data.evento_id),
@@ -427,12 +463,15 @@ export function DespesaFormPage() {
           despesa_ramo: data.ramo != null ? String(data.ramo) : '',
           despesa_secao: data.secao != null ? String(data.secao) : '',
           despesa_secaonome: '',
-          despesa_valor: '0,00',
+          despesa_valor: repasseParam ? valorCampo(repasse) : '0,00',
           despesa_finalidade:
-            prev.despesa_finalidade.trim() || `Evento: ${data.nome}`,
+            prev.despesa_finalidade.trim() ||
+            (repasseParam
+              ? `${REPASSE_DESPESA_FINALIDADE} — ${data.nome}`
+              : `Evento: ${data.nome}`),
         }))
       })
-  }, [isNew, eventoIdParam, eventos, empresaId])
+  }, [isNew, eventoIdParam, eventos, empresaId, repasseParam, navigate])
 
   useEffect(() => {
     if (!isNew || !acaoIdParam || !empresaId) return
@@ -500,7 +539,9 @@ export function DespesaFormPage() {
     const aid = Number(atividadeIdParam)
     if (!Number.isFinite(aid) || aid <= 0) return
 
-    const fromList = atividades.find((a) => a.atividade_id === aid)
+    const fromList = repasseParam
+      ? undefined
+      : atividades.find((a) => a.atividade_id === aid)
     if (fromList) {
       setForm((prev) => ({
         ...prev,
@@ -524,12 +565,31 @@ export function DespesaFormPage() {
 
     void supabase
       .from('atividades')
-      .select('atividade_id, descricao, ramo, secao, patrulha_matilha')
+      .select(
+        'atividade_id, descricao, ramo, secao, patrulha_matilha, encerrado_em, repasse_grupo, repasse_despesa_id',
+      )
       .eq('empresa_id', empresaId)
       .eq('atividade_id', aid)
       .maybeSingle()
       .then(({ data }) => {
         if (!data) return
+        if (data.encerrado_em && !repasseParam) {
+          setError(
+            'Esta atividade está encerrada — não é possível lançar despesas.',
+          )
+          return
+        }
+        if (repasseParam && data.repasse_despesa_id) {
+          navigate(`/despesas/inclusao/${data.repasse_despesa_id}`, {
+            replace: true,
+          })
+          return
+        }
+        const repasse = Number(data.repasse_grupo ?? 0)
+        if (repasseParam && !(repasse > 0)) {
+          setError('Não há valor de repasse calculado para esta atividade.')
+          return
+        }
         setForm((prev) => ({
           ...prev,
           atividade_id: String(data.atividade_id),
@@ -542,13 +602,15 @@ export function DespesaFormPage() {
             data.patrulha_matilha != null
               ? String(data.patrulha_matilha)
               : '',
-          despesa_valor: '0,00',
+          despesa_valor: repasseParam ? valorCampo(repasse) : '0,00',
           despesa_finalidade:
             prev.despesa_finalidade.trim() ||
-            `Atividade: ${data.descricao}`,
+            (repasseParam
+              ? `${REPASSE_DESPESA_FINALIDADE} — ${data.descricao}`
+              : `Atividade: ${data.descricao}`),
         }))
       })
-  }, [isNew, atividadeIdParam, atividades, empresaId])
+  }, [isNew, atividadeIdParam, atividades, empresaId, repasseParam, navigate])
 
   useEffect(() => {
     if (isNew || !empresaId) return
@@ -727,6 +789,35 @@ export function DespesaFormPage() {
         setSaving(false)
         setError(insertError?.message ?? 'Não foi possível salvar a despesa.')
         return
+      }
+
+      if (repasseParam) {
+        const despesaId = created.despesa_id as number
+        const vinculo = atividadeIdParam
+          ? supabase
+              .from('atividades')
+              .update({ repasse_despesa_id: despesaId })
+              .eq('atividade_id', Number(atividadeIdParam))
+              .eq('empresa_id', empresaId)
+              .is('repasse_despesa_id', null)
+          : eventoIdParam
+            ? supabase
+                .from('venda_eventos')
+                .update({ repasse_despesa_id: despesaId })
+                .eq('evento_id', Number(eventoIdParam))
+                .eq('empresa_id', empresaId)
+                .is('repasse_despesa_id', null)
+            : null
+        if (vinculo) {
+          const { error: linkError } = await vinculo
+          if (linkError) {
+            setSaving(false)
+            setError(
+              `Despesa salva, mas não vinculou ao repasse: ${linkError.message}`,
+            )
+            return
+          }
+        }
       }
 
       if (quitarNaInclusao) {

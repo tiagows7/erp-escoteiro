@@ -7,6 +7,9 @@ import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { formatMoney, situacaoDespesaLabel } from '@/lib/despesas'
 import { situacaoTituloLabel } from '@/lib/receitas'
 import { isAssociadoLogin, staffRamoScope } from '@/lib/roles'
+import { isEncerrado } from '@/lib/encerrado'
+import { isValorGrupoTipo, repasseDespesaPath } from '@/lib/repasseGrupo'
+import { RepasseGrupoPainel } from '@/components/RepasseGrupoPainel'
 import {
   atividadeVisivelPara,
   type AssociadoAtividadeCtx,
@@ -93,7 +96,7 @@ export function AtividadeContasPage() {
         supabase
           .from('atividades')
           .select(
-            'atividade_id, empresa_id, ramo, secao, patrulha_matilha, descricao, local, valor, created_at',
+            'atividade_id, empresa_id, ramo, secao, patrulha_matilha, descricao, local, valor, created_at, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id',
           )
           .eq('atividade_id', atividadeId)
           .eq('empresa_id', empresaId)
@@ -262,7 +265,7 @@ export function AtividadeContasPage() {
           </p>
         </div>
         <div className="page-header-actions actions-pair">
-          {canFinanceiro ? (
+          {canFinanceiro && !isEncerrado(atividade.encerrado_em) ? (
             <>
               <Link
                 className="btn btn-accent"
@@ -328,6 +331,40 @@ export function AtividadeContasPage() {
           </p>
         </div>
       </section>
+
+      {!associadoLogin &&
+      isEncerrado(atividade.encerrado_em) &&
+      atividade.repasse_grupo != null ? (
+        <RepasseGrupoPainel
+          encerrado
+          tipo={
+            isValorGrupoTipo(atividade.valor_grupo_tipo)
+              ? atividade.valor_grupo_tipo
+              : 'por_jovem'
+          }
+          valorConfigurado={Number(atividade.valor_grupo ?? 0)}
+          repasse={Number(atividade.repasse_grupo)}
+          jovens={Number(atividade.repasse_jovens ?? 0)}
+          base={Number(atividade.repasse_base ?? 0)}
+          jovensLabel="Jovens confirmados"
+          acao={
+            canFinanceiro && Number(atividade.repasse_grupo) > 0 ? (
+              <Link
+                className="btn btn-accent"
+                to={repasseDespesaPath({
+                  origem: 'atividade',
+                  origemId: atividade.atividade_id,
+                  despesaId: atividade.repasse_despesa_id,
+                })}
+              >
+                {atividade.repasse_despesa_id
+                  ? 'Abrir despesa do repasse'
+                  : 'Lançar como despesa'}
+              </Link>
+            ) : null
+          }
+        />
+      ) : null}
 
       <section className="panel" style={{ marginBottom: '1rem' }}>
         <h3 style={{ marginTop: 0 }}>Receitas</h3>
