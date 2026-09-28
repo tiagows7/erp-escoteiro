@@ -226,7 +226,7 @@ export function SolicitacaoFormPage() {
 
   return (
     <>
-      <WaitingOverlay show={saving} message="Salvando solicitação…" />
+      <WaitingOverlay open={saving} message="Salvando solicitação…" />
       <header className="page-header">
         <div>
           <h2>{isNew ? 'Nova solicitação' : 'Solicitação'}</h2>

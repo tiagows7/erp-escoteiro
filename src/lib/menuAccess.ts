@@ -276,13 +276,14 @@ export function filterNavItemsByMenuKeys(
   opts?: { associadoLogin?: boolean },
 ): NavItem[] {
   if (menuKeys == null) return items
+  const keys = menuKeys
   const associadoLogin = opts?.associadoLogin === true
 
   function filterItems(list: NavItem[]): NavItem[] {
     return list
       .map((item) => {
         if (item.type === 'link') {
-          return menuKeys.includes(item.to) ||
+          return keys.includes(item.to) ||
             isAlwaysVisibleMenuKey(item.to, associadoLogin)
             ? item
             : null
