@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AlertMessage } from '@/components/AlertMessage'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
-import { useVoluntarioNaoBeneficiario } from '@/hooks/useVoluntarioNaoBeneficiario'
+import { useGestorSolicitacoes } from '@/hooks/useGestorSolicitacoes'
 import { supabase } from '@/lib/supabase'
+import {
+  isSolicitacaoSituacao,
+  type SolicitacaoSituacao,
+} from '@/lib/solicitacaoSituacao'
 import type { Ramo } from '@/types/database'
 
 type Secao = {
@@ -27,7 +31,7 @@ const emptyForm = {
   secao_id: '',
   texto: '',
   data_solicitacao: todayIso(),
-  resolvida: false,
+  situacao: 'em_andamento' as SolicitacaoSituacao,
   data_resolvida: '',
 }
 
@@ -39,7 +43,7 @@ export function SolicitacaoFormPage() {
   const toast = useToast()
   const empresaId = empresa?.id
   const canWrite = hasPermission('solicitacoes.write')
-  const { loading: volLoading, allowed } = useVoluntarioNaoBeneficiario()
+  const { loading: gestorLoading, gestor } = useGestorSolicitacoes()
 
   const [form, setForm] = useState(emptyForm)
   const [ramos, setRamos] = useState<Ramo[]>([])
@@ -54,7 +58,18 @@ export function SolicitacaoFormPage() {
   }, [form.ramo_id, secoes])
 
   useEffect(() => {
-    if (!empresaId || !allowed) return
+    if (!isNew) return
+    setForm((prev) => ({
+      ...prev,
+      ramo_id: profile?.codigo_ramo ? String(profile.codigo_ramo) : prev.ramo_id,
+      secao_id: profile?.codigo_secao
+        ? String(profile.codigo_secao)
+        : prev.secao_id,
+    }))
+  }, [isNew, profile?.codigo_ramo, profile?.codigo_secao])
+
+  useEffect(() => {
+    if (!empresaId) return
     void Promise.all([
       supabase
         .from('ramos')
@@ -69,16 +84,16 @@ export function SolicitacaoFormPage() {
       setRamos((r.data as Ramo[]) ?? [])
       setSecoes((s.data as Secao[]) ?? [])
     })
-  }, [empresaId, allowed])
+  }, [empresaId])
 
   useEffect(() => {
-    if (isNew || !empresaId || !allowed) return
+    if (isNew || !empresaId) return
     let mounted = true
     void (async () => {
       const { data, error: loadError } = await supabase
         .from('solicitacoes')
         .select(
-          'solicitacao_id, ramo_id, secao_id, texto, data_solicitacao, resolvida, data_resolvida',
+          'solicitacao_id, ramo_id, secao_id, texto, data_solicitacao, situacao, resolvida, data_resolvida',
         )
         .eq('solicitacao_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -96,7 +111,11 @@ export function SolicitacaoFormPage() {
         secao_id: String(data.secao_id ?? ''),
         texto: data.texto ?? '',
         data_solicitacao: data.data_solicitacao?.slice(0, 10) ?? todayIso(),
-        resolvida: data.resolvida === true,
+        situacao: isSolicitacaoSituacao(data.situacao)
+          ? data.situacao
+          : data.resolvida
+            ? 'realizada'
+            : 'em_andamento',
         data_resolvida: data.data_resolvida?.slice(0, 10) ?? '',
       })
       setLoading(false)
@@ -104,7 +123,7 @@ export function SolicitacaoFormPage() {
     return () => {
       mounted = false
     }
-  }, [id, isNew, empresaId, allowed])
+  }, [id, isNew, empresaId])
 
   function update<K extends keyof typeof emptyForm>(
     key: K,
@@ -113,11 +132,15 @@ export function SolicitacaoFormPage() {
     setForm((prev) => {
       const next = { ...prev, [key]: value }
       if (key === 'ramo_id') next.secao_id = ''
-      if (key === 'resolvida' && value === true && !next.data_resolvida) {
-        next.data_resolvida = todayIso()
-      }
-      if (key === 'resolvida' && value === false) {
+      if (key === 'situacao' && value === 'em_andamento') {
         next.data_resolvida = ''
+      }
+      if (
+        key === 'situacao' &&
+        value !== 'em_andamento' &&
+        !next.data_resolvida
+      ) {
+        next.data_resolvida = todayIso()
       }
       return next
     })
@@ -134,8 +157,13 @@ export function SolicitacaoFormPage() {
       setError('Informe o ramo, a seção e o texto da solicitação.')
       return
     }
-    if (form.resolvida && !form.data_resolvida) {
-      setError('Informe a data em que a solicitação foi resolvida.')
+    if (
+      !isNew &&
+      gestor &&
+      form.situacao !== 'em_andamento' &&
+      !form.data_resolvida
+    ) {
+      setError('Informe a data da situação.')
       return
     }
 
@@ -148,8 +176,10 @@ export function SolicitacaoFormPage() {
       secao_id: secaoId,
       texto,
       data_solicitacao: form.data_solicitacao || todayIso(),
-      resolvida: form.resolvida,
-      data_resolvida: form.resolvida ? form.data_resolvida : null,
+      situacao: isNew ? 'em_andamento' : form.situacao,
+      resolvida: !isNew && form.situacao === 'realizada',
+      data_resolvida:
+        isNew || form.situacao === 'em_andamento' ? null : form.data_resolvida,
     }
 
     if (isNew) {
@@ -170,9 +200,28 @@ export function SolicitacaoFormPage() {
         )
         return
       }
-      navigate(`/solicitacoes/${data.solicitacao_id}`, {
-        state: { flashSuccess: 'Solicitação registrada!' },
+      if (gestor) {
+        navigate(`/solicitacoes/${data.solicitacao_id}`, {
+          state: { flashSuccess: 'Solicitação registrada!' },
+        })
+        return
+      }
+      toast.success(
+        'Solicitação registrada',
+        'O pedido foi enviado para o grupo.',
+      )
+      setForm({
+        ...emptyForm,
+        data_solicitacao: todayIso(),
+        ramo_id: profile?.codigo_ramo ? String(profile.codigo_ramo) : '',
+        secao_id: profile?.codigo_secao ? String(profile.codigo_secao) : '',
       })
+      return
+    }
+
+    if (!gestor) {
+      setSaving(false)
+      setError('Só dirigentes ou usuários sem ramo alteram a solicitação.')
       return
     }
 
@@ -191,7 +240,7 @@ export function SolicitacaoFormPage() {
   }
 
   async function excluir() {
-    if (!canWrite || !empresaId || isNew) return
+    if (!gestor || !empresaId || isNew) return
     if (!window.confirm('Excluir esta solicitação?')) return
     setSaving(true)
     const { error: delError } = await supabase
@@ -209,8 +258,11 @@ export function SolicitacaoFormPage() {
     })
   }
 
-  if (volLoading) return <div className="loading">Carregando…</div>
-  if (!allowed) return <Navigate to="/dashboard" replace />
+  const podeEditar = isNew ? canWrite : gestor
+
+  if (gestorLoading || loading) {
+    return <div className="loading">Carregando solicitação…</div>
+  }
 
   if (!empresaId) {
     return (
@@ -221,8 +273,6 @@ export function SolicitacaoFormPage() {
       </section>
     )
   }
-
-  if (loading) return <div className="loading">Carregando solicitação…</div>
 
   return (
     <>
@@ -235,7 +285,10 @@ export function SolicitacaoFormPage() {
             <strong>{empresa?.nome}</strong>
           </p>
         </div>
-        <Link className="btn btn-soft" to="/solicitacoes">
+        <Link
+          className="btn btn-soft"
+          to={gestor ? '/solicitacoes' : '/dashboard'}
+        >
           Voltar
         </Link>
       </header>
@@ -254,7 +307,7 @@ export function SolicitacaoFormPage() {
               id="sol_ramo"
               className="select"
               value={form.ramo_id}
-              disabled={!canWrite}
+              disabled={!podeEditar}
               onChange={(e) => update('ramo_id', e.target.value)}
               required
             >
@@ -273,7 +326,7 @@ export function SolicitacaoFormPage() {
               id="sol_secao"
               className="select"
               value={form.secao_id}
-              disabled={!canWrite || !form.ramo_id}
+              disabled={!podeEditar || !form.ramo_id}
               onChange={(e) => update('secao_id', e.target.value)}
               required
             >
@@ -295,7 +348,7 @@ export function SolicitacaoFormPage() {
               className="input"
               type="date"
               value={form.data_solicitacao}
-              disabled={!canWrite}
+              disabled={!podeEditar}
               onChange={(e) => update('data_solicitacao', e.target.value)}
               required
             />
@@ -308,45 +361,51 @@ export function SolicitacaoFormPage() {
               className="input"
               rows={5}
               value={form.texto}
-              disabled={!canWrite}
+              disabled={!podeEditar}
               onChange={(e) => update('texto', e.target.value)}
               placeholder="Descreva o pedido…"
               required
             />
           </div>
 
-          <div className="field">
-            <label htmlFor="sol_resolvida">Resolvida</label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <input
-                id="sol_resolvida"
-                type="checkbox"
-                checked={form.resolvida}
-                disabled={!canWrite}
-                onChange={(e) => update('resolvida', e.target.checked)}
-              />
-              Marcar como resolvida
-            </label>
-          </div>
+          {!isNew && gestor ? (
+            <>
+              <div className="field">
+                <label htmlFor="sol_situacao">Situação</label>
+                <select
+                  id="sol_situacao"
+                  className="select"
+                  value={form.situacao}
+                  onChange={(e) =>
+                    update('situacao', e.target.value as SolicitacaoSituacao)
+                  }
+                >
+                  <option value="em_andamento">Em andamento</option>
+                  <option value="realizada">Realizada</option>
+                  <option value="nao_realizada">Não realizada</option>
+                </select>
+              </div>
 
-          <div className="field">
-            <label htmlFor="sol_data_resolvida">Data da resolução</label>
-            <input
-              id="sol_data_resolvida"
-              className="input"
-              type="date"
-              value={form.data_resolvida}
-              disabled={!canWrite || !form.resolvida}
-              onChange={(e) => update('data_resolvida', e.target.value)}
-            />
-          </div>
+              <div className="field">
+                <label htmlFor="sol_data_resolvida">Data da situação</label>
+                <input
+                  id="sol_data_resolvida"
+                  className="input"
+                  type="date"
+                  value={form.data_resolvida}
+                  disabled={form.situacao === 'em_andamento'}
+                  onChange={(e) => update('data_resolvida', e.target.value)}
+                />
+              </div>
+            </>
+          ) : null}
 
-          {canWrite ? (
+          {podeEditar ? (
             <div className="form-actions field-span-2">
               <button className="btn btn-primary" type="submit" disabled={saving}>
                 {saving ? 'Salvando…' : 'Salvar'}
               </button>
-              {!isNew ? (
+              {!isNew && gestor ? (
                 <button
                   className="btn btn-danger"
                   type="button"
@@ -356,7 +415,10 @@ export function SolicitacaoFormPage() {
                   Excluir
                 </button>
               ) : null}
-              <Link className="btn btn-soft" to="/solicitacoes">
+              <Link
+                className="btn btn-soft"
+                to={gestor ? '/solicitacoes' : '/dashboard'}
+              >
                 Cancelar
               </Link>
             </div>

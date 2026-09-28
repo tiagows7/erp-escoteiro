@@ -269,6 +269,7 @@ export type Solicitacao = {
   data_solicitacao: string
   resolvida: boolean
   data_resolvida: string | null
+  situacao?: 'em_andamento' | 'realizada' | 'nao_realizada' | null
   user_id: string | null
   user_nome: string | null
   created_at: string

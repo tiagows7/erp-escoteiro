@@ -13,7 +13,6 @@ import {
   profileUsesMenuKeys,
 } from '@/lib/menuAccess'
 import { useAssociadoAcaoEntreAmigos } from '@/hooks/useAssociadoAcaoEntreAmigos'
-import { useVoluntarioNaoBeneficiario } from '@/hooks/useVoluntarioNaoBeneficiario'
 import { isAssociadoLogin } from '@/lib/roles'
 import { PlataformaAcessoBanner } from '@/components/PlataformaAcessoGate'
 
@@ -106,8 +105,6 @@ export function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   const { loading: acaoMenuLoading, temAcao } = useAssociadoAcaoEntreAmigos()
-  const { loading: volMenuLoading, allowed: voluntarioNaoBeneficiario } =
-    useVoluntarioNaoBeneficiario()
 
   useEffect(() => {
     if (!isSuperAdmin) return
@@ -171,12 +168,6 @@ export function AppLayout() {
           item.to === '/vendas/acao-entre-amigos' &&
           isAssociadoLogin(profile) &&
           (acaoMenuLoading || !temAcao)
-        ) {
-          return false
-        }
-        if (
-          item.to === '/solicitacoes' &&
-          (volMenuLoading || !voluntarioNaoBeneficiario)
         ) {
           return false
         }
@@ -269,7 +260,7 @@ export function AppLayout() {
         ),
     )
     return [...topo, ...resto]
-  }, [allItems, hasPermission, profile, acaoMenuLoading, temAcao, volMenuLoading, voluntarioNaoBeneficiario])
+  }, [allItems, hasPermission, profile, acaoMenuLoading, temAcao])
 
   useEffect(() => {
     setOpenGroups((prev) => {

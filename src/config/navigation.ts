@@ -280,12 +280,6 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     type: 'link',
-    to: '/solicitacoes',
-    label: 'Solicitações',
-    permission: 'solicitacoes.view',
-  },
-  {
-    type: 'link',
     to: '/competicoes',
     label: 'Competições',
     permission: 'competicoes.view',
@@ -334,6 +328,12 @@ export const NAV_ITEMS: NavItem[] = [
         permission: 'vendas.view',
       },
     ],
+  },
+  {
+    type: 'link',
+    to: '/solicitacoes',
+    label: 'Solicitações',
+    permission: 'solicitacoes.write',
   },
   {
     type: 'link',
@@ -494,12 +494,6 @@ export function navItemsForProfile(
       },
       {
         type: 'link',
-        to: '/solicitacoes',
-        label: 'Solicitações',
-        permission: 'solicitacoes.view',
-      },
-      {
-        type: 'link',
         to: '/atividades',
         label: 'Atividades',
         permission: 'atividades.view',
@@ -521,6 +515,12 @@ export function navItemsForProfile(
         to: '/vendas/loja-online',
         label: 'Loja online',
         permission: 'vendas.view',
+      },
+      {
+        type: 'link',
+        to: '/solicitacoes',
+        label: 'Solicitações',
+        permission: 'solicitacoes.write',
       },
     ]
     const keys = profile?.menu_keys

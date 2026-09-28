@@ -3,9 +3,15 @@ import { Link, Navigate } from 'react-router-dom'
 import { AddIcon } from '@/components/AddIcon'
 import { AlertMessage } from '@/components/AlertMessage'
 import { useAuth } from '@/contexts/AuthContext'
+import { useToast } from '@/contexts/ToastContext'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
-import { useVoluntarioNaoBeneficiario } from '@/hooks/useVoluntarioNaoBeneficiario'
+import { useGestorSolicitacoes } from '@/hooks/useGestorSolicitacoes'
 import { supabase } from '@/lib/supabase'
+import {
+  isSolicitacaoSituacao,
+  solicitacaoSituacaoLabel,
+  type SolicitacaoSituacao,
+} from '@/lib/solicitacaoSituacao'
 
 type Solicitacao = {
   solicitacao_id: number
@@ -13,12 +19,22 @@ type Solicitacao = {
   secao_id: number
   texto: string
   data_solicitacao: string
+  situacao: string | null
   resolvida: boolean
   data_resolvida: string | null
   user_nome: string | null
 }
 
 type Lookup = { id: number; nome: string }
+type Filtro = 'em_andamento' | 'realizada' | 'nao_realizada' | 'todas'
+
+function todayIso() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 function formatDate(value: string | null) {
   if (!value) return '—'
@@ -26,24 +42,34 @@ function formatDate(value: string | null) {
   return ano && mes && dia ? `${dia}/${mes}/${ano}` : value
 }
 
+function situacaoDe(row: Solicitacao): SolicitacaoSituacao {
+  if (isSolicitacaoSituacao(row.situacao)) return row.situacao
+  return row.resolvida ? 'realizada' : 'em_andamento'
+}
+
+function badgeClass(situacao: SolicitacaoSituacao) {
+  if (situacao === 'realizada') return 'badge'
+  if (situacao === 'nao_realizada') return 'badge badge-danger'
+  return 'badge badge-warning'
+}
+
 export function SolicitacoesPage() {
-  const { empresa, hasPermission } = useAuth()
+  const { empresa } = useAuth()
+  const toast = useToast()
   const empresaId = empresa?.id
-  const canWrite = hasPermission('solicitacoes.write')
-  const { loading: volLoading, allowed } = useVoluntarioNaoBeneficiario()
+  const { loading: gestorLoading, gestor } = useGestorSolicitacoes()
   const flashTick = useFlashSuccess()
   const [rows, setRows] = useState<Solicitacao[]>([])
   const [ramos, setRamos] = useState<Lookup[]>([])
   const [secoes, setSecoes] = useState<Lookup[]>([])
   const [q, setQ] = useState('')
-  const [filtro, setFiltro] = useState<'todas' | 'abertas' | 'resolvidas'>(
-    'abertas',
-  )
+  const [filtro, setFiltro] = useState<Filtro>('em_andamento')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [savingId, setSavingId] = useState<number | null>(null)
 
   useEffect(() => {
-    if (!empresaId || !allowed) return
+    if (!empresaId || !gestor) return
     let mounted = true
     void (async () => {
       setLoading(true)
@@ -51,7 +77,7 @@ export function SolicitacoesPage() {
         supabase
           .from('solicitacoes')
           .select(
-            'solicitacao_id, ramo_id, secao_id, texto, data_solicitacao, resolvida, data_resolvida, user_nome',
+            'solicitacao_id, ramo_id, secao_id, texto, data_solicitacao, situacao, resolvida, data_resolvida, user_nome',
           )
           .eq('empresa_id', empresaId)
           .order('data_solicitacao', { ascending: false })
@@ -86,7 +112,7 @@ export function SolicitacoesPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, allowed, flashTick])
+  }, [empresaId, gestor, flashTick])
 
   const ramoMap = useMemo(
     () => new Map(ramos.map((r) => [r.id, r.nome])),
@@ -100,8 +126,8 @@ export function SolicitacoesPage() {
   const filtered = useMemo(() => {
     const term = q.trim().toLocaleLowerCase('pt-BR')
     return rows.filter((row) => {
-      if (filtro === 'abertas' && row.resolvida) return false
-      if (filtro === 'resolvidas' && !row.resolvida) return false
+      const situacao = situacaoDe(row)
+      if (filtro !== 'todas' && situacao !== filtro) return false
       if (!term) return true
       const ramo = ramoMap.get(row.ramo_id) ?? ''
       const secao = secaoMap.get(row.secao_id) ?? ''
@@ -111,11 +137,44 @@ export function SolicitacoesPage() {
     })
   }, [q, rows, filtro, ramoMap, secaoMap])
 
-  if (volLoading) {
+  async function marcar(row: Solicitacao, situacao: SolicitacaoSituacao) {
+    if (!empresaId || situacaoDe(row) === situacao) return
+    setSavingId(row.solicitacao_id)
+    setError(null)
+    const { error: upError } = await supabase
+      .from('solicitacoes')
+      .update({
+        situacao,
+        resolvida: situacao === 'realizada',
+        data_resolvida: situacao === 'em_andamento' ? null : todayIso(),
+      })
+      .eq('solicitacao_id', row.solicitacao_id)
+      .eq('empresa_id', empresaId)
+    setSavingId(null)
+    if (upError) {
+      setError(upError.message)
+      return
+    }
+    setRows((prev) =>
+      prev.map((item) =>
+        item.solicitacao_id === row.solicitacao_id
+          ? {
+              ...item,
+              situacao,
+              resolvida: situacao === 'realizada',
+              data_resolvida: situacao === 'em_andamento' ? null : todayIso(),
+            }
+          : item,
+      ),
+    )
+    toast.success('Situação atualizada', solicitacaoSituacaoLabel(situacao))
+  }
+
+  if (gestorLoading) {
     return <div className="loading">Carregando…</div>
   }
-  if (!allowed) {
-    return <Navigate to="/dashboard" replace />
+  if (!gestor) {
+    return <Navigate to="/solicitacoes/novo" replace />
   }
 
   if (!empresaId) {
@@ -134,19 +193,13 @@ export function SolicitacoesPage() {
         <div>
           <h2>Solicitações</h2>
           <p>
-            Pedidos internos por ramo e seção —{' '}
-            <strong>{empresa?.nome}</strong>
+            Pedidos do grupo — <strong>{empresa?.nome}</strong>
           </p>
         </div>
-        {canWrite ? (
-          <Link
-            className="btn btn-primary btn-with-icon"
-            to="/solicitacoes/novo"
-          >
-            <AddIcon />
-            Nova solicitação
-          </Link>
-        ) : null}
+        <Link className="btn btn-primary btn-with-icon" to="/solicitacoes/novo">
+          <AddIcon />
+          Nova solicitação
+        </Link>
       </header>
 
       <section className="panel">
@@ -160,13 +213,12 @@ export function SolicitacoesPage() {
           <select
             className="select"
             value={filtro}
-            onChange={(event) =>
-              setFiltro(event.target.value as typeof filtro)
-            }
+            onChange={(event) => setFiltro(event.target.value as Filtro)}
             aria-label="Filtrar por situação"
           >
-            <option value="abertas">Abertas</option>
-            <option value="resolvidas">Resolvidas</option>
+            <option value="em_andamento">Em andamento</option>
+            <option value="realizada">Realizadas</option>
+            <option value="nao_realizada">Não realizadas</option>
             <option value="todas">Todas</option>
           </select>
         </div>
@@ -191,44 +243,63 @@ export function SolicitacoesPage() {
                   <th>Ramo</th>
                   <th>Seção</th>
                   <th>Solicitação</th>
+                  <th>Quem pediu</th>
                   <th>Situação</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => (
-                  <tr key={row.solicitacao_id}>
-                    <td>
-                      <Link
-                        className="btn btn-soft"
-                        to={`/solicitacoes/${row.solicitacao_id}`}
-                      >
-                        Abrir
-                      </Link>
-                    </td>
-                    <td>{formatDate(row.data_solicitacao)}</td>
-                    <td>{ramoMap.get(row.ramo_id) ?? '—'}</td>
-                    <td>{secaoMap.get(row.secao_id) ?? '—'}</td>
-                    <td>
-                      <span title={row.texto}>
-                        {row.texto.length > 80
-                          ? `${row.texto.slice(0, 80)}…`
-                          : row.texto}
-                      </span>
-                    </td>
-                    <td>
-                      {row.resolvida ? (
-                        <span className="badge">
-                          Resolvida
-                          {row.data_resolvida
-                            ? ` · ${formatDate(row.data_resolvida)}`
-                            : ''}
+                {filtered.map((row) => {
+                  const situacao = situacaoDe(row)
+                  return (
+                    <tr key={row.solicitacao_id}>
+                      <td>
+                        <Link
+                          className="btn btn-soft"
+                          to={`/solicitacoes/${row.solicitacao_id}`}
+                        >
+                          Abrir
+                        </Link>
+                      </td>
+                      <td>{formatDate(row.data_solicitacao)}</td>
+                      <td>{ramoMap.get(row.ramo_id) ?? '—'}</td>
+                      <td>{secaoMap.get(row.secao_id) ?? '—'}</td>
+                      <td>
+                        <span title={row.texto}>
+                          {row.texto.length > 80
+                            ? `${row.texto.slice(0, 80)}…`
+                            : row.texto}
                         </span>
-                      ) : (
-                        <span className="badge badge-warning">Aberta</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td>{row.user_nome?.trim() || '—'}</td>
+                      <td>
+                        <select
+                          className="select"
+                          aria-label="Situação da solicitação"
+                          value={situacao}
+                          disabled={savingId === row.solicitacao_id}
+                          onChange={(event) =>
+                            void marcar(
+                              row,
+                              event.target.value as SolicitacaoSituacao,
+                            )
+                          }
+                        >
+                          <option value="em_andamento">Em andamento</option>
+                          <option value="realizada">Realizada</option>
+                          <option value="nao_realizada">Não realizada</option>
+                        </select>
+                        <div style={{ marginTop: '0.35rem' }}>
+                          <span className={badgeClass(situacao)}>
+                            {solicitacaoSituacaoLabel(situacao)}
+                            {situacao !== 'em_andamento' && row.data_resolvida
+                              ? ` · ${formatDate(row.data_resolvida)}`
+                              : ''}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
