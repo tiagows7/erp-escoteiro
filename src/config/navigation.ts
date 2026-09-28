@@ -187,7 +187,7 @@ export const NAV_ITEMS: NavItem[] = [
       {
         type: 'link',
         to: '/cadastros/fornecedores',
-        label: 'Fornecedor / Contatos',
+        label: 'Fornecedor/Despesa/Receitas',
         permission: 'financeiro.view',
       },
       {

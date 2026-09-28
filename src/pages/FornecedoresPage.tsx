@@ -113,7 +113,7 @@ export function FornecedoresPage() {
     <>
       <header className="page-header">
         <div>
-          <h2>Fornecedor / Contatos</h2>
+          <h2>Fornecedor/Despesa/Receitas</h2>
           <p>
             Contatos de receita e despesa do grupo{' '}
             <strong>{empresa?.nome}</strong>
