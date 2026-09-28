@@ -58,10 +58,24 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'dashboard.view',
   },
   {
-    type: 'link',
-    to: '/portal-transparencia',
-    label: 'Portal da Transparência',
-    permission: 'portal.view',
+    type: 'group',
+    id: 'transparencia',
+    label: 'Transparência',
+    anyOf: ['portal.view', 'projetos.view'],
+    children: [
+      {
+        type: 'link',
+        to: '/portal-transparencia',
+        label: 'Portal da Transparência',
+        permission: 'portal.view',
+      },
+      {
+        type: 'link',
+        to: '/projetos',
+        label: 'Projetos',
+        permission: 'projetos.view',
+      },
+    ],
   },
   {
     type: 'group',
@@ -323,12 +337,6 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     type: 'link',
-    to: '/projetos',
-    label: 'Projetos',
-    permission: 'projetos.view',
-  },
-  {
-    type: 'link',
     to: '/grupos',
     label: 'Grupos escoteiros',
     permission: 'grupos.write',
@@ -412,10 +420,24 @@ export function navItemsForProfile(
         permission: 'dashboard.view',
       },
       {
-        type: 'link',
-        to: '/portal-transparencia',
-        label: 'Portal da Transparência',
-        permission: 'portal.view',
+        type: 'group',
+        id: 'transparencia',
+        label: 'Transparência',
+        anyOf: ['portal.view', 'projetos.view'],
+        children: [
+          {
+            type: 'link',
+            to: '/portal-transparencia',
+            label: 'Portal da Transparência',
+            permission: 'portal.view',
+          },
+          {
+            type: 'link',
+            to: '/projetos',
+            label: 'Projetos',
+            permission: 'projetos.view',
+          },
+        ],
       },
       {
         type: 'group',
@@ -481,12 +503,6 @@ export function navItemsForProfile(
         to: '/atividades',
         label: 'Atividades',
         permission: 'atividades.view',
-      },
-      {
-        type: 'link',
-        to: '/projetos',
-        label: 'Projetos',
-        permission: 'projetos.view',
       },
       {
         type: 'link',
@@ -582,8 +598,8 @@ export function navItemsForProfile(
         if (fromMenus) filtered.push(fromMenus)
       }
 
-      // Ordem fixa: Dashboard → Portal → Grupo → demais.
-      const ordemTopo = ['/dashboard', '/portal-transparencia', 'grupo'] as const
+      // Ordem fixa: Dashboard → Transparência → Grupo → demais.
+      const ordemTopo = ['/dashboard', 'transparencia', 'grupo'] as const
       filtered.sort((a, b) => {
         const toOf = (item: NavItem) =>
           item.type === 'link' ? item.to : item.id
