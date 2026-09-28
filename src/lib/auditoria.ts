@@ -13,6 +13,7 @@ export const AUDITORIA_TABELA_LABELS: Record<string, string> = {
   tipo_pagamento: 'Tipo de pagamento',
   tipo_mensalidade: 'Tipo de mensalidade',
   fornecedor_despesa: 'Fornecedores',
+  plano_contas: 'Plano de contas',
   empresa: 'Grupo escoteiro',
   empresa_conta_bancaria: 'Conta bancária',
   empresa_saldo_local: 'Locais do saldo',

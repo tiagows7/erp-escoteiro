@@ -50,6 +50,8 @@ import { UsuariosPage } from '@/pages/UsuariosPage'
 import { UsuarioFormPage } from '@/pages/UsuarioFormPage'
 import { FornecedoresPage } from '@/pages/FornecedoresPage'
 import { FornecedorFormPage } from '@/pages/FornecedorFormPage'
+import { PlanoContasPage } from '@/pages/PlanoContasPage'
+import { PlanoContaFormPage } from '@/pages/PlanoContaFormPage'
 import { CalendarioGrupoPage } from '@/pages/CalendarioGrupoPage'
 import { HomeRedirectPage } from '@/pages/HomeRedirectPage'
 import { TipoMensalidadePage } from '@/pages/TipoMensalidadePage'
@@ -276,6 +278,22 @@ export default function App() {
               element={
                 <RequirePermission permission="financeiro.write">
                   <FornecedorFormPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="cadastros/plano-contas"
+              element={
+                <RequirePermission permission="financeiro.view">
+                  <PlanoContasPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="cadastros/plano-contas/:id"
+              element={
+                <RequirePermission permission="financeiro.write">
+                  <PlanoContaFormPage />
                 </RequirePermission>
               }
             />

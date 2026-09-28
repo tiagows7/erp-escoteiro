@@ -6,48 +6,25 @@ import { AddIcon } from '@/components/AddIcon'
 import { AlertMessage } from '@/components/AlertMessage'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 
-type FornecedorRow = {
-  fordespesa_id: number
-  fordespesa_nome: string | null
-  fordespesa_cnpj: string | null
-  fordespesa_tipo: string | null
-  fordespesa_despesa: string | null
-  fordespesa_uf: string | null
-  fordespesa_fone1: string | null
-  fordespesa_email: string | null
-  plano_contas:
-    | { codigo: string; nome: string }
-    | { codigo: string; nome: string }[]
-    | null
+type PlanoConta = {
+  plano_conta_id: number
+  codigo: string
+  nome: string
+  natureza: string
+  ativo: boolean
 }
 
-function tipoLabel(tipo: string | null) {
-  if (tipo === 'J') return 'Jurídica'
-  if (tipo === 'F') return 'Física'
-  return tipo || '—'
+function naturezaLabel(value: string) {
+  return value === 'receita' ? 'Receita' : 'Despesa'
 }
 
-function contaLabel(row: FornecedorRow) {
-  const conta = Array.isArray(row.plano_contas)
-    ? row.plano_contas[0]
-    : row.plano_contas
-  if (!conta) return '—'
-  return `${conta.codigo} — ${conta.nome}`
-}
-
-function naturezaLabel(natureza: string | null) {
-  if (natureza === 'R') return 'Receita'
-  if (natureza === 'D') return 'Despesa'
-  return natureza || '—'
-}
-
-export function FornecedoresPage() {
+export function PlanoContasPage() {
   const { empresa, hasPermission } = useAuth()
   const canWrite = hasPermission('financeiro.write')
   const empresaId = empresa?.id
   const flashTick = useFlashSuccess()
 
-  const [rows, setRows] = useState<FornecedorRow[]>([])
+  const [rows, setRows] = useState<PlanoConta[]>([])
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -63,12 +40,10 @@ export function FornecedoresPage() {
     void (async () => {
       setLoading(true)
       const { data, error: queryError } = await supabase
-        .from('fornecedor_despesa')
-        .select(
-          'fordespesa_id, fordespesa_nome, fordespesa_cnpj, fordespesa_tipo, fordespesa_despesa, fordespesa_uf, fordespesa_fone1, fordespesa_email, plano_contas(codigo, nome)',
-        )
+        .from('plano_contas')
+        .select('plano_conta_id, codigo, nome, natureza, ativo')
         .eq('empresa_id', empresaId)
-        .order('fordespesa_nome')
+        .order('codigo', { ascending: true })
 
       if (!mounted) return
       if (queryError) {
@@ -76,7 +51,7 @@ export function FornecedoresPage() {
         setRows([])
       } else {
         setError(null)
-        setRows((data as FornecedorRow[]) ?? [])
+        setRows((data ?? []) as PlanoConta[])
       }
       setLoading(false)
     })()
@@ -89,13 +64,10 @@ export function FornecedoresPage() {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
     if (!term) return rows
-    return rows.filter(
-      (r) =>
-        (r.fordespesa_nome ?? '').toLowerCase().includes(term) ||
-        (r.fordespesa_cnpj ?? '').toLowerCase().includes(term) ||
-        (r.fordespesa_uf ?? '').toLowerCase().includes(term) ||
-        (r.fordespesa_email ?? '').toLowerCase().includes(term) ||
-        contaLabel(r).toLowerCase().includes(term),
+    return rows.filter((row) =>
+      `${row.codigo} ${row.nome} ${naturezaLabel(row.natureza)}`
+        .toLowerCase()
+        .includes(term),
     )
   }, [rows, q])
 
@@ -113,19 +85,20 @@ export function FornecedoresPage() {
     <>
       <header className="page-header">
         <div>
-          <h2>Fornecedor / Contatos</h2>
+          <h2>Plano de contas</h2>
           <p>
-            Contatos de receita e despesa do grupo{' '}
-            <strong>{empresa?.nome}</strong>
+            Contas do grupo <strong>{empresa?.nome}</strong> para classificar
+            fornecedores e contatos. O Portal da Transparência vai agrupar os
+            lançamentos por aqui.
           </p>
         </div>
         {canWrite ? (
           <Link
             className="btn btn-primary btn-with-icon"
-            to="/cadastros/fornecedores/novo"
+            to="/cadastros/plano-contas/novo"
           >
             <AddIcon />
-            Novo fornecedor
+            Nova conta
           </Link>
         ) : null}
       </header>
@@ -134,7 +107,8 @@ export function FornecedoresPage() {
         <div className="toolbar">
           <input
             className="input"
-            placeholder="Buscar por nome, CPF/CNPJ, conta, UF ou e-mail…"
+            style={{ maxWidth: 360 }}
+            placeholder="Buscar por código ou nome…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -147,48 +121,40 @@ export function FornecedoresPage() {
         ) : null}
 
         <p className="field-hint" style={{ marginBottom: '0.75rem' }}>
-          {loading
-            ? 'Carregando…'
-            : `${filtered.length} fornecedor(es) encontrado(s)`}
+          {loading ? 'Carregando…' : `${filtered.length} conta(s) encontrada(s)`}
         </p>
 
         {loading ? (
-          <div className="loading">Carregando fornecedores…</div>
+          <div className="loading">Carregando plano de contas…</div>
         ) : filtered.length === 0 ? (
-          <div className="empty">Nenhum fornecedor cadastrado neste grupo.</div>
+          <div className="empty">Nenhuma conta cadastrada neste grupo.</div>
         ) : (
           <div className="table-wrap">
             <table className="data">
               <thead>
                 <tr>
                   <th></th>
+                  <th>Código</th>
                   <th>Nome</th>
-                  <th>CPF/CNPJ</th>
-                  <th>Tipo</th>
                   <th>Natureza</th>
-                  <th>Conta</th>
-                  <th>UF</th>
-                  <th>Telefone</th>
+                  <th>Ativa</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((row) => (
-                  <tr key={row.fordespesa_id}>
+                  <tr key={row.plano_conta_id}>
                     <td>
                       <Link
                         className="btn btn-soft"
-                        to={`/cadastros/fornecedores/${row.fordespesa_id}`}
+                        to={`/cadastros/plano-contas/${row.plano_conta_id}`}
                       >
                         Abrir
                       </Link>
                     </td>
-                    <td>{row.fordespesa_nome || '—'}</td>
-                    <td>{row.fordespesa_cnpj || '—'}</td>
-                    <td>{tipoLabel(row.fordespesa_tipo)}</td>
-                    <td>{naturezaLabel(row.fordespesa_despesa)}</td>
-                    <td>{contaLabel(row)}</td>
-                    <td>{row.fordespesa_uf || '—'}</td>
-                    <td>{row.fordespesa_fone1 || '—'}</td>
+                    <td>{row.codigo}</td>
+                    <td>{row.nome}</td>
+                    <td>{naturezaLabel(row.natureza)}</td>
+                    <td>{row.ativo ? 'Sim' : 'Não'}</td>
                   </tr>
                 ))}
               </tbody>

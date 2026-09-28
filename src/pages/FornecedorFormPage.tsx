@@ -13,6 +13,14 @@ import { loadCidades, loadEstados } from '@/lib/brasilLocalidades'
 
 type Lookup = { id: number; nome: string }
 
+type PlanoOpcao = {
+  plano_conta_id: number
+  codigo: string
+  nome: string
+  natureza: string
+  ativo: boolean
+}
+
 const emptyForm = {
   fordespesa_nome: '',
   fordespesa_cnpj: '',
@@ -30,6 +38,7 @@ const emptyForm = {
   fordespesa_uf: '',
   fordespesa_cidade: '',
   fordespesa_cep: '',
+  plano_conta_id: '',
 }
 
 function numOrNull(value: string) {
@@ -57,6 +66,7 @@ export function FornecedorFormPage() {
     [],
   )
   const [cidades, setCidades] = useState<Lookup[]>([])
+  const [contas, setContas] = useState<PlanoOpcao[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
@@ -64,6 +74,25 @@ export function FornecedorFormPage() {
   useEffect(() => {
     void loadEstados(supabase).then((list) => setEstados(list))
   }, [])
+
+  useEffect(() => {
+    if (!empresaId) {
+      setContas([])
+      return
+    }
+    let mounted = true
+    void supabase
+      .from('plano_contas')
+      .select('plano_conta_id, codigo, nome, natureza, ativo')
+      .eq('empresa_id', empresaId)
+      .order('codigo')
+      .then(({ data }) => {
+        if (mounted) setContas((data ?? []) as PlanoOpcao[])
+      })
+    return () => {
+      mounted = false
+    }
+  }, [empresaId])
 
   useEffect(() => {
     if (!form.fordespesa_uf) {
@@ -87,7 +116,7 @@ export function FornecedorFormPage() {
       const { data, error: loadError } = await supabase
         .from('fornecedor_despesa')
         .select(
-          'fordespesa_id, fordespesa_nome, fordespesa_cnpj, fordespesa_tipo, fordespesa_despesa, fordespesa_email, fordespesa_email2, fordespesa_fone1, fordespesa_fone2, fordespesa_fone3, fordespesa_endereco, fordespesa_numero, fordespesa_complemento, fordespesa_bairro, fordespesa_uf, fordespesa_cidade, fordespesa_cep',
+          'fordespesa_id, fordespesa_nome, fordespesa_cnpj, fordespesa_tipo, fordespesa_despesa, fordespesa_email, fordespesa_email2, fordespesa_fone1, fordespesa_fone2, fordespesa_fone3, fordespesa_endereco, fordespesa_numero, fordespesa_complemento, fordespesa_bairro, fordespesa_uf, fordespesa_cidade, fordespesa_cep, plano_conta_id',
         )
         .eq('fordespesa_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -117,6 +146,7 @@ export function FornecedorFormPage() {
         fordespesa_uf: data.fordespesa_uf ?? '',
         fordespesa_cidade: data.fordespesa_cidade?.toString() ?? '',
         fordespesa_cep: data.fordespesa_cep ?? '',
+        plano_conta_id: data.plano_conta_id?.toString() ?? '',
       })
       setLoading(false)
     })()
@@ -152,6 +182,7 @@ export function FornecedorFormPage() {
       fordespesa_uf: strOrNull(form.fordespesa_uf.toUpperCase()),
       fordespesa_cidade: numOrNull(form.fordespesa_cidade),
       fordespesa_cep: strOrNull(form.fordespesa_cep),
+      plano_conta_id: numOrNull(form.plano_conta_id ?? ''),
     }
   }
 
@@ -328,12 +359,59 @@ export function FornecedorFormPage() {
               id="fordespesa_despesa"
               className="select"
               value={form.fordespesa_despesa}
-              onChange={(e) => update('fordespesa_despesa', e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value
+                const naturezaConta = value === 'R' ? 'receita' : 'despesa'
+                setForm((prev) => {
+                  const atual = contas.find(
+                    (c) => String(c.plano_conta_id) === (prev.plano_conta_id ?? ''),
+                  )
+                  const keep = atual != null && atual.natureza === naturezaConta
+                  return {
+                    ...prev,
+                    fordespesa_despesa: value,
+                    plano_conta_id: keep ? (prev.plano_conta_id ?? '') : '',
+                  }
+                })
+              }}
               disabled={disabled}
             >
               <option value="D">Despesa</option>
               <option value="R">Receita</option>
             </select>
+          </div>
+
+          <div className="field field-span-2">
+            <label htmlFor="plano_conta_id">Plano de contas</label>
+            <select
+              id="plano_conta_id"
+              className="select"
+              value={form.plano_conta_id ?? ''}
+              onChange={(e) => update('plano_conta_id', e.target.value)}
+              disabled={disabled}
+            >
+              <option value="">Sem conta</option>
+              {contas
+                .filter((conta) => {
+                  const naturezaConta =
+                    form.fordespesa_despesa === 'R' ? 'receita' : 'despesa'
+                  if (conta.natureza !== naturezaConta) return false
+                  return (
+                    conta.ativo ||
+                    String(conta.plano_conta_id) === (form.plano_conta_id ?? '')
+                  )
+                })
+                .map((conta) => (
+                  <option key={conta.plano_conta_id} value={conta.plano_conta_id}>
+                    {conta.codigo} — {conta.nome}
+                    {conta.ativo ? '' : ' (inativa)'}
+                  </option>
+                ))}
+            </select>
+            <span className="field-hint">
+              Classifica este contato. O Portal da Transparência usará a conta
+              para agrupar os lançamentos.
+            </span>
           </div>
 
           <div className="field">

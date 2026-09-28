@@ -190,6 +190,12 @@ export const NAV_ITEMS: NavItem[] = [
         label: 'Fornecedor / Contatos',
         permission: 'financeiro.view',
       },
+      {
+        type: 'link',
+        to: '/cadastros/plano-contas',
+        label: 'Plano de contas',
+        permission: 'financeiro.view',
+      },
     ],
   },
   {
