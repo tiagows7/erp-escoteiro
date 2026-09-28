@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 import { useGestorSolicitacoes } from '@/hooks/useGestorSolicitacoes'
+import { isAssociadoLogin } from '@/lib/roles'
 import { supabase } from '@/lib/supabase'
 import {
   isSolicitacaoSituacao,
@@ -54,10 +55,12 @@ function badgeClass(situacao: SolicitacaoSituacao) {
 }
 
 export function SolicitacoesPage() {
-  const { empresa } = useAuth()
+  const { empresa, profile, user } = useAuth()
   const toast = useToast()
   const empresaId = empresa?.id
+  const associadoLogin = isAssociadoLogin(profile)
   const { loading: gestorLoading, gestor } = useGestorSolicitacoes()
+  const verMinhas = associadoLogin && !gestor
   const flashTick = useFlashSuccess()
   const [rows, setRows] = useState<Solicitacao[]>([])
   const [ramos, setRamos] = useState<Lookup[]>([])
@@ -69,19 +72,27 @@ export function SolicitacoesPage() {
   const [savingId, setSavingId] = useState<number | null>(null)
 
   useEffect(() => {
-    if (!empresaId || !gestor) return
+    if (!gestorLoading && verMinhas) setFiltro('todas')
+  }, [gestorLoading, verMinhas])
+
+  useEffect(() => {
+    if (gestorLoading || !empresaId || (!gestor && !verMinhas)) return
     let mounted = true
     void (async () => {
       setLoading(true)
+      let solicitacoes = supabase
+        .from('solicitacoes')
+        .select(
+          'solicitacao_id, ramo_id, secao_id, texto, data_solicitacao, situacao, resolvida, data_resolvida, user_nome',
+        )
+        .eq('empresa_id', empresaId)
+        .order('data_solicitacao', { ascending: false })
+        .order('solicitacao_id', { ascending: false })
+      if (verMinhas && user?.id) {
+        solicitacoes = solicitacoes.eq('user_id', user.id)
+      }
       const [solRes, ramoRes, secaoRes] = await Promise.all([
-        supabase
-          .from('solicitacoes')
-          .select(
-            'solicitacao_id, ramo_id, secao_id, texto, data_solicitacao, situacao, resolvida, data_resolvida, user_nome',
-          )
-          .eq('empresa_id', empresaId)
-          .order('data_solicitacao', { ascending: false })
-          .order('solicitacao_id', { ascending: false }),
+        solicitacoes,
         supabase.from('ramos').select('ramo_id, nome').order('ramo_id'),
         supabase
           .from('secao')
@@ -112,7 +123,7 @@ export function SolicitacoesPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, gestor, flashTick])
+  }, [empresaId, gestor, gestorLoading, verMinhas, user?.id, flashTick])
 
   const ramoMap = useMemo(
     () => new Map(ramos.map((r) => [r.id, r.nome])),
@@ -173,7 +184,7 @@ export function SolicitacoesPage() {
   if (gestorLoading) {
     return <div className="loading">Carregando…</div>
   }
-  if (!gestor) {
+  if (!gestor && !verMinhas) {
     return <Navigate to="/solicitacoes/novo" replace />
   }
 
@@ -191,9 +202,12 @@ export function SolicitacoesPage() {
     <>
       <header className="page-header">
         <div>
-          <h2>Solicitações</h2>
+          <h2>{verMinhas ? 'Minhas solicitações' : 'Solicitações'}</h2>
           <p>
-            Pedidos do grupo — <strong>{empresa?.nome}</strong>
+            {verMinhas
+              ? 'Pedidos que você abriu e a situação de cada um'
+              : 'Pedidos do grupo'}{' '}
+            — <strong>{empresa?.nome}</strong>
           </p>
         </div>
         <Link className="btn btn-primary btn-with-icon" to="/solicitacoes/novo">
@@ -232,7 +246,11 @@ export function SolicitacoesPage() {
         {loading ? (
           <div className="loading">Carregando solicitações…</div>
         ) : filtered.length === 0 ? (
-          <div className="empty">Nenhuma solicitação encontrada.</div>
+          <div className="empty">
+            {verMinhas
+              ? 'Você ainda não abriu solicitações.'
+              : 'Nenhuma solicitação encontrada.'}
+          </div>
         ) : (
           <div className="table-wrap">
             <table className="data">
@@ -243,7 +261,7 @@ export function SolicitacoesPage() {
                   <th>Ramo</th>
                   <th>Seção</th>
                   <th>Solicitação</th>
-                  <th>Quem pediu</th>
+                  {verMinhas ? null : <th>Quem pediu</th>}
                   <th>Situação</th>
                 </tr>
               </thead>
@@ -270,25 +288,29 @@ export function SolicitacoesPage() {
                             : row.texto}
                         </span>
                       </td>
-                      <td>{row.user_nome?.trim() || '—'}</td>
+                      {verMinhas ? null : (
+                        <td>{row.user_nome?.trim() || '—'}</td>
+                      )}
                       <td>
-                        <select
-                          className="select"
-                          aria-label="Situação da solicitação"
-                          value={situacao}
-                          disabled={savingId === row.solicitacao_id}
-                          onChange={(event) =>
-                            void marcar(
-                              row,
-                              event.target.value as SolicitacaoSituacao,
-                            )
-                          }
-                        >
-                          <option value="em_andamento">Em andamento</option>
-                          <option value="realizada">Realizada</option>
-                          <option value="nao_realizada">Não realizada</option>
-                        </select>
-                        <div style={{ marginTop: '0.35rem' }}>
+                        {gestor ? (
+                          <select
+                            className="select"
+                            aria-label="Situação da solicitação"
+                            value={situacao}
+                            disabled={savingId === row.solicitacao_id}
+                            onChange={(event) =>
+                              void marcar(
+                                row,
+                                event.target.value as SolicitacaoSituacao,
+                              )
+                            }
+                          >
+                            <option value="em_andamento">Em andamento</option>
+                            <option value="realizada">Realizada</option>
+                            <option value="nao_realizada">Não realizada</option>
+                          </select>
+                        ) : null}
+                        <div style={{ marginTop: gestor ? '0.35rem' : 0 }}>
                           <span className={badgeClass(situacao)}>
                             {solicitacaoSituacaoLabel(situacao)}
                             {situacao !== 'em_andamento' && row.data_resolvida

@@ -5,9 +5,11 @@ import { WaitingOverlay } from '@/components/WaitingOverlay'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { useGestorSolicitacoes } from '@/hooks/useGestorSolicitacoes'
+import { isAssociadoLogin } from '@/lib/roles'
 import { supabase } from '@/lib/supabase'
 import {
   isSolicitacaoSituacao,
+  solicitacaoSituacaoLabel,
   type SolicitacaoSituacao,
 } from '@/lib/solicitacaoSituacao'
 import type { Ramo } from '@/types/database'
@@ -43,7 +45,9 @@ export function SolicitacaoFormPage() {
   const toast = useToast()
   const empresaId = empresa?.id
   const canWrite = hasPermission('solicitacoes.write')
+  const associadoLogin = isAssociadoLogin(profile)
   const { loading: gestorLoading, gestor } = useGestorSolicitacoes()
+  const voltarPara = gestor || associadoLogin ? '/solicitacoes' : '/dashboard'
 
   const [form, setForm] = useState(emptyForm)
   const [ramos, setRamos] = useState<Ramo[]>([])
@@ -206,6 +210,12 @@ export function SolicitacaoFormPage() {
         })
         return
       }
+      if (associadoLogin) {
+        navigate('/solicitacoes', {
+          state: { flashSuccess: 'Solicitação registrada!' },
+        })
+        return
+      }
       toast.success(
         'Solicitação registrada',
         'O pedido foi enviado para o grupo.',
@@ -287,7 +297,7 @@ export function SolicitacaoFormPage() {
         </div>
         <Link
           className="btn btn-soft"
-          to={gestor ? '/solicitacoes' : '/dashboard'}
+          to={voltarPara}
         >
           Voltar
         </Link>
@@ -368,6 +378,18 @@ export function SolicitacaoFormPage() {
             />
           </div>
 
+          {!isNew && !gestor ? (
+            <div className="field field-span-2">
+              <label>Situação</label>
+              <p style={{ margin: 0 }}>
+                <strong>{solicitacaoSituacaoLabel(form.situacao)}</strong>
+                {form.data_resolvida
+                  ? ` · ${form.data_resolvida.split('-').reverse().join('/')}`
+                  : ''}
+              </p>
+            </div>
+          ) : null}
+
           {!isNew && gestor ? (
             <>
               <div className="field">
@@ -417,7 +439,7 @@ export function SolicitacaoFormPage() {
               ) : null}
               <Link
                 className="btn btn-soft"
-                to={gestor ? '/solicitacoes' : '/dashboard'}
+                to={voltarPara}
               >
                 Cancelar
               </Link>
