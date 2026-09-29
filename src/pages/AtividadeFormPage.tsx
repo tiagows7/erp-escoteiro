@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { PlanoContaReceitaField } from '@/components/PlanoContaReceitaField'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   formDraftKey,
@@ -44,6 +45,7 @@ const emptyForm = {
   valor: '0,00',
   valor_grupo: '0,00',
   valor_grupo_tipo: 'por_jovem' as ValorGrupoTipo,
+  plano_conta_id: '',
 }
 
 function unidadeLabel(ramoId: number | null): string {
@@ -186,7 +188,7 @@ export function AtividadeFormPage() {
       const { data, error: loadError } = await supabase
         .from('atividades')
         .select(
-          'atividade_id, ramo, secao, patrulha_matilha, descricao, local, valor, data_atividade, valor_grupo, valor_grupo_tipo, encerrado_em, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id',
+          'atividade_id, ramo, secao, patrulha_matilha, descricao, local, valor, data_atividade, valor_grupo, valor_grupo_tipo, encerrado_em, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, plano_conta_id',
         )
         .eq('atividade_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -219,6 +221,7 @@ export function AtividadeFormPage() {
         valor_grupo_tipo: isValorGrupoTipo(data.valor_grupo_tipo)
           ? data.valor_grupo_tipo
           : 'por_jovem',
+        plano_conta_id: data.plano_conta_id?.toString() ?? '',
       })
       setEncerradoEm((data.encerrado_em as string | null) ?? null)
       if (data.repasse_grupo != null) {
@@ -347,7 +350,30 @@ export function AtividadeFormPage() {
       return
     }
     if (!isNew && isEncerrado(encerradoEm)) {
-      setError('Atividade encerrada — somente visualização.')
+      if (!empresaId) {
+        setError('Grupo escoteiro não carregado.')
+        return
+      }
+      setSaving(true)
+      setError(null)
+      const { error: saveError } = await supabase
+        .from('atividades')
+        .update({
+          plano_conta_id: form.plano_conta_id
+            ? Number(form.plano_conta_id)
+            : null,
+        })
+        .eq('atividade_id', Number(id))
+        .eq('empresa_id', empresaId)
+      setSaving(false)
+      if (saveError) {
+        setError(saveError.message)
+        return
+      }
+      toast.success(
+        'Conta salva',
+        'As receitas sem conta desta atividade foram classificadas.',
+      )
       return
     }
     if (!empresaId) {
@@ -386,6 +412,7 @@ export function AtividadeFormPage() {
       valor: parseMoneyInput(form.valor),
       valor_grupo: parseMoneyInput(form.valor_grupo),
       valor_grupo_tipo: form.valor_grupo_tipo,
+      plano_conta_id: form.plano_conta_id ? Number(form.plano_conta_id) : null,
     }
 
     const result = isNew
@@ -648,6 +675,13 @@ export function AtividadeFormPage() {
               />
             </div>
 
+            <PlanoContaReceitaField
+              empresaId={empresaId}
+              value={form.plano_conta_id}
+              onChange={(value) => update('plano_conta_id', value)}
+              disabled={saving || !canWrite}
+            />
+
             <div className="field">
               <label htmlFor="data_atividade">Data da atividade</label>
               <input
@@ -701,12 +735,12 @@ export function AtividadeFormPage() {
               <button type="submit" className="btn btn-primary" disabled={saving}>
                 {saving ? 'Salvando…' : 'Salvar'}
               </button>
+            ) : canWrite && encerrado ? (
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? 'Salvando…' : 'Salvar conta'}
+              </button>
             ) : (
-              <p className="muted">
-                {encerrado
-                  ? 'Atividade encerrada — somente visualização.'
-                  : 'Modo leitura — sem permissão para salvar.'}
-              </p>
+              <p className="muted">Modo leitura — sem permissão para salvar.</p>
             )}
             <Link className="btn btn-soft" to="/atividades">
               Cancelar

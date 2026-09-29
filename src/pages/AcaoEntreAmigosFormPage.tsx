@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { PlanoContaReceitaField } from '@/components/PlanoContaReceitaField'
 import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
@@ -102,6 +103,7 @@ const emptyForm = {
   data_sorteio: '',
   data_limite_venda: '',
   quantidade_premios: '1',
+  plano_conta_id: '',
 }
 
 function unidadeLabel(ramoId: number | null): string {
@@ -299,7 +301,7 @@ export function AcaoEntreAmigosFormPage() {
       const { data, error: loadError } = await supabase
         .from('acao_entre_amigos')
         .select(
-          'acao_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, quantidade_premios, imagem_url, encerrado_em, numero_sorteado, numeros_sorteados, sorteado_em',
+          'acao_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, quantidade_premios, imagem_url, encerrado_em, numero_sorteado, numeros_sorteados, sorteado_em, plano_conta_id',
         )
         .eq('acao_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -339,6 +341,7 @@ export function AcaoEntreAmigosFormPage() {
         quantidade_premios: String(
           Math.max(1, Number(data.quantidade_premios ?? 1) || 1),
         ),
+        plano_conta_id: data.plano_conta_id?.toString() ?? '',
       })
       setImagemUrl(data.imagem_url ?? null)
       setImagemPreview(data.imagem_url ?? null)
@@ -524,7 +527,30 @@ export function AcaoEntreAmigosFormPage() {
       return
     }
     if (!isNew && isEncerrado(encerradoEm)) {
-      setError('Ação encerrada — somente visualização.')
+      if (!empresaId) {
+        setError('Grupo escoteiro não carregado.')
+        return
+      }
+      setSaving(true)
+      setError(null)
+      const { error: saveError } = await supabase
+        .from('acao_entre_amigos')
+        .update({
+          plano_conta_id: form.plano_conta_id
+            ? Number(form.plano_conta_id)
+            : null,
+        })
+        .eq('acao_id', Number(id))
+        .eq('empresa_id', empresaId)
+      setSaving(false)
+      if (saveError) {
+        setError(saveError.message)
+        return
+      }
+      toast.success(
+        'Conta salva',
+        'As receitas sem conta desta ação foram classificadas.',
+      )
       return
     }
     if (!empresaId) {
@@ -588,6 +614,7 @@ export function AcaoEntreAmigosFormPage() {
       data_sorteio: form.data_sorteio || null,
       data_limite_venda: form.data_limite_venda || null,
       quantidade_premios: qtdPremios,
+      plano_conta_id: form.plano_conta_id ? Number(form.plano_conta_id) : null,
     }
 
     const result = isNew
@@ -994,6 +1021,13 @@ export function AcaoEntreAmigosFormPage() {
             />
           </div>
 
+          <PlanoContaReceitaField
+            empresaId={empresaId}
+            value={form.plano_conta_id}
+            onChange={(value) => update('plano_conta_id', value)}
+            disabled={saving || !canWrite}
+          />
+
           <div className="field">
             <label htmlFor="ramo">Ramo</label>
             <select
@@ -1211,12 +1245,12 @@ export function AcaoEntreAmigosFormPage() {
                 </button>
               ) : null}
             </>
+          ) : canWrite && encerrado ? (
+            <button className="btn btn-primary" type="submit" disabled={saving}>
+              {saving ? 'Salvando…' : 'Salvar conta'}
+            </button>
           ) : (
-            <p className="muted">
-              {encerrado
-                ? 'Ação encerrada — somente visualização.'
-                : 'Modo leitura — sem permissão para salvar.'}
-            </p>
+            <p className="muted">Modo leitura — sem permissão para salvar.</p>
           )}
           <Link className="btn btn-soft" to="/vendas/acao-entre-amigos">
             Cancelar

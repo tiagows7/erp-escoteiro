@@ -1021,7 +1021,7 @@ export function ReceitaFormPage() {
             />
           </div>
 
-          {isMensalidade ? (
+          {isMensalidade || form.atividade_id || form.evento_id || form.acao_id ? (
             <div className="field field-span-2">
               <label htmlFor="plano_conta">Plano de contas</label>
               <input

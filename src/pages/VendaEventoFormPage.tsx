@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { PlanoContaReceitaField } from '@/components/PlanoContaReceitaField'
 import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
@@ -89,6 +90,7 @@ const emptyForm = {
   data_evento: '',
   valor_grupo: '0,00',
   valor_grupo_tipo: 'por_jovem' as ValorGrupoTipo,
+  plano_conta_id: '',
 }
 
 type TipoFormRow = {
@@ -205,7 +207,7 @@ export function VendaEventoFormPage() {
       const { data, error: loadError } = await supabase
         .from('venda_eventos')
         .select(
-          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id',
+          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, plano_conta_id',
         )
         .eq('evento_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -240,6 +242,7 @@ export function VendaEventoFormPage() {
         valor_grupo_tipo: isValorGrupoTipo(data.valor_grupo_tipo)
           ? data.valor_grupo_tipo
           : 'por_jovem',
+        plano_conta_id: data.plano_conta_id?.toString() ?? '',
       })
       setImagemUrl(data.imagem_url ?? null)
       setImagemPreview(data.imagem_url ?? null)
@@ -484,7 +487,30 @@ export function VendaEventoFormPage() {
       return
     }
     if (!isNew && isEncerrado(encerradoEm)) {
-      setError('Evento encerrado — somente visualização.')
+      if (!empresaId) {
+        setError('Grupo escoteiro não carregado.')
+        return
+      }
+      setSaving(true)
+      setError(null)
+      const { error: saveError } = await supabase
+        .from('venda_eventos')
+        .update({
+          plano_conta_id: form.plano_conta_id
+            ? Number(form.plano_conta_id)
+            : null,
+        })
+        .eq('evento_id', Number(id))
+        .eq('empresa_id', empresaId)
+      setSaving(false)
+      if (saveError) {
+        setError(saveError.message)
+        return
+      }
+      toast.success(
+        'Conta salva',
+        'As receitas sem conta deste evento foram classificadas.',
+      )
       return
     }
     if (!empresaId) {
@@ -553,6 +579,7 @@ export function VendaEventoFormPage() {
       data_evento: form.data_evento || null,
       valor_grupo: parseMoneyInput(form.valor_grupo),
       valor_grupo_tipo: form.valor_grupo_tipo,
+      plano_conta_id: form.plano_conta_id ? Number(form.plano_conta_id) : null,
     }
 
     const result = isNew
@@ -846,6 +873,13 @@ export function VendaEventoFormPage() {
             />
           </div>
 
+          <PlanoContaReceitaField
+            empresaId={empresaId}
+            value={form.plano_conta_id}
+            onChange={(value) => update('plano_conta_id', value)}
+            disabled={saving || !canWrite}
+          />
+
           <div className="field">
             <label htmlFor="ramo">Ramo</label>
             <select
@@ -1105,12 +1139,12 @@ export function VendaEventoFormPage() {
                 </button>
               ) : null}
             </>
+          ) : canWrite && encerrado ? (
+            <button className="btn btn-primary" type="submit" disabled={saving}>
+              {saving ? 'Salvando…' : 'Salvar conta'}
+            </button>
           ) : (
-            <p className="muted">
-              {encerrado
-                ? 'Evento encerrado — somente visualização.'
-                : 'Modo leitura — sem permissão para salvar.'}
-            </p>
+            <p className="muted">Modo leitura — sem permissão para salvar.</p>
           )}
         </div>
       </form>
