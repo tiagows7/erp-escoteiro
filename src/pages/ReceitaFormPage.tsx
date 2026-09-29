@@ -124,6 +124,7 @@ export function ReceitaFormPage() {
   const [form, setForm, { hydrateFromServer, clearDraft, restored }] =
     usePersistedFormState(persistKey, emptyNewForm)
   const [origem, setOrigem] = useState<string>(RECEITA_ORIGEM.AVULSA)
+  const [contaPlano, setContaPlano] = useState<string | null>(null)
   const [saldo, setSaldo] = useState<number | null>(null)
   const [situacao, setSituacao] = useState<number | null>(null)
   const [paidAmount, setPaidAmount] = useState(0)
@@ -161,6 +162,7 @@ export function ReceitaFormPage() {
       receita_vencimento: todayISO(),
     })
     setOrigem(RECEITA_ORIGEM.AVULSA)
+    setContaPlano(null)
     setSaldo(null)
     setSituacao(null)
     setPaidAmount(0)
@@ -532,7 +534,7 @@ export function ReceitaFormPage() {
       const { data, error: loadError } = await supabase
         .from('receitas')
         .select(
-          'receita_id, receita_descricao, associado_id, receita_ramo, receita_secao, atividade_id, projeto_id, evento_id, acao_id, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, receita_observacao, receita_origem, receita_documento',
+          'receita_id, receita_descricao, associado_id, receita_ramo, receita_secao, atividade_id, projeto_id, evento_id, acao_id, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, receita_observacao, receita_origem, receita_documento, plano_contas(codigo, nome)',
         )
         .eq('receita_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -575,6 +577,12 @@ export function ReceitaFormPage() {
         receita_observacao: data.receita_observacao ?? '',
       })
       setOrigem(data.receita_origem ?? RECEITA_ORIGEM.AVULSA)
+      const conta = Array.isArray(data.plano_contas)
+        ? data.plano_contas[0]
+        : data.plano_contas
+      setContaPlano(
+        conta ? `${conta.codigo} — ${conta.nome}` : null,
+      )
       setSaldo(saldoNum)
       setSituacao(data.receita_situacao)
       setPaidAmount(Math.max(0, valorNum - saldoNum))
@@ -1012,6 +1020,19 @@ export function ReceitaFormPage() {
               maxLength={120}
             />
           </div>
+
+          {isMensalidade ? (
+            <div className="field field-span-2">
+              <label htmlFor="plano_conta">Plano de contas</label>
+              <input
+                id="plano_conta"
+                className="input"
+                value={contaPlano ?? 'Sem conta'}
+                disabled
+                readOnly
+              />
+            </div>
+          ) : null}
 
           <div className="field field-span-2">
             <label htmlFor="associado_id">Associado (opcional)</label>

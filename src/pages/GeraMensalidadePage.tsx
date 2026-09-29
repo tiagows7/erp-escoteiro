@@ -26,6 +26,7 @@ type TipoMensalidade = {
   tipomensalidade_id: number
   nome: string
   valor: number | null
+  plano_conta_id: number | null
 }
 
 type PreviewRow = {
@@ -36,6 +37,7 @@ type PreviewRow = {
   ramo: number | null
   tipomensalidade_id: number
   tipo_nome: string
+  plano_conta_id: number | null
   valor: number
   already: boolean
   celular: string | null
@@ -66,7 +68,7 @@ export function GeraMensalidadePage() {
     if (!empresaId) return
     void supabase
       .from('tipo_mensalidade')
-      .select('tipomensalidade_id, nome, valor')
+      .select('tipomensalidade_id, nome, valor, plano_conta_id')
       .eq('empresa_id', empresaId)
       .order('nome')
       .then(({ data }) => setTipos((data as TipoMensalidade[]) ?? []))
@@ -138,7 +140,7 @@ export function GeraMensalidadePage() {
       associadosQuery.order('nome').limit(5000),
       supabase
         .from('tipo_mensalidade')
-        .select('tipomensalidade_id, nome, valor')
+        .select('tipomensalidade_id, nome, valor, plano_conta_id')
         .eq('empresa_id', empresaId),
       supabase
         .from('receitas')
@@ -189,6 +191,7 @@ export function GeraMensalidadePage() {
         ramo: (a.ramo as number | null) ?? null,
         tipomensalidade_id: tipoId,
         tipo_nome: tipo.nome,
+        plano_conta_id: tipo.plano_conta_id ?? null,
         valor,
         already: existentes.has(a.associado_id as number),
         celular: (a.celular as string | null) ?? null,
@@ -234,6 +237,7 @@ export function GeraMensalidadePage() {
       empresa_id: empresaId,
       associado_id: row.associado_id,
       tipomensalidade_id: row.tipomensalidade_id,
+      plano_conta_id: row.plano_conta_id,
       receita_origem: RECEITA_ORIGEM.MENSALIDADE,
       receita_descricao: `Mensalidade ${competencia.slice(5, 7)}/${competencia.slice(0, 4)} — ${row.tipo_nome}`,
       // Conta do grupo: não atribui movimento ao ramo/seção do associado.

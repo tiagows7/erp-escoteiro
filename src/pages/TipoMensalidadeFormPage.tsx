@@ -9,6 +9,14 @@ import { WaitingOverlay } from '@/components/WaitingOverlay'
 const emptyForm = {
   nome: '',
   valor: '0',
+  plano_conta_id: '',
+}
+
+type PlanoOpcao = {
+  plano_conta_id: number
+  codigo: string
+  nome: string
+  ativo: boolean
 }
 
 export function TipoMensalidadeFormPage() {
@@ -21,9 +29,30 @@ export function TipoMensalidadeFormPage() {
   const toast = useToast()
 
   const [form, setForm] = useState(emptyForm)
+  const [contas, setContas] = useState<PlanoOpcao[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
+
+  useEffect(() => {
+    if (!empresaId) {
+      setContas([])
+      return
+    }
+    let mounted = true
+    void supabase
+      .from('plano_contas')
+      .select('plano_conta_id, codigo, nome, ativo')
+      .eq('empresa_id', empresaId)
+      .eq('natureza', 'receita')
+      .order('codigo')
+      .then(({ data }) => {
+        if (mounted) setContas((data ?? []) as PlanoOpcao[])
+      })
+    return () => {
+      mounted = false
+    }
+  }, [empresaId])
 
   useEffect(() => {
     if (isNew || !empresaId) return
@@ -32,7 +61,7 @@ export function TipoMensalidadeFormPage() {
     void (async () => {
       const { data, error: loadError } = await supabase
         .from('tipo_mensalidade')
-        .select('tipomensalidade_id, nome, valor')
+        .select('tipomensalidade_id, nome, valor, plano_conta_id')
         .eq('tipomensalidade_id', Number(id))
         .eq('empresa_id', empresaId)
         .maybeSingle()
@@ -47,6 +76,7 @@ export function TipoMensalidadeFormPage() {
       setForm({
         nome: data.nome ?? '',
         valor: String(data.valor ?? 0),
+        plano_conta_id: data.plano_conta_id?.toString() ?? '',
       })
       setLoading(false)
     })()
@@ -87,6 +117,7 @@ export function TipoMensalidadeFormPage() {
       empresa_id: empresaId,
       nome: form.nome.trim().toUpperCase(),
       valor,
+      plano_conta_id: form.plano_conta_id ? Number(form.plano_conta_id) : null,
     }
 
     const result = isNew
@@ -232,6 +263,40 @@ export function TipoMensalidadeFormPage() {
               disabled={disabled}
               required
             />
+          </div>
+          <div className="field field-span-2">
+            <label htmlFor="plano_conta_id">Plano de contas</label>
+            <select
+              id="plano_conta_id"
+              className="select"
+              value={form.plano_conta_id}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  plano_conta_id: e.target.value,
+                }))
+              }
+              disabled={disabled}
+            >
+              <option value="">Sem conta</option>
+              {contas
+                .filter(
+                  (conta) =>
+                    conta.ativo ||
+                    String(conta.plano_conta_id) === form.plano_conta_id,
+                )
+                .map((conta) => (
+                  <option key={conta.plano_conta_id} value={conta.plano_conta_id}>
+                    {conta.codigo} — {conta.nome}
+                    {conta.ativo ? '' : ' (inativa)'}
+                  </option>
+                ))}
+            </select>
+            <span className="field-hint">
+              Conta de receita usada nas mensalidades deste tipo. Títulos já
+              gerados sem conta recebem esta classificação. Os que já têm conta
+              permanecem como estavam.
+            </span>
           </div>
         </div>
 

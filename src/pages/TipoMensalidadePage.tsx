@@ -11,6 +11,18 @@ type TipoMensalidade = {
   empresa_id: number
   nome: string
   valor: number | null
+  plano_contas:
+    | { codigo: string; nome: string }
+    | { codigo: string; nome: string }[]
+    | null
+}
+
+function contaLabel(row: TipoMensalidade) {
+  const conta = Array.isArray(row.plano_contas)
+    ? row.plano_contas[0]
+    : row.plano_contas
+  if (!conta) return '—'
+  return `${conta.codigo} — ${conta.nome}`
 }
 
 function formatMoney(value: number | null) {
@@ -41,7 +53,9 @@ export function TipoMensalidadePage() {
       setLoading(true)
       const { data, error: queryError } = await supabase
         .from('tipo_mensalidade')
-        .select('tipomensalidade_id, empresa_id, nome, valor')
+        .select(
+          'tipomensalidade_id, empresa_id, nome, valor, plano_contas(codigo, nome)',
+        )
         .eq('empresa_id', empresaId)
         .order('nome')
 
@@ -64,7 +78,11 @@ export function TipoMensalidadePage() {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
     if (!term) return rows
-    return rows.filter((row) => row.nome.toLowerCase().includes(term))
+    return rows.filter(
+      (row) =>
+        row.nome.toLowerCase().includes(term) ||
+        contaLabel(row).toLowerCase().includes(term),
+    )
   }, [q, rows])
 
   if (!empresaId) {
@@ -102,7 +120,7 @@ export function TipoMensalidadePage() {
           <input
             className="input"
             style={{ maxWidth: 360 }}
-            placeholder="Buscar por nome…"
+            placeholder="Buscar por nome ou conta…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -132,6 +150,7 @@ export function TipoMensalidadePage() {
                   <th></th>
                   <th>Nome</th>
                   <th>Valor</th>
+                  <th>Conta</th>
                 </tr>
               </thead>
               <tbody>
@@ -147,6 +166,7 @@ export function TipoMensalidadePage() {
                     </td>
                     <td>{row.nome}</td>
                     <td>{formatMoney(row.valor)}</td>
+                    <td>{contaLabel(row)}</td>
                   </tr>
                 ))}
               </tbody>
