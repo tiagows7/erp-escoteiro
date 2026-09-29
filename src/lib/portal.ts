@@ -82,6 +82,15 @@ export type PortalReceita = {
   plano_conta_qtd?: number | null
 }
 
+export type PortalPlanoLinha = {
+  lado: 'receita' | 'despesa'
+  plano_codigo: string | null
+  plano_nome: string | null
+  fornecedor_nome: string | null
+  qtd: number
+  total: number
+}
+
 export type PortalSecao = {
   secao_id: number
   secao_nome: string

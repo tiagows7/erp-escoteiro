@@ -20,13 +20,15 @@ import {
   type PortalDespesa,
   type PortalGrupo,
   type PortalReceita,
+  type PortalPlanoLinha,
   type PortalResumo,
   type PortalSaldoLocal,
   type PortalSecao,
 } from '@/lib/portal'
 import { DocumentosLinks } from '@/components/DocumentosLinks'
+import { PortalPlanoContasPainel } from '@/components/PortalPlanoContasPainel'
 
-type Tab = 'despesas' | 'receitas'
+type Tab = 'despesas' | 'receitas' | 'plano'
 
 export function PortalTransparenciaPage() {
   const { slug = '' } = useParams()
@@ -36,6 +38,7 @@ export function PortalTransparenciaPage() {
   const [resumo, setResumo] = useState<PortalResumo | null>(null)
   const [despesas, setDespesas] = useState<PortalDespesa[]>([])
   const [receitas, setReceitas] = useState<PortalReceita[]>([])
+  const [planoLinhas, setPlanoLinhas] = useState<PortalPlanoLinha[]>([])
   const [secoes, setSecoes] = useState<PortalSecao[]>([])
   const [saldoLocais, setSaldoLocais] = useState<PortalSaldoLocal[]>([])
   const [ano, setAno] = useState(currentPortalYear())
@@ -133,7 +136,7 @@ export function PortalTransparenciaPage() {
             })
           : Promise.resolve({ data: [], error: null })
 
-      const [resumoRes, despRes, recRes, secoesRes, locaisRes] =
+      const [resumoRes, despRes, recRes, planoRes, secoesRes, locaisRes] =
         await Promise.all([
         supabase.rpc('portal_resumo', {
           p_slug: cleanSlug,
@@ -156,6 +159,13 @@ export function PortalTransparenciaPage() {
           p_secao: secaoId,
           p_mes: mes,
         }),
+        supabase.rpc('portal_plano_contas', {
+          p_slug: cleanSlug,
+          p_ano: ano,
+          p_caixa: caixa,
+          p_secao: secaoId,
+          p_mes: mes,
+        }),
         secoesPromise,
         supabase.rpc('portal_saldo_locais', {
           p_slug: cleanSlug,
@@ -170,18 +180,21 @@ export function PortalTransparenciaPage() {
         resumoRes.error ||
         despRes.error ||
         recRes.error ||
+        planoRes.error ||
         secoesRes.error
       ) {
         setError(
           resumoRes.error?.message ||
             despRes.error?.message ||
             recRes.error?.message ||
+            planoRes.error?.message ||
             secoesRes.error?.message ||
             'Falha ao carregar dados.',
         )
         setResumo(null)
         setDespesas([])
         setReceitas([])
+        setPlanoLinhas([])
         setSecoes([])
         setSaldoLocais([])
       } else {
@@ -191,6 +204,7 @@ export function PortalTransparenciaPage() {
         setResumo(resumoRow)
         setDespesas((despRes.data as PortalDespesa[]) ?? [])
         setReceitas((recRes.data as PortalReceita[]) ?? [])
+        setPlanoLinhas((planoRes.data as PortalPlanoLinha[]) ?? [])
         setSecoes((secoesRes.data as PortalSecao[]) ?? [])
         if (locaisRes.error) {
           console.warn('Locais do saldo:', locaisRes.error.message)
@@ -611,9 +625,20 @@ export function PortalTransparenciaPage() {
               >
                 Receitas ({receitas.length})
               </button>
+              <button
+                type="button"
+                role="tab"
+                className={`tab${tab === 'plano' ? ' active' : ''}`}
+                aria-selected={tab === 'plano'}
+                onClick={() => setTab('plano')}
+              >
+                Plano de contas
+              </button>
             </div>
 
-            {tab === 'despesas' ? (
+            {tab === 'plano' ? (
+              <PortalPlanoContasPainel linhas={planoLinhas} />
+            ) : tab === 'despesas' ? (
               despesas.length === 0 ? (
                 <div className="empty">
                   Nenhuma despesa neste caixa/período.

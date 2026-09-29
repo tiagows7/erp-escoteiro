@@ -5364,6 +5364,11 @@ form.panel .muted,
   letter-spacing: -0.02em;
 }
 
+.portal-plano-subtotal td {
+  border-top: 1px solid var(--line);
+  background: #f4f7f5;
+}
+
 .portal-caixa-atual {
   margin: 0.85rem 0 0;
   color: #5a6b62;
