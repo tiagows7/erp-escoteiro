@@ -84,7 +84,7 @@ export function DespesasInclusaoPage() {
       let query = supabase
         .from('despesas')
         .select(
-          'despesa_id, despesa_finalidade, despesa_numeronota, despesa_emissao, despesa_vencimento, despesa_valor, despesa_saldo, despesa_situacao, despesa_ramo, despesa_fornecedor, fornecedor_despesa(fordespesa_nome), atividades(descricao)',
+          'despesa_id, despesa_finalidade, despesa_numeronota, despesa_emissao, despesa_vencimento, despesa_valor, despesa_saldo, despesa_situacao, despesa_ramo, despesa_fornecedor, fornecedor_despesa(fordespesa_nome), atividades!despesas_atividade_id_fkey(descricao)',
         )
         .eq('empresa_id', empresaId)
         .order('despesa_vencimento', { ascending: false })
