@@ -78,6 +78,8 @@ export type PortalReceita = {
   receita_saldo: number | null
   receita_situacao: number | null
   receita_documento: string | null
+  /** Mais de 1 quando a linha soma várias receitas da mesma conta. */
+  plano_conta_qtd?: number | null
 }
 
 export type PortalSecao = {

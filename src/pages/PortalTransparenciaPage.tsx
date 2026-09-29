@@ -287,22 +287,38 @@ export function PortalTransparenciaPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {rows.map((row) => {
+              const acumulada = (row.plano_conta_qtd ?? 0) > 1
+              return (
               <tr key={row.receita_id}>
                 <td>{formatPortalDate(row.receita_emissao)}</td>
                 <td>{formatPortalDate(row.receita_competencia)}</td>
-                <td>{row.receita_descricao || '—'}</td>
+                <td>
+                  {row.receita_descricao || '—'}
+                  {acumulada ? (
+                    <span className="muted"> ({row.plano_conta_qtd} títulos)</span>
+                  ) : null}
+                </td>
                 <td>{origemReceitaLabel(row.receita_origem)}</td>
-                {showRamoCol ? <td>{row.ramo_nome || 'Grupo'}</td> : null}
-                {showSecaoCol ? <td>{row.secao_nome || '—'}</td> : null}
+                {showRamoCol ? (
+                  <td>{acumulada ? '—' : row.ramo_nome || 'Grupo'}</td>
+                ) : null}
+                {showSecaoCol ? (
+                  <td>{acumulada ? '—' : row.secao_nome || '—'}</td>
+                ) : null}
                 <td>{formatMoney(row.receita_valor)}</td>
                 <td>{formatMoney(row.receita_saldo)}</td>
                 <td>{situacaoTituloLabel(row.receita_situacao)}</td>
                 <td>
-                  <DocumentosLinks value={row.receita_documento} />
+                  {acumulada ? (
+                    '—'
+                  ) : (
+                    <DocumentosLinks value={row.receita_documento} />
+                  )}
                 </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>
