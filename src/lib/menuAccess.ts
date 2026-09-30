@@ -181,6 +181,7 @@ export const ALWAYS_VISIBLE_MENU_KEYS = [
   '/cadastros/funcao',
   // Cadastro novo do financeiro: aparece mesmo com menu_keys antigo.
   '/cadastros/plano-contas',
+  '/financeiro/orcamentos',
   // Admin do grupo: item só entra no nav se role=admin.
   '/grupos/meu',
   '/sugestoes-melhoria',

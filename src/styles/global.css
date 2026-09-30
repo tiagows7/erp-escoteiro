@@ -6531,3 +6531,17 @@ form.panel .muted,
     padding: 0;
   }
 }
+
+.orcamento-itens .input {
+  width: 100%;
+  min-width: 4.5rem;
+}
+
+.orcamento-itens-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}

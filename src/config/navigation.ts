@@ -256,6 +256,12 @@ export const NAV_ITEMS: NavItem[] = [
           },
         ],
       },
+      {
+        type: 'link',
+        to: '/financeiro/orcamentos',
+        label: 'Orçamento',
+        permission: 'financeiro.view',
+      },
     ],
   },
   {

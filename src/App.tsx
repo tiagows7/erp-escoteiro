@@ -52,6 +52,8 @@ import { FornecedoresPage } from '@/pages/FornecedoresPage'
 import { FornecedorFormPage } from '@/pages/FornecedorFormPage'
 import { PlanoContasPage } from '@/pages/PlanoContasPage'
 import { PlanoContaFormPage } from '@/pages/PlanoContaFormPage'
+import { OrcamentosPage } from '@/pages/OrcamentosPage'
+import { OrcamentoFormPage } from '@/pages/OrcamentoFormPage'
 import { CalendarioGrupoPage } from '@/pages/CalendarioGrupoPage'
 import { HomeRedirectPage } from '@/pages/HomeRedirectPage'
 import { TipoMensalidadePage } from '@/pages/TipoMensalidadePage'
@@ -404,6 +406,25 @@ export default function App() {
               element={
                 <RequirePermission permission="financeiro.view">
                   <DespesasRelatorioPage />
+                </RequirePermission>
+              }
+            />
+
+            <Route
+              path="financeiro/orcamentos"
+              element={
+                <RequirePermission permission="financeiro.view">
+                  <OrcamentosPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="financeiro/orcamentos/:id"
+              element={
+                <RequirePermission
+                  anyOf={['financeiro.view', 'financeiro.write']}
+                >
+                  <OrcamentoFormPage />
                 </RequirePermission>
               }
             />
