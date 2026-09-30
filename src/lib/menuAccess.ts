@@ -171,6 +171,7 @@ export const ALWAYS_VISIBLE_MENU_KEYS = [
   '/dashboard',
   '/calendario',
   '/competicoes',
+  '/assiduidade',
   '/conquistas',
   '/voluntarios',
   '/regimento-interno',

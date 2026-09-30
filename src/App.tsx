@@ -89,6 +89,8 @@ import { AtividadeFormPage } from '@/pages/AtividadeFormPage'
 import { AtividadeContasPage } from '@/pages/AtividadeContasPage'
 import { CompeticoesPage } from '@/pages/CompeticoesPage'
 import { CompeticaoFormPage } from '@/pages/CompeticaoFormPage'
+import { AssiduidadePage } from '@/pages/AssiduidadePage'
+import { AssiduidadeFormPage } from '@/pages/AssiduidadeFormPage'
 import { SolicitacoesPage } from '@/pages/SolicitacoesPage'
 import { SolicitacaoFormPage } from '@/pages/SolicitacaoFormPage'
 import { PwaInstallBanner } from '@/components/PwaInstallBanner'
@@ -535,6 +537,24 @@ export default function App() {
                   anyOf={['competicoes.view', 'competicoes.write']}
                 >
                   <CompeticaoFormPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="assiduidade"
+              element={
+                <RequirePermission permission="atividades.view">
+                  <AssiduidadePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="assiduidade/:id"
+              element={
+                <RequirePermission
+                  anyOf={['atividades.view', 'atividades.write']}
+                >
+                  <AssiduidadeFormPage />
                 </RequirePermission>
               }
             />

@@ -51,6 +51,8 @@ export const AUDITORIA_TABELA_LABELS: Record<string, string> = {
   plataforma_pix_cobrancas: 'PIX cobrança plataforma',
   conquistas: 'Conquistas',
   competicoes: 'Competições',
+  assiduidade: 'Assiduidade',
+  assiduidade_presenca: 'Presença (assiduidade)',
   competicao_participante: 'Participantes (competição)',
   competicao_prova: 'Provas (competição)',
   competicao_pontuacao: 'Pontuação (competição)',

@@ -291,10 +291,24 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
-    type: 'link',
-    to: '/competicoes',
-    label: 'Competições',
-    permission: 'competicoes.view',
+    type: 'group',
+    id: 'ramos',
+    label: 'Ramos',
+    anyOf: ['competicoes.view', 'atividades.view'],
+    children: [
+      {
+        type: 'link',
+        to: '/competicoes',
+        label: 'Competições',
+        permission: 'competicoes.view',
+      },
+      {
+        type: 'link',
+        to: '/assiduidade',
+        label: 'Assiduidade',
+        permission: 'atividades.view',
+      },
+    ],
   },
   {
     type: 'link',
