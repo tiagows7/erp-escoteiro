@@ -6,29 +6,20 @@ import { AlertMessage } from '@/components/AlertMessage'
 import {
   currentPortalYear,
   formatMoney,
-  formatPortalDate,
-  groupBySecao,
-  origemReceitaLabel,
   parsePortalCaixaId,
   PORTAL_CAIXA_GERAL,
   PORTAL_MESES,
   portalCaixasVisiveis,
   portalPeriodoLabel,
   portalYearOptions,
-  situacaoTituloLabel,
   type PortalCaixaId,
-  type PortalDespesa,
   type PortalGrupo,
-  type PortalReceita,
   type PortalPlanoLinha,
   type PortalResumo,
   type PortalSaldoLocal,
   type PortalSecao,
 } from '@/lib/portal'
-import { DocumentosLinks } from '@/components/DocumentosLinks'
 import { PortalPlanoContasPainel } from '@/components/PortalPlanoContasPainel'
-
-type Tab = 'despesas' | 'receitas' | 'plano'
 
 export function PortalTransparenciaPage() {
   const { slug = '' } = useParams()
@@ -36,8 +27,6 @@ export function PortalTransparenciaPage() {
   const { profile, session } = useAuth()
   const [grupo, setGrupo] = useState<PortalGrupo | null>(null)
   const [resumo, setResumo] = useState<PortalResumo | null>(null)
-  const [despesas, setDespesas] = useState<PortalDespesa[]>([])
-  const [receitas, setReceitas] = useState<PortalReceita[]>([])
   const [planoLinhas, setPlanoLinhas] = useState<PortalPlanoLinha[]>([])
   const [secoes, setSecoes] = useState<PortalSecao[]>([])
   const [saldoLocais, setSaldoLocais] = useState<PortalSaldoLocal[]>([])
@@ -47,7 +36,6 @@ export function PortalTransparenciaPage() {
     return parsePortalCaixaId(searchParams.get('caixa')) ?? PORTAL_CAIXA_GERAL
   })
   const [secaoId, setSecaoId] = useState<number | null>(null)
-  const [tab, setTab] = useState<Tab>('despesas')
   const [locaisAbertos, setLocaisAbertos] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -58,10 +46,8 @@ export function PortalTransparenciaPage() {
     () => portalCaixasVisiveis(profile?.codigo_ramo),
     [profile?.codigo_ramo],
   )
-  const isGeral = caixa === PORTAL_CAIXA_GERAL
   const mostrarSecoes = caixa >= 1 && caixa <= 4 && secoes.length > 1
-  const agruparPorSecao = mostrarSecoes && secaoId == null
-  const showRamoCol = isGeral
+  const showRamoCol = caixa === PORTAL_CAIXA_GERAL
 
   useEffect(() => {
     const parsed = parsePortalCaixaId(searchParams.get('caixa'))
@@ -136,23 +122,8 @@ export function PortalTransparenciaPage() {
             })
           : Promise.resolve({ data: [], error: null })
 
-      const [resumoRes, despRes, recRes, planoRes, secoesRes, locaisRes] =
-        await Promise.all([
+      const [resumoRes, planoRes, secoesRes, locaisRes] = await Promise.all([
         supabase.rpc('portal_resumo', {
-          p_slug: cleanSlug,
-          p_ano: ano,
-          p_caixa: caixa,
-          p_secao: secaoId,
-          p_mes: mes,
-        }),
-        supabase.rpc('portal_despesas', {
-          p_slug: cleanSlug,
-          p_ano: ano,
-          p_caixa: caixa,
-          p_secao: secaoId,
-          p_mes: mes,
-        }),
-        supabase.rpc('portal_receitas', {
           p_slug: cleanSlug,
           p_ano: ano,
           p_caixa: caixa,
@@ -176,24 +147,14 @@ export function PortalTransparenciaPage() {
 
       if (!mounted) return
 
-      if (
-        resumoRes.error ||
-        despRes.error ||
-        recRes.error ||
-        planoRes.error ||
-        secoesRes.error
-      ) {
+      if (resumoRes.error || planoRes.error || secoesRes.error) {
         setError(
           resumoRes.error?.message ||
-            despRes.error?.message ||
-            recRes.error?.message ||
             planoRes.error?.message ||
             secoesRes.error?.message ||
             'Falha ao carregar dados.',
         )
         setResumo(null)
-        setDespesas([])
-        setReceitas([])
         setPlanoLinhas([])
         setSecoes([])
         setSaldoLocais([])
@@ -202,8 +163,6 @@ export function PortalTransparenciaPage() {
           Array.isArray(resumoRes.data) ? resumoRes.data[0] : resumoRes.data
         ) as PortalResumo | null
         setResumo(resumoRow)
-        setDespesas((despRes.data as PortalDespesa[]) ?? [])
-        setReceitas((recRes.data as PortalReceita[]) ?? [])
         setPlanoLinhas((planoRes.data as PortalPlanoLinha[]) ?? [])
         setSecoes((secoesRes.data as PortalSecao[]) ?? [])
         if (locaisRes.error) {
@@ -229,115 +188,11 @@ export function PortalTransparenciaPage() {
       ? 'Todas as seções'
       : (secoes.find((s) => s.secao_id === secaoId)?.secao_nome ?? 'Seção')
 
-  const despesasGrupos = useMemo(
-    () => (agruparPorSecao ? groupBySecao(despesas) : null),
-    [agruparPorSecao, despesas],
-  )
-  const receitasGrupos = useMemo(
-    () => (agruparPorSecao ? groupBySecao(receitas) : null),
-    [agruparPorSecao, receitas],
-  )
   const totalLocais = useMemo(
     () =>
       saldoLocais.reduce((sum, local) => sum + Number(local.valor ?? 0), 0),
     [saldoLocais],
   )
-
-  function renderDespesasTable(rows: PortalDespesa[], showSecaoCol: boolean) {
-    return (
-      <div className="table-wrap">
-        <table className="data">
-          <thead>
-            <tr>
-              <th>Emissão</th>
-              <th>Finalidade</th>
-              <th>Fornecedor</th>
-              {showRamoCol ? <th>Ramo</th> : null}
-              {showSecaoCol ? <th>Seção</th> : null}
-              <th>Valor</th>
-              <th>Saldo</th>
-              <th>Situação</th>
-              <th>Documento</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.despesa_id}>
-                <td>{formatPortalDate(row.despesa_emissao)}</td>
-                <td>{row.despesa_finalidade || '—'}</td>
-                <td>{row.fornecedor_nome || '—'}</td>
-                {showRamoCol ? <td>{row.ramo_nome || 'Grupo'}</td> : null}
-                {showSecaoCol ? <td>{row.secao_nome || '—'}</td> : null}
-                <td>{formatMoney(row.despesa_valor)}</td>
-                <td>{formatMoney(row.despesa_saldo)}</td>
-                <td>{situacaoTituloLabel(row.despesa_situacao)}</td>
-                <td>
-                  <DocumentosLinks value={row.despesa_documento} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    )
-  }
-
-  function renderReceitasTable(rows: PortalReceita[], showSecaoCol: boolean) {
-    return (
-      <div className="table-wrap">
-        <table className="data">
-          <thead>
-            <tr>
-              <th>Emissão</th>
-              <th>Competência</th>
-              <th>Descrição</th>
-              <th>Origem</th>
-              {showRamoCol ? <th>Ramo</th> : null}
-              {showSecaoCol ? <th>Seção</th> : null}
-              <th>Valor</th>
-              <th>Saldo</th>
-              <th>Situação</th>
-              <th>Documento</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const acumulada = (row.plano_conta_qtd ?? 0) > 1
-              return (
-              <tr key={row.receita_id}>
-                <td>{formatPortalDate(row.receita_emissao)}</td>
-                <td>{formatPortalDate(row.receita_competencia)}</td>
-                <td>
-                  {row.receita_descricao || '—'}
-                  {acumulada ? (
-                    <span className="muted"> ({row.plano_conta_qtd} títulos)</span>
-                  ) : null}
-                </td>
-                <td>{origemReceitaLabel(row.receita_origem)}</td>
-                {showRamoCol ? (
-                  <td>{acumulada ? '—' : row.ramo_nome || 'Grupo'}</td>
-                ) : null}
-                {showSecaoCol ? (
-                  <td>{acumulada ? '—' : row.secao_nome || '—'}</td>
-                ) : null}
-                <td>{formatMoney(row.receita_valor)}</td>
-                <td>{formatMoney(row.receita_saldo)}</td>
-                <td>{situacaoTituloLabel(row.receita_situacao)}</td>
-                <td>
-                  {acumulada ? (
-                    '—'
-                  ) : (
-                    <DocumentosLinks value={row.receita_documento} />
-                  )}
-                </td>
-              </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    )
-  }
 
   return (
     <div className="portal-page">
@@ -606,84 +461,16 @@ export function PortalTransparenciaPage() {
 
         {!loading && grupo ? (
           <section className="panel portal-panel">
-            <div className="tabs" role="tablist">
-              <button
-                type="button"
-                role="tab"
-                className={`tab${tab === 'despesas' ? ' active' : ''}`}
-                aria-selected={tab === 'despesas'}
-                onClick={() => setTab('despesas')}
-              >
-                Despesas ({despesas.length})
-              </button>
-              <button
-                type="button"
-                role="tab"
-                className={`tab${tab === 'receitas' ? ' active' : ''}`}
-                aria-selected={tab === 'receitas'}
-                onClick={() => setTab('receitas')}
-              >
-                Receitas ({receitas.length})
-              </button>
-              <button
-                type="button"
-                role="tab"
-                className={`tab${tab === 'plano' ? ' active' : ''}`}
-                aria-selected={tab === 'plano'}
-                onClick={() => setTab('plano')}
-              >
-                Plano de contas
-              </button>
-            </div>
-
-            {tab === 'plano' ? (
-              <PortalPlanoContasPainel linhas={planoLinhas} />
-            ) : tab === 'despesas' ? (
-              despesas.length === 0 ? (
-                <div className="empty">
-                  Nenhuma despesa neste caixa/período.
-                </div>
-              ) : despesasGrupos ? (
-                <div className="portal-secao-groups">
-                  {despesasGrupos.map((grupoSecao) => (
-                    <section
-                      key={grupoSecao.key}
-                      className="portal-secao-group"
-                    >
-                      <h3>
-                        {grupoSecao.secao_nome}{' '}
-                        <span className="muted">
-                          ({grupoSecao.items.length})
-                        </span>
-                      </h3>
-                      {renderDespesasTable(grupoSecao.items, false)}
-                    </section>
-                  ))}
-                </div>
-              ) : (
-                renderDespesasTable(despesas, false)
-              )
-            ) : receitas.length === 0 ? (
-              <div className="empty">
-                Nenhuma receita neste caixa/período.
-              </div>
-            ) : receitasGrupos ? (
-              <div className="portal-secao-groups">
-                {receitasGrupos.map((grupoSecao) => (
-                  <section key={grupoSecao.key} className="portal-secao-group">
-                    <h3>
-                      {grupoSecao.secao_nome}{' '}
-                      <span className="muted">
-                        ({grupoSecao.items.length})
-                      </span>
-                    </h3>
-                    {renderReceitasTable(grupoSecao.items, false)}
-                  </section>
-                ))}
-              </div>
-            ) : (
-              renderReceitasTable(receitas, false)
-            )}
+            <PortalPlanoContasPainel
+              key={`${ano}|${mes ?? ''}|${caixa}|${secaoId ?? ''}`}
+              linhas={planoLinhas}
+              slug={slug.trim().toLowerCase()}
+              ano={ano}
+              mes={mes}
+              caixa={caixa}
+              secaoId={secaoId}
+              showRamoCol={showRamoCol}
+            />
           </section>
         ) : null}
       </main>
