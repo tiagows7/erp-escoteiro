@@ -13,7 +13,6 @@ type AssiduidadeRow = {
   assiduidade_id: number
   ramo: number
   data_atividade: string
-  atividade_id: number
   assiduidade_presenca: Presenca[] | null
 }
 
@@ -33,7 +32,6 @@ export function AssiduidadePage() {
 
   const [rows, setRows] = useState<AssiduidadeRow[]>([])
   const [ramos, setRamos] = useState<Map<number, string>>(new Map())
-  const [atividades, setAtividades] = useState<Map<number, string>>(new Map())
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -48,23 +46,19 @@ export function AssiduidadePage() {
     let mounted = true
     void (async () => {
       setLoading(true)
-      const [listaRes, ramosRes, atividadesRes] = await Promise.all([
+      const [listaRes, ramosRes] = await Promise.all([
         supabase
           .from('assiduidade')
           .select(
-            'assiduidade_id, ramo, data_atividade, atividade_id, assiduidade_presenca(compareceu)',
+            'assiduidade_id, ramo, data_atividade, assiduidade_presenca(compareceu)',
           )
           .eq('empresa_id', empresaId)
           .order('data_atividade', { ascending: false }),
         supabase.from('ramos').select('ramo_id, nome').order('ramo_id'),
-        supabase
-          .from('atividades')
-          .select('atividade_id, descricao')
-          .eq('empresa_id', empresaId),
       ])
 
       if (!mounted) return
-      const falha = listaRes.error || ramosRes.error || atividadesRes.error
+      const falha = listaRes.error || ramosRes.error
       if (falha) {
         setError(falha.message)
         setRows([])
@@ -73,14 +67,6 @@ export function AssiduidadePage() {
         setRows((listaRes.data ?? []) as AssiduidadeRow[])
         setRamos(
           new Map((ramosRes.data ?? []).map((row) => [row.ramo_id, row.nome])),
-        )
-        setAtividades(
-          new Map(
-            (atividadesRes.data ?? []).map((row) => [
-              row.atividade_id,
-              row.descricao,
-            ]),
-          ),
         )
       }
       setLoading(false)
@@ -104,12 +90,9 @@ export function AssiduidadePage() {
     if (!term) return visiveis
     return visiveis.filter((row) => {
       const ramo = ramos.get(row.ramo) ?? ''
-      const atividade = atividades.get(row.atividade_id) ?? ''
-      return `${ramo} ${atividade} ${formatData(row.data_atividade)}`
-        .toLowerCase()
-        .includes(term)
+      return `${ramo} ${formatData(row.data_atividade)}`.toLowerCase().includes(term)
     })
-  }, [visiveis, q, ramos, atividades])
+  }, [visiveis, q, ramos])
 
   if (!empresaId) {
     return (
@@ -147,7 +130,7 @@ export function AssiduidadePage() {
           <input
             className="input"
             style={{ maxWidth: 360 }}
-            placeholder="Buscar por ramo ou atividade…"
+            placeholder="Buscar por ramo ou data…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -176,7 +159,6 @@ export function AssiduidadePage() {
                 <tr>
                   <th></th>
                   <th>Data</th>
-                  <th>Atividade</th>
                   <th>Ramo</th>
                   <th>Compareceram</th>
                 </tr>
@@ -196,7 +178,6 @@ export function AssiduidadePage() {
                         </Link>
                       </td>
                       <td>{formatData(row.data_atividade)}</td>
-                      <td>{atividades.get(row.atividade_id) ?? '—'}</td>
                       <td>{ramos.get(row.ramo) ?? '—'}</td>
                       <td>
                         {presentes} de {presencas.length}
