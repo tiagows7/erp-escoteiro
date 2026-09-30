@@ -17,6 +17,20 @@ type Pessoa = {
   compareceu: boolean
 }
 
+type AtividadeOpcao = {
+  atividade_id: number
+  descricao: string
+  data_atividade: string | null
+  ramo: number | null
+}
+
+function formatData(value: string | null | undefined) {
+  if (!value) return ''
+  const [ano, mes, dia] = value.slice(0, 10).split('-')
+  if (!ano || !mes || !dia) return value
+  return `${dia}/${mes}/${ano}`
+}
+
 export function AssiduidadeFormPage() {
   const { id } = useParams()
   const isNew = !id || id === 'novo'
@@ -30,8 +44,10 @@ export function AssiduidadeFormPage() {
 
   const [savedId, setSavedId] = useState<number | null>(routeId)
   const [ramo, setRamo] = useState(ramoScope != null ? String(ramoScope) : '')
+  const [atividadeId, setAtividadeId] = useState('')
   const [dataAtividade, setDataAtividade] = useState('')
   const [ramos, setRamos] = useState<Ramo[]>([])
+  const [atividades, setAtividades] = useState<AtividadeOpcao[]>([])
   const [pessoas, setPessoas] = useState<Pessoa[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingPessoas, setLoadingPessoas] = useState(false)
@@ -108,15 +124,20 @@ export function AssiduidadeFormPage() {
 
     let mounted = true
     void (async () => {
-      const [ramosRes, atualRes, presencaRes] = await Promise.all([
+      const [ramosRes, atividadesRes, atualRes, presencaRes] = await Promise.all([
         supabase
           .from('ramos')
           .select('ramo_id, nome, idade_inicio, idade_fim')
           .order('ramo_id'),
+        supabase
+          .from('atividades')
+          .select('atividade_id, descricao, data_atividade, ramo')
+          .eq('empresa_id', empresaId)
+          .order('data_atividade', { ascending: false }),
         routeId
           ? supabase
               .from('assiduidade')
-              .select('ramo, data_atividade')
+              .select('ramo, data_atividade, atividade_id')
               .eq('assiduidade_id', routeId)
               .eq('empresa_id', empresaId)
               .maybeSingle()
@@ -131,7 +152,11 @@ export function AssiduidadeFormPage() {
       ])
 
       if (!mounted) return
-      const falha = ramosRes.error || atualRes.error || presencaRes.error
+      const falha =
+        ramosRes.error ||
+        atividadesRes.error ||
+        atualRes.error ||
+        presencaRes.error
       if (falha) {
         setError(falha.message)
         setLoading(false)
@@ -144,6 +169,7 @@ export function AssiduidadeFormPage() {
       }
 
       setRamos((ramosRes.data ?? []) as Ramo[])
+      setAtividades((atividadesRes.data ?? []) as AtividadeOpcao[])
 
       const marcas = new Map<number, boolean>()
       for (const row of presencaRes.data ?? []) {
@@ -162,6 +188,11 @@ export function AssiduidadeFormPage() {
         }
         setSavedId(routeId)
         setRamo(String(atualRes.data.ramo))
+        setAtividadeId(
+          atualRes.data.atividade_id != null
+            ? String(atualRes.data.atividade_id)
+            : '',
+        )
         setDataAtividade((atualRes.data.data_atividade ?? '').slice(0, 10))
         setLoading(false)
         await carregarPessoas(atualRes.data.ramo, marcas)
@@ -178,6 +209,15 @@ export function AssiduidadeFormPage() {
       mounted = false
     }
   }, [empresaId, routeId, ramoScope, carregarPessoas])
+
+  const atividadesDoRamo = useMemo(
+    () =>
+      atividades.filter(
+        (item) =>
+          ramoId != null && (item.ramo == null || item.ramo === ramoId),
+      ),
+    [atividades, ramoId],
+  )
 
   const jovens = pessoas.filter((pessoa) => pessoa.tipo === 'jovem')
   const voluntarios = pessoas.filter((pessoa) => pessoa.tipo === 'voluntario')
@@ -215,6 +255,10 @@ export function AssiduidadeFormPage() {
       setError('Escolha o ramo.')
       return
     }
+    if (!atividadeId) {
+      setError('Escolha a atividade cadastrada.')
+      return
+    }
     if (!dataAtividade) {
       setError('Informe a data da atividade.')
       return
@@ -225,6 +269,7 @@ export function AssiduidadeFormPage() {
     const payload = {
       empresa_id: empresaId,
       ramo: ramoId,
+      atividade_id: Number(atividadeId),
       data_atividade: dataAtividade,
     }
 
@@ -239,7 +284,7 @@ export function AssiduidadeFormPage() {
         setSaving(false)
         setError(
           insertError?.code === '23505'
-            ? 'Já existe uma chamada deste ramo nesta data.'
+            ? 'Já existe uma chamada deste ramo para esta atividade.'
             : (insertError?.message ?? 'Não foi possível salvar.'),
         )
         return
@@ -256,7 +301,7 @@ export function AssiduidadeFormPage() {
         setSaving(false)
         setError(
           updateError.code === '23505'
-            ? 'Já existe uma chamada deste ramo nesta data.'
+            ? 'Já existe uma chamada deste ramo para esta atividade.'
             : updateError.message,
         )
         return
@@ -449,6 +494,7 @@ export function AssiduidadeFormPage() {
               onChange={(e) => {
                 const next = e.target.value
                 setRamo(next)
+                setAtividadeId('')
                 if (!next) {
                   setPessoas([])
                   return
@@ -472,6 +518,37 @@ export function AssiduidadeFormPage() {
           </div>
 
           <div className="field">
+            <label htmlFor="atividade">Atividade</label>
+            <select
+              id="atividade"
+              className="select"
+              value={atividadeId}
+              disabled={disabled || ramoId == null}
+              required
+              onChange={(e) => {
+                const next = e.target.value
+                setAtividadeId(next)
+                const escolhida = atividades.find(
+                  (item) => String(item.atividade_id) === next,
+                )
+                if (escolhida?.data_atividade) {
+                  setDataAtividade(escolhida.data_atividade.slice(0, 10))
+                }
+              }}
+            >
+              <option value="">Selecione…</option>
+              {atividadesDoRamo.map((item) => (
+                <option key={item.atividade_id} value={item.atividade_id}>
+                  {item.descricao?.trim() || `Atividade #${item.atividade_id}`}
+                  {item.data_atividade
+                    ? ` · ${formatData(item.data_atividade)}`
+                    : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
             <label htmlFor="data_atividade">Data da atividade</label>
             <input
               id="data_atividade"
@@ -487,7 +564,12 @@ export function AssiduidadeFormPage() {
 
         {ramoId == null ? (
           <p className="field-hint">
-            Escolha o ramo para trazer os jovens e os voluntários.
+            Escolha o ramo para trazer as atividades, os jovens e os voluntários.
+          </p>
+        ) : atividadesDoRamo.length === 0 ? (
+          <p className="field-hint">
+            Nenhuma atividade cadastrada neste ramo. Cadastre a atividade antes
+            da chamada.
           </p>
         ) : loadingPessoas ? (
           <div className="loading">Carregando jovens e voluntários…</div>
