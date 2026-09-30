@@ -12,14 +12,14 @@ import {
   parseMoneyInput,
 } from '@/lib/despesas'
 import { staffRamoScope } from '@/lib/roles'
+import type { Ramo } from '@/types/database'
 
-type DestinoTipo = 'atividade' | 'evento'
-
-type Opcao = {
-  id: number
+type Secao = { secao_id: number; nome: string; ramo: number | null }
+type Patrulha = {
+  secaonome_id: number
   nome: string
-  data: string | null
   ramo: number | null
+  secao: number | null
 }
 
 type ItemForm = {
@@ -40,21 +40,21 @@ function novoItem(): ItemForm {
   }
 }
 
-function formatData(value: string | null) {
-  if (!value) return ''
-  const [ano, mes, dia] = value.slice(0, 10).split('-')
-  if (!ano || !mes || !dia) return ''
-  return `${dia}/${mes}/${ano}`
-}
-
 function parseQuantidade(value: string) {
   const n = Number(value.trim().replace(',', '.'))
   return Number.isFinite(n) ? n : 0
 }
 
-function opcaoLabel(opcao: Opcao) {
-  const data = formatData(opcao.data)
-  return data ? `${opcao.nome} · ${data}` : opcao.nome
+function numOrNull(value: string) {
+  if (!value) return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+function unidadeLabel(ramoId: number | null) {
+  if (ramoId === 1) return 'Matilha'
+  if (ramoId === 4) return 'Clã'
+  return 'Patrulha'
 }
 
 export function OrcamentoFormPage() {
@@ -69,18 +69,38 @@ export function OrcamentoFormPage() {
   const ramoScope = useMemo(() => staffRamoScope(profile), [profile])
 
   const [savedId, setSavedId] = useState<number | null>(routeId)
-  const [tipo, setTipo] = useState<DestinoTipo>('atividade')
-  const [atividadeId, setAtividadeId] = useState<number | null>(null)
-  const [eventoId, setEventoId] = useState<number | null>(null)
+  const [nome, setNome] = useState('')
+  const [ramo, setRamo] = useState('')
+  const [secao, setSecao] = useState('')
+  const [patrulha, setPatrulha] = useState('')
   const [observacao, setObservacao] = useState('')
   const [itens, setItens] = useState<ItemForm[]>([novoItem()])
-  const [atividades, setAtividades] = useState<Opcao[]>([])
-  const [eventos, setEventos] = useState<Opcao[]>([])
-  const [ocupadosAtividade, setOcupadosAtividade] = useState<number[]>([])
-  const [ocupadosEvento, setOcupadosEvento] = useState<number[]>([])
+  const [ramos, setRamos] = useState<Ramo[]>([])
+  const [secoes, setSecoes] = useState<Secao[]>([])
+  const [patrulhas, setPatrulhas] = useState<Patrulha[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const ramoId = ramo ? Number(ramo) : null
+  const secaoId = secao ? Number(secao) : null
+
+  const secoesDoRamo = useMemo(() => {
+    if (ramoId == null) return []
+    return secoes.filter((item) => item.ramo === ramoId)
+  }, [ramoId, secoes])
+
+  const patrulhasDaSecao = useMemo(() => {
+    if (ramoId == null || secaoId == null) return []
+    return patrulhas.filter(
+      (item) => item.ramo === ramoId && item.secao === secaoId,
+    )
+  }, [ramoId, secaoId, patrulhas])
+
+  useEffect(() => {
+    if (ramoScope == null || !isNew) return
+    setRamo(String(ramoScope))
+  }, [ramoScope, isNew])
 
   useEffect(() => {
     if (!empresaId) {
@@ -90,26 +110,26 @@ export function OrcamentoFormPage() {
 
     let mounted = true
     void (async () => {
-      const [atividadesRes, eventosRes, usadosRes, atualRes, itensRes] =
+      const [ramosRes, secoesRes, patrulhasRes, atualRes, itensRes] =
         await Promise.all([
           supabase
-            .from('atividades')
-            .select('atividade_id, descricao, data_atividade, ramo')
-            .eq('empresa_id', empresaId)
-            .order('data_atividade', { ascending: false }),
+            .from('ramos')
+            .select('ramo_id, nome, idade_inicio, idade_fim')
+            .order('ramo_id'),
           supabase
-            .from('venda_eventos')
-            .select('evento_id, nome, data_evento, ramo')
+            .from('secao')
+            .select('secao_id, nome, ramo')
             .eq('empresa_id', empresaId)
-            .order('data_evento', { ascending: false }),
+            .order('nome'),
           supabase
-            .from('orcamentos')
-            .select('orcamento_id, atividade_id, evento_id')
-            .eq('empresa_id', empresaId),
+            .from('secao_nome')
+            .select('secaonome_id, nome, ramo, secao')
+            .eq('empresa_id', empresaId)
+            .order('nome'),
           routeId
             ? supabase
                 .from('orcamentos')
-                .select('atividade_id, evento_id, observacao')
+                .select('nome, ramo, secao, patrulha_matilha, observacao')
                 .eq('orcamento_id', routeId)
                 .eq('empresa_id', empresaId)
                 .maybeSingle()
@@ -117,9 +137,7 @@ export function OrcamentoFormPage() {
           routeId
             ? supabase
                 .from('orcamento_itens')
-                .select(
-                  'descricao, quantidade, unidade, valor_unitario, ordem',
-                )
+                .select('descricao, quantidade, unidade, valor_unitario, ordem')
                 .eq('orcamento_id', routeId)
                 .eq('empresa_id', empresaId)
                 .order('ordem', { ascending: true })
@@ -128,9 +146,9 @@ export function OrcamentoFormPage() {
 
       if (!mounted) return
       const falha =
-        atividadesRes.error ||
-        eventosRes.error ||
-        usadosRes.error ||
+        ramosRes.error ||
+        secoesRes.error ||
+        patrulhasRes.error ||
         atualRes.error ||
         itensRes.error
       if (falha) {
@@ -144,51 +162,29 @@ export function OrcamentoFormPage() {
         return
       }
 
-      setAtividades(
-        (atividadesRes.data ?? []).map((row) => ({
-          id: row.atividade_id,
-          nome: row.descricao,
-          data: row.data_atividade,
-          ramo: row.ramo,
-        })),
-      )
-      setEventos(
-        (eventosRes.data ?? []).map((row) => ({
-          id: row.evento_id,
-          nome: row.nome,
-          data: row.data_evento,
-          ramo: row.ramo,
-        })),
-      )
-      setOcupadosAtividade(
-        (usadosRes.data ?? [])
-          .filter(
-            (row) =>
-              row.atividade_id != null && row.orcamento_id !== routeId,
-          )
-          .map((row) => row.atividade_id as number),
-      )
-      setOcupadosEvento(
-        (usadosRes.data ?? [])
-          .filter(
-            (row) => row.evento_id != null && row.orcamento_id !== routeId,
-          )
-          .map((row) => row.evento_id as number),
-      )
+      setRamos((ramosRes.data ?? []) as Ramo[])
+      setSecoes((secoesRes.data ?? []) as Secao[])
+      setPatrulhas((patrulhasRes.data ?? []) as Patrulha[])
 
       if (atualRes.data) {
         const atual = atualRes.data
-        setSavedId(routeId)
-        setObservacao(atual.observacao ?? '')
-        if (atual.evento_id != null) {
-          setTipo('evento')
-          setEventoId(atual.evento_id)
-          setAtividadeId(null)
-        } else {
-          setTipo('atividade')
-          setAtividadeId(atual.atividade_id)
-          setEventoId(null)
+        if (
+          ramoScope != null &&
+          atual.ramo != null &&
+          atual.ramo !== ramoScope
+        ) {
+          setError('Este orçamento não pertence ao seu ramo.')
+          setLoading(false)
+          return
         }
+        setSavedId(routeId)
+        setNome(atual.nome ?? '')
+        setRamo(atual.ramo != null ? String(atual.ramo) : '')
+        setSecao(atual.secao != null ? String(atual.secao) : '')
+        setPatrulha(
+          atual.patrulha_matilha != null ? String(atual.patrulha_matilha) : '',
+        )
+        setObservacao(atual.observacao ?? '')
         const linhas = (itensRes.data ?? []).map((item) => ({
           key: crypto.randomUUID(),
           descricao: item.descricao ?? '',
@@ -205,33 +201,7 @@ export function OrcamentoFormPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, routeId])
-
-  const opcoesAtividade = useMemo(
-    () =>
-      atividades.filter((opcao) => {
-        if (opcao.id === atividadeId) return true
-        if (ocupadosAtividade.includes(opcao.id)) return false
-        if (ramoScope != null && opcao.ramo != null && opcao.ramo !== ramoScope) {
-          return false
-        }
-        return true
-      }),
-    [atividades, atividadeId, ocupadosAtividade, ramoScope],
-  )
-
-  const opcoesEvento = useMemo(
-    () =>
-      eventos.filter((opcao) => {
-        if (opcao.id === eventoId) return true
-        if (ocupadosEvento.includes(opcao.id)) return false
-        if (ramoScope != null && opcao.ramo != null && opcao.ramo !== ramoScope) {
-          return false
-        }
-        return true
-      }),
-    [eventos, eventoId, ocupadosEvento, ramoScope],
-  )
+  }, [empresaId, routeId, ramoScope])
 
   const total = itens.reduce((sum, item) => {
     const qtd = parseQuantidade(item.quantidade)
@@ -255,14 +225,9 @@ export function OrcamentoFormPage() {
       return
     }
 
-    const destinoAtividade = tipo === 'atividade' ? atividadeId : null
-    const destinoEvento = tipo === 'evento' ? eventoId : null
-    if (destinoAtividade == null && destinoEvento == null) {
-      setError(
-        tipo === 'atividade'
-          ? 'Escolha a atividade deste orçamento.'
-          : 'Escolha o evento deste orçamento.',
-      )
+    const nomeAtividade = nome.trim()
+    if (!nomeAtividade) {
+      setError('Informe o nome da atividade que será orçada.')
       return
     }
 
@@ -288,8 +253,13 @@ export function OrcamentoFormPage() {
     setError(null)
     const payload = {
       empresa_id: empresaId,
-      atividade_id: destinoAtividade,
-      evento_id: destinoEvento,
+      nome: nomeAtividade,
+      ramo: numOrNull(ramo),
+      secao: numOrNull(ramo) == null ? null : numOrNull(secao),
+      patrulha_matilha:
+        numOrNull(ramo) == null || numOrNull(secao) == null
+          ? null
+          : numOrNull(patrulha),
       observacao: observacao.trim() || null,
     }
 
@@ -302,11 +272,7 @@ export function OrcamentoFormPage() {
         .single()
       if (insertError || !data) {
         setSaving(false)
-        setError(
-          insertError?.code === '23505'
-            ? 'Já existe um orçamento para esta atividade ou evento.'
-            : (insertError?.message ?? 'Não foi possível salvar.'),
-        )
+        setError(insertError?.message ?? 'Não foi possível salvar.')
         return
       }
       orcamentoId = data.orcamento_id
@@ -319,11 +285,7 @@ export function OrcamentoFormPage() {
         .eq('empresa_id', empresaId)
       if (updateError) {
         setSaving(false)
-        setError(
-          updateError.code === '23505'
-            ? 'Já existe um orçamento para esta atividade ou evento.'
-            : updateError.message,
-        )
+        setError(updateError.message)
         return
       }
     }
@@ -399,8 +361,7 @@ export function OrcamentoFormPage() {
   }
 
   const disabled = saving || !canWrite
-  const opcoes = tipo === 'atividade' ? opcoesAtividade : opcoesEvento
-  const destinoId = tipo === 'atividade' ? atividadeId : eventoId
+  const labelUnidade = unidadeLabel(ramoId)
 
   return (
     <>
@@ -430,50 +391,89 @@ export function OrcamentoFormPage() {
 
         <div className="form-grid">
           <div className="field">
-            <label htmlFor="tipo">Para</label>
+            <label htmlFor="ramo">Ramo</label>
             <select
-              id="tipo"
+              id="ramo"
               className="select"
-              value={tipo}
-              disabled={disabled}
+              value={ramo}
+              disabled={disabled || ramoScope != null}
               onChange={(e) => {
-                const next = e.target.value === 'evento' ? 'evento' : 'atividade'
-                setTipo(next)
-                if (next === 'atividade') setEventoId(null)
-                else setAtividadeId(null)
+                setRamo(e.target.value)
+                setSecao('')
+                setPatrulha('')
               }}
             >
-              <option value="atividade">Atividade</option>
-              <option value="evento">Evento</option>
+              <option value="">Grupo todo (todos os ramos)</option>
+              {ramos
+                .filter((item) =>
+                  ramoScope != null
+                    ? item.ramo_id === ramoScope
+                    : item.ramo_id >= 1 && item.ramo_id <= 5,
+                )
+                .map((item) => (
+                  <option key={item.ramo_id} value={item.ramo_id}>
+                    {item.nome}
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="secao">Seção</label>
+            <select
+              id="secao"
+              className="select"
+              value={secao}
+              disabled={disabled || !ramo}
+              onChange={(e) => {
+                setSecao(e.target.value)
+                setPatrulha('')
+              }}
+            >
+              <option value="">
+                {ramo ? 'Toda a seção / nenhuma' : 'Grupo todo (sem seção)'}
+              </option>
+              {secoesDoRamo.map((item) => (
+                <option key={item.secao_id} value={item.secao_id}>
+                  {item.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="patrulha_matilha">{labelUnidade}</label>
+            <select
+              id="patrulha_matilha"
+              className="select"
+              value={patrulha}
+              disabled={disabled || !secao}
+              onChange={(e) => setPatrulha(e.target.value)}
+            >
+              <option value="">
+                {secao ? 'Toda a seção (opcional)' : 'Escolha a seção'}
+              </option>
+              {patrulhasDaSecao.map((item) => (
+                <option key={item.secaonome_id} value={item.secaonome_id}>
+                  {item.nome}
+                </option>
+              ))}
             </select>
           </div>
 
           <div className="field field-span-2">
-            <label htmlFor="destino">
-              {tipo === 'atividade' ? 'Atividade' : 'Evento'}
-            </label>
-            <select
-              id="destino"
-              className="select"
-              value={destinoId ?? ''}
+            <label htmlFor="nome">Nome da atividade</label>
+            <input
+              id="nome"
+              className="input"
+              value={nome}
               disabled={disabled}
-              onChange={(e) => {
-                const next = e.target.value ? Number(e.target.value) : null
-                if (tipo === 'atividade') setAtividadeId(next)
-                else setEventoId(next)
-              }}
+              maxLength={200}
               required
-            >
-              <option value="">Selecione…</option>
-              {opcoes.map((opcao) => (
-                <option key={opcao.id} value={opcao.id}>
-                  {opcaoLabel(opcao)}
-                </option>
-              ))}
-            </select>
+              onChange={(e) => setNome(e.target.value)}
+            />
             <span className="field-hint">
-              Um orçamento por atividade ou evento. Liste tudo o que precisa
-              para realizá-lo.
+              Nome da atividade que será orçada.
             </span>
           </div>
 

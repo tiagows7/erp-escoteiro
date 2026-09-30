@@ -8,42 +8,18 @@ import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 import { formatMoney } from '@/lib/despesas'
 import { staffRamoScope } from '@/lib/roles'
 
-type AtividadeRef = {
-  descricao: string
-  data_atividade: string | null
-  ramo: number | null
-}
-
-type EventoRef = {
-  nome: string
-  data_evento: string | null
-  ramo: number | null
-}
-
-type OrcamentoRow = {
-  orcamento_id: number
-  atividade_id: number | null
-  evento_id: number | null
-  atividades: AtividadeRef | AtividadeRef[] | null
-  venda_eventos: EventoRef | EventoRef[] | null
-  orcamento_itens: ItemValor[] | null
-}
-
 type ItemValor = {
   quantidade: number | null
   valor_unitario: number | null
 }
 
-function um<T>(value: T | T[] | null | undefined): T | null {
-  if (Array.isArray(value)) return value[0] ?? null
-  return value ?? null
-}
-
-function formatData(value: string | null | undefined) {
-  if (!value) return '—'
-  const [ano, mes, dia] = value.slice(0, 10).split('-')
-  if (!ano || !mes || !dia) return value
-  return `${dia}/${mes}/${ano}`
+type OrcamentoRow = {
+  orcamento_id: number
+  nome: string
+  ramo: number | null
+  secao: number | null
+  patrulha_matilha: number | null
+  orcamento_itens: ItemValor[] | null
 }
 
 function totalItens(itens: ItemValor[] | null) {
@@ -62,6 +38,9 @@ export function OrcamentosPage() {
   const flashTick = useFlashSuccess()
 
   const [rows, setRows] = useState<OrcamentoRow[]>([])
+  const [ramos, setRamos] = useState<Map<number, string>>(new Map())
+  const [secoes, setSecoes] = useState<Map<number, string>>(new Map())
+  const [patrulhas, setPatrulhas] = useState<Map<number, string>>(new Map())
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -76,21 +55,43 @@ export function OrcamentosPage() {
     let mounted = true
     void (async () => {
       setLoading(true)
-      const { data, error: queryError } = await supabase
-        .from('orcamentos')
-        .select(
-          'orcamento_id, atividade_id, evento_id, atividades(descricao, data_atividade, ramo), venda_eventos(nome, data_evento, ramo), orcamento_itens(quantidade, valor_unitario)',
-        )
-        .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: false })
+      const [listaRes, ramosRes, secoesRes, patrulhasRes] = await Promise.all([
+        supabase
+          .from('orcamentos')
+          .select(
+            'orcamento_id, nome, ramo, secao, patrulha_matilha, orcamento_itens(quantidade, valor_unitario)',
+          )
+          .eq('empresa_id', empresaId)
+          .order('nome', { ascending: true }),
+        supabase.from('ramos').select('ramo_id, nome').order('ramo_id'),
+        supabase
+          .from('secao')
+          .select('secao_id, nome')
+          .eq('empresa_id', empresaId),
+        supabase
+          .from('secao_nome')
+          .select('secaonome_id, nome')
+          .eq('empresa_id', empresaId),
+      ])
 
       if (!mounted) return
-      if (queryError) {
-        setError(queryError.message)
+      const falha =
+        listaRes.error || ramosRes.error || secoesRes.error || patrulhasRes.error
+      if (falha) {
+        setError(falha.message)
         setRows([])
       } else {
         setError(null)
-        setRows((data ?? []) as unknown as OrcamentoRow[])
+        setRows((listaRes.data ?? []) as OrcamentoRow[])
+        setRamos(new Map((ramosRes.data ?? []).map((row) => [row.ramo_id, row.nome])))
+        setSecoes(
+          new Map((secoesRes.data ?? []).map((row) => [row.secao_id, row.nome])),
+        )
+        setPatrulhas(
+          new Map(
+            (patrulhasRes.data ?? []).map((row) => [row.secaonome_id, row.nome]),
+          ),
+        )
       }
       setLoading(false)
     })()
@@ -101,43 +102,25 @@ export function OrcamentosPage() {
   }, [empresaId, flashTick])
 
   const visiveis = useMemo(() => {
-    return rows.flatMap((row) => {
-      const atividade = um(row.atividades)
-      const evento = um(row.venda_eventos)
-      const nome =
-        row.atividade_id != null
-          ? atividade?.descricao?.trim() || 'Sem nome'
-          : evento?.nome?.trim() || 'Sem nome'
-      const data =
-        row.atividade_id != null
-          ? atividade?.data_atividade
-          : evento?.data_evento
-      const ramo =
-        row.atividade_id != null ? atividade?.ramo : evento?.ramo
-      if (ramoScope != null && ramo != null && ramo !== ramoScope) {
-        return []
-      }
-      const tipo = row.atividade_id != null ? 'Atividade' : 'Evento'
-      return [
-        {
-          id: row.orcamento_id,
-          tipo,
-          nome,
-          data: data ?? null,
-          qtd: row.orcamento_itens?.length ?? 0,
-          total: totalItens(row.orcamento_itens),
-        },
-      ]
+    return rows.filter((row) => {
+      if (ramoScope == null) return true
+      return row.ramo == null || row.ramo === ramoScope
     })
   }, [rows, ramoScope])
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
     if (!term) return visiveis
-    return visiveis.filter((row) =>
-      `${row.tipo} ${row.nome}`.toLowerCase().includes(term),
-    )
-  }, [visiveis, q])
+    return visiveis.filter((row) => {
+      const ramo = row.ramo == null ? 'grupo' : (ramos.get(row.ramo) ?? '')
+      const secao = row.secao == null ? '' : (secoes.get(row.secao) ?? '')
+      const unidade =
+        row.patrulha_matilha == null
+          ? ''
+          : (patrulhas.get(row.patrulha_matilha) ?? '')
+      return `${row.nome} ${ramo} ${secao} ${unidade}`.toLowerCase().includes(term)
+    })
+  }, [visiveis, q, ramos, secoes, patrulhas])
 
   if (!empresaId) {
     return (
@@ -155,7 +138,7 @@ export function OrcamentosPage() {
         <div>
           <h2>Orçamento</h2>
           <p>
-            Itens necessários para realizar atividades e eventos do grupo{' '}
+            Itens necessários para realizar a atividade orçada do grupo{' '}
             <strong>{empresa?.nome}</strong>.
           </p>
         </div>
@@ -175,7 +158,7 @@ export function OrcamentosPage() {
           <input
             className="input"
             style={{ maxWidth: 360 }}
-            placeholder="Buscar por atividade ou evento…"
+            placeholder="Buscar por nome, ramo ou seção…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -203,29 +186,37 @@ export function OrcamentosPage() {
               <thead>
                 <tr>
                   <th></th>
-                  <th>Tipo</th>
-                  <th>Atividade / evento</th>
-                  <th>Data</th>
+                  <th>Nome da atividade</th>
+                  <th>Ramo</th>
+                  <th>Seção</th>
+                  <th>Patrulha / matilha</th>
                   <th>Itens</th>
                   <th>Total estimado</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((row) => (
-                  <tr key={row.id}>
+                  <tr key={row.orcamento_id}>
                     <td>
                       <Link
                         className="btn btn-soft"
-                        to={`/financeiro/orcamentos/${row.id}`}
+                        to={`/financeiro/orcamentos/${row.orcamento_id}`}
                       >
                         Abrir
                       </Link>
                     </td>
-                    <td>{row.tipo}</td>
                     <td>{row.nome}</td>
-                    <td>{formatData(row.data)}</td>
-                    <td>{row.qtd}</td>
-                    <td>{formatMoney(row.total)}</td>
+                    <td>
+                      {row.ramo == null ? 'Grupo todo' : (ramos.get(row.ramo) ?? '—')}
+                    </td>
+                    <td>{row.secao == null ? '—' : (secoes.get(row.secao) ?? '—')}</td>
+                    <td>
+                      {row.patrulha_matilha == null
+                        ? '—'
+                        : (patrulhas.get(row.patrulha_matilha) ?? '—')}
+                    </td>
+                    <td>{row.orcamento_itens?.length ?? 0}</td>
+                    <td>{formatMoney(totalItens(row.orcamento_itens))}</td>
                   </tr>
                 ))}
               </tbody>
