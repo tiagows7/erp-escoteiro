@@ -7,6 +7,8 @@ import { PixSicrediCheckoutModal } from '@/components/PixSicrediCheckoutModal'
 import { formatMoney } from '@/lib/despesas'
 import { formatQty, parseQtyInput } from '@/lib/estoque'
 import { finalizarVendaLoja } from '@/lib/lojaVenda'
+import { LojaTipoReceitaBar } from '@/components/LojaTipoReceitaBar'
+import { isGrupoAdmin } from '@/lib/roles'
 import {
   empresaTemChavePixInformada,
   type PixCreateInput,
@@ -42,7 +44,7 @@ type CartItem = {
 }
 
 export function LojaPage() {
-  const { empresa, hasPermission } = useAuth()
+  const { empresa, profile, hasPermission } = useAuth()
   const empresaId = empresa?.id
   const canSell = hasPermission('vendas.write')
 
@@ -245,7 +247,7 @@ export function LojaPage() {
     }
     if (!lojaTipoInformado) {
       setError(
-        'Tipo de receita da loja não informado. Escolha o tipo no cadastro do grupo.',
+        'Tipo de receita da loja não informado. Escolha o tipo no topo da página.',
       )
       return
     }
@@ -357,13 +359,11 @@ export function LojaPage() {
         </div>
       </header>
 
-      {lojaTipoInformado ? null : (
-        <AlertMessage tone="error" title="Tipo de receita da loja">
-          Escolha o tipo de receita no{' '}
-          <Link to={`/grupos/${empresaId}`}>cadastro do grupo</Link> para as
-          vendas caírem no plano de contas do portal.
-        </AlertMessage>
-      )}
+      <LojaTipoReceitaBar
+        empresaId={empresaId}
+        canEdit={isGrupoAdmin(profile?.role)}
+        onInformado={setLojaTipoInformado}
+      />
 
       {error ? (
         <AlertMessage tone="error" title="Atenção">

@@ -11,8 +11,9 @@ import {
   type PixCreateInput,
 } from '@/lib/pixSicredi'
 import { loadPixPendingForEmpresa } from '@/lib/pixSicrediPending'
-import { isAssociadoLogin } from '@/lib/roles'
+import { isAssociadoLogin, isGrupoAdmin } from '@/lib/roles'
 import { linkPublicoLojaOnline } from '@/lib/lojaOnlinePublic'
+import { LojaTipoReceitaBar } from '@/components/LojaTipoReceitaBar'
 
 type ProdutoLoja = {
   produto_id: number
@@ -296,7 +297,7 @@ export function LojaOnlinePage() {
     }
     if (!lojaTipoInformado) {
       setError(
-        'Tipo de receita da loja não informado. Escolha o tipo no cadastro do grupo.',
+        'Tipo de receita da loja não informado. Escolha o tipo no topo da página.',
       )
       return
     }
@@ -427,13 +428,11 @@ export function LojaOnlinePage() {
         </div>
       </header>
 
-      {lojaTipoInformado ? null : (
-        <AlertMessage tone="error" title="Tipo de receita da loja">
-          Escolha o tipo de receita no{' '}
-          <Link to={`/grupos/${empresaId}`}>cadastro do grupo</Link> para as
-          vendas caírem no plano de contas do portal.
-        </AlertMessage>
-      )}
+      <LojaTipoReceitaBar
+        empresaId={empresaId}
+        canEdit={isGrupoAdmin(profile?.role)}
+        onInformado={setLojaTipoInformado}
+      />
 
       {error ? (
         <AlertMessage tone="error" title="Atenção">
