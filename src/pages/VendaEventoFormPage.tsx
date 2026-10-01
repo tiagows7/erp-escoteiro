@@ -491,6 +491,10 @@ export function VendaEventoFormPage() {
         setError('Grupo escoteiro não carregado.')
         return
       }
+      if (!form.receita_tipo_id) {
+        setError('Tipo de receita não informado.')
+        return
+      }
       setSaving(true)
       setError(null)
       const { error: saveError } = await supabase
@@ -550,6 +554,10 @@ export function VendaEventoFormPage() {
     const labels = tiposLimpos.map((t) => t.label.toLowerCase())
     if (new Set(labels).size !== labels.length) {
       setError('Não use o mesmo nome em mais de um tipo de convite.')
+      return
+    }
+    if (!form.receita_tipo_id) {
+      setError('Tipo de receita não informado.')
       return
     }
 

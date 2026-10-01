@@ -1259,6 +1259,19 @@ function parseLojaMeta(raw: unknown): {
   return { canal: 'local', compradorNome: null, compradorTelefone: null }
 }
 
+async function lojaReceitaTipoId(
+  admin: ReturnType<typeof createClient>,
+  empresaId: number,
+): Promise<number | null> {
+  const { data } = await admin
+    .from('empresa')
+    .select('loja_receita_tipo_id')
+    .eq('id', empresaId)
+    .maybeSingle()
+  const id = data?.loja_receita_tipo_id
+  return id != null && Number(id) > 0 ? Number(id) : null
+}
+
 async function baixarLoja(
   admin: ReturnType<typeof createClient>,
   opts: {
@@ -1316,12 +1329,18 @@ async function baixarLoja(
     200,
   )
 
+  const tipoReceitaId = await lojaReceitaTipoId(admin, opts.empresaId)
+  if (!tipoReceitaId) {
+    throw new Error('Tipo de receita da loja não informado.')
+  }
+
   const { data: receita, error: recError } = await admin
     .from('receitas')
     .insert({
       empresa_id: opts.empresaId,
       receita_origem: 'A',
       receita_descricao: descricao,
+      receita_tipo_id: tipoReceitaId,
       receita_emissao: todayISO(),
       receita_vencimento: todayISO(),
       receita_valor: valor,
@@ -2396,6 +2415,14 @@ Deno.serve(async (req) => {
         )
         if (!(valor > 0)) return json({ error: 'Valor da compra inválido.' }, 400)
 
+        const tipoLoja = await lojaReceitaTipoId(admin, Number(empresa.id))
+        if (!tipoLoja) {
+          return json(
+            { error: 'Tipo de receita da loja não informado.' },
+            503,
+          )
+        }
+
         const { data: tipoPagamento } = await admin
           .from('tipo_pagamento')
           .select('tipopagto_id')
@@ -2830,6 +2857,16 @@ Deno.serve(async (req) => {
               itens: lojaItens,
             }
           : null
+
+      if (tipo === 'loja') {
+        const tipoLoja = await lojaReceitaTipoId(admin, empresaId)
+        if (!tipoLoja) {
+          return json(
+            { error: 'Tipo de receita da loja não informado.' },
+            400,
+          )
+        }
+      }
 
       let ramoId: number | null = null
       let secaoId: number | null = null

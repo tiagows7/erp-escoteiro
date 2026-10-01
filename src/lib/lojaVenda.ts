@@ -153,12 +153,29 @@ export async function finalizarVendaLoja(
     200,
   )
 
+  const { data: grupo, error: grupoError } = await supabase
+    .from('empresa')
+    .select('loja_receita_tipo_id')
+    .eq('id', input.empresaId)
+    .maybeSingle()
+  if (grupoError) {
+    return { ok: false, error: grupoError.message }
+  }
+  if (!grupo?.loja_receita_tipo_id) {
+    return {
+      ok: false,
+      error:
+        'Tipo de receita da loja não informado. Escolha o tipo no cadastro do grupo.',
+    }
+  }
+
   const { data: receita, error: receitaError } = await supabase
     .from('receitas')
     .insert({
       empresa_id: input.empresaId,
       receita_origem: RECEITA_ORIGEM.AVULSA,
       receita_descricao: descricao,
+      receita_tipo_id: grupo.loja_receita_tipo_id,
       receita_emissao: hoje,
       receita_vencimento: hoje,
       receita_valor: total,

@@ -34,6 +34,7 @@ import {
   vencimentoCompetencia,
 } from '@/lib/receitas'
 import { loadCidades, loadEstados } from '@/lib/brasilLocalidades'
+import { TipoReceitaField } from '@/components/TipoReceitaField'
 import type { Ramo } from '@/types/database'
 
 type SecaoOpt = {
@@ -104,6 +105,7 @@ const emptyForm = {
   plataforma_isento: false,
   plataforma_dia_vencimento: '',
   dia_vencimento_mensalidade: '',
+  loja_receita_tipo_id: '',
   logo_url: '' as string | null,
   adminNome: '',
   adminEmail: '',
@@ -213,7 +215,7 @@ export function GrupoFormPage() {
         supabase
           .from('empresa')
           .select(
-            'id, nome, cnpj, email, slug, telefone, estado, cidade, logo_url, ativo, portal_transparencia, plataforma_plano_id, plataforma_isento, plataforma_dia_vencimento, dia_vencimento_mensalidade',
+            'id, nome, cnpj, email, slug, telefone, estado, cidade, logo_url, ativo, portal_transparencia, plataforma_plano_id, plataforma_isento, plataforma_dia_vencimento, dia_vencimento_mensalidade, loja_receita_tipo_id',
           )
           .eq('id', Number(id))
           .maybeSingle(),
@@ -272,6 +274,7 @@ export function GrupoFormPage() {
           data.dia_vencimento_mensalidade != null
             ? String(data.dia_vencimento_mensalidade)
             : '',
+        loja_receita_tipo_id: data.loja_receita_tipo_id?.toString() ?? '',
         logo_url: data.logo_url,
       })
       setLogoPreview(data.logo_url)
@@ -420,6 +423,9 @@ export function GrupoFormPage() {
             dia_vencimento_mensalidade: form.dia_vencimento_mensalidade
               ? Number(form.dia_vencimento_mensalidade)
               : null,
+            loja_receita_tipo_id: form.loja_receita_tipo_id
+              ? Number(form.loja_receita_tipo_id)
+              : null,
           })
           .eq('id', result.empresa.id)
 
@@ -464,6 +470,9 @@ export function GrupoFormPage() {
           portal_transparencia: form.portal_transparencia,
           dia_vencimento_mensalidade: form.dia_vencimento_mensalidade
             ? Number(form.dia_vencimento_mensalidade)
+            : null,
+          loja_receita_tipo_id: form.loja_receita_tipo_id
+            ? Number(form.loja_receita_tipo_id)
             : null,
           ...(isSuperAdmin
             ? {
@@ -938,6 +947,15 @@ export function GrupoFormPage() {
               atualizados ao salvar. Sem dia = último dia da competência.
             </p>
           </div>
+          <TipoReceitaField
+            empresaId={isNew ? undefined : Number(id)}
+            value={form.loja_receita_tipo_id}
+            onChange={(value) =>
+              setForm((prev) => ({ ...prev, loja_receita_tipo_id: value }))
+            }
+            disabled={disabled || isNew}
+            hint="Vendas da loja e da loja online entram neste tipo. O portal usa o plano de contas desse contato."
+          />
         </div>
 
         {isSuperAdmin ? (

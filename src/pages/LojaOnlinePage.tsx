@@ -70,6 +70,7 @@ export function LojaOnlinePage() {
   const [pixTitle, setPixTitle] = useState('Loja online')
   const [pixInput, setPixInput] = useState<PixCreateInput | null>(null)
   const [lojaLinkToken, setLojaLinkToken] = useState('')
+  const [lojaTipoInformado, setLojaTipoInformado] = useState(true)
 
   const grupoMap = useMemo(
     () => new Map(grupos.map((g) => [g.grupoproduto_id, g.nome])),
@@ -114,7 +115,7 @@ export function LojaOnlinePage() {
       empresaTemChavePixInformada(empresaId),
       supabase
         .from('empresa')
-        .select('loja_link_token')
+        .select('loja_link_token, loja_receita_tipo_id')
         .eq('id', empresaId)
         .maybeSingle(),
     ])
@@ -130,6 +131,7 @@ export function LojaOnlinePage() {
     setTiposPagamento(tipos)
     setPixDisponivel(pixOk)
     setLojaLinkToken(String(empresaRes.data?.loja_link_token ?? ''))
+    setLojaTipoInformado(empresaRes.data?.loja_receita_tipo_id != null)
 
     if (associadoLogin && profile?.registro) {
       const registroNum = Number(String(profile.registro).replace(/\D/g, ''))
@@ -292,6 +294,12 @@ export function LojaOnlinePage() {
       )
       return
     }
+    if (!lojaTipoInformado) {
+      setError(
+        'Tipo de receita da loja não informado. Escolha o tipo no cadastro do grupo.',
+      )
+      return
+    }
     for (const item of cart) {
       if (item.quantidade <= 0) {
         setError(`Quantidade inválida em “${item.nome}”.`)
@@ -418,6 +426,14 @@ export function LojaOnlinePage() {
           </Link>
         </div>
       </header>
+
+      {lojaTipoInformado ? null : (
+        <AlertMessage tone="error" title="Tipo de receita da loja">
+          Escolha o tipo de receita no{' '}
+          <Link to={`/grupos/${empresaId}`}>cadastro do grupo</Link> para as
+          vendas caírem no plano de contas do portal.
+        </AlertMessage>
+      )}
 
       {error ? (
         <AlertMessage tone="error" title="Atenção">

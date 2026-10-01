@@ -62,6 +62,7 @@ export function LojaPage() {
   const [pixDisponivel, setPixDisponivel] = useState(false)
   const [pixTitle, setPixTitle] = useState('Venda loja')
   const [pixInput, setPixInput] = useState<PixCreateInput | null>(null)
+  const [lojaTipoInformado, setLojaTipoInformado] = useState(true)
 
   const grupoMap = useMemo(
     () => new Map(grupos.map((g) => [g.grupoproduto_id, g.nome])),
@@ -77,7 +78,7 @@ export function LojaPage() {
       return
     }
     setLoading(true)
-    const [prodRes, grupoRes, tipoRes, pixOk] = await Promise.all([
+    const [prodRes, grupoRes, tipoRes, pixOk, empresaRes] = await Promise.all([
       supabase
         .from('produto')
         .select(
@@ -98,6 +99,11 @@ export function LojaPage() {
         .eq('empresa_id', empresaId)
         .order('nome'),
       empresaTemChavePixInformada(empresaId),
+      supabase
+        .from('empresa')
+        .select('loja_receita_tipo_id')
+        .eq('id', empresaId)
+        .maybeSingle(),
     ])
     if (prodRes.error) {
       setError(prodRes.error.message)
@@ -110,6 +116,7 @@ export function LojaPage() {
     const tipos = (tipoRes.data as TipoPagamento[]) ?? []
     setTiposPagamento(tipos)
     setPixDisponivel(pixOk)
+    setLojaTipoInformado(empresaRes.data?.loja_receita_tipo_id != null)
     setTipopagtoId((prev) => {
       if (prev && tipos.some((t) => String(t.tipopagto_id) === prev)) return prev
       return tipos.length === 1 ? String(tipos[0].tipopagto_id) : ''
@@ -236,6 +243,12 @@ export function LojaPage() {
       setError('Selecione o tipo de pagamento.')
       return
     }
+    if (!lojaTipoInformado) {
+      setError(
+        'Tipo de receita da loja não informado. Escolha o tipo no cadastro do grupo.',
+      )
+      return
+    }
     for (const item of cart) {
       if (item.quantidade <= 0) {
         setError(`Quantidade inválida em “${item.nome}”.`)
@@ -343,6 +356,14 @@ export function LojaPage() {
           </Link>
         </div>
       </header>
+
+      {lojaTipoInformado ? null : (
+        <AlertMessage tone="error" title="Tipo de receita da loja">
+          Escolha o tipo de receita no{' '}
+          <Link to={`/grupos/${empresaId}`}>cadastro do grupo</Link> para as
+          vendas caírem no plano de contas do portal.
+        </AlertMessage>
+      )}
 
       {error ? (
         <AlertMessage tone="error" title="Atenção">

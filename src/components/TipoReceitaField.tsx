@@ -11,11 +11,13 @@ export function TipoReceitaField({
   value,
   onChange,
   disabled,
+  hint,
 }: {
   empresaId: number | undefined
   value: string
   onChange: (value: string) => void
   disabled?: boolean
+  hint?: string
 }) {
   const [tipos, setTipos] = useState<TipoOpcao[]>([])
 
@@ -57,9 +59,8 @@ export function TipoReceitaField({
         ))}
       </select>
       <span className="field-hint">
-        Contato marcado como receita. O portal usa o plano de contas desse
-        contato para agrupar os títulos. Os que já têm tipo permanecem como
-        estavam.
+        {hint ??
+          'Contato marcado como receita. O portal usa o plano de contas desse contato para agrupar os títulos. Os que já têm tipo permanecem como estavam.'}
       </span>
     </div>
   )

@@ -354,6 +354,10 @@ export function AtividadeFormPage() {
         setError('Grupo escoteiro não carregado.')
         return
       }
+      if (!form.receita_tipo_id) {
+        setError('Tipo de receita não informado.')
+        return
+      }
       setSaving(true)
       setError(null)
       const { error: saveError } = await supabase
@@ -386,6 +390,10 @@ export function AtividadeFormPage() {
     }
     if (!form.descricao.trim()) {
       setError('Informe a descrição da atividade.')
+      return
+    }
+    if (!form.receita_tipo_id) {
+      setError('Tipo de receita não informado.')
       return
     }
 
