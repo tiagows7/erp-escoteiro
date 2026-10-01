@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
-import { PlanoContaReceitaField } from '@/components/PlanoContaReceitaField'
+import { TipoReceitaField } from '@/components/TipoReceitaField'
 import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
@@ -90,7 +90,7 @@ const emptyForm = {
   data_evento: '',
   valor_grupo: '0,00',
   valor_grupo_tipo: 'por_jovem' as ValorGrupoTipo,
-  plano_conta_id: '',
+  receita_tipo_id: '',
 }
 
 type TipoFormRow = {
@@ -207,7 +207,7 @@ export function VendaEventoFormPage() {
       const { data, error: loadError } = await supabase
         .from('venda_eventos')
         .select(
-          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, plano_conta_id',
+          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, receita_tipo_id',
         )
         .eq('evento_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -242,7 +242,7 @@ export function VendaEventoFormPage() {
         valor_grupo_tipo: isValorGrupoTipo(data.valor_grupo_tipo)
           ? data.valor_grupo_tipo
           : 'por_jovem',
-        plano_conta_id: data.plano_conta_id?.toString() ?? '',
+        receita_tipo_id: data.receita_tipo_id?.toString() ?? '',
       })
       setImagemUrl(data.imagem_url ?? null)
       setImagemPreview(data.imagem_url ?? null)
@@ -496,8 +496,8 @@ export function VendaEventoFormPage() {
       const { error: saveError } = await supabase
         .from('venda_eventos')
         .update({
-          plano_conta_id: form.plano_conta_id
-            ? Number(form.plano_conta_id)
+          receita_tipo_id: form.receita_tipo_id
+            ? Number(form.receita_tipo_id)
             : null,
         })
         .eq('evento_id', Number(id))
@@ -508,8 +508,8 @@ export function VendaEventoFormPage() {
         return
       }
       toast.success(
-        'Conta salva',
-        'As receitas sem conta deste evento foram classificadas.',
+        'Tipo salvo',
+        'As receitas sem tipo deste evento foram classificadas.',
       )
       return
     }
@@ -579,7 +579,9 @@ export function VendaEventoFormPage() {
       data_evento: form.data_evento || null,
       valor_grupo: parseMoneyInput(form.valor_grupo),
       valor_grupo_tipo: form.valor_grupo_tipo,
-      plano_conta_id: form.plano_conta_id ? Number(form.plano_conta_id) : null,
+      receita_tipo_id: form.receita_tipo_id
+        ? Number(form.receita_tipo_id)
+        : null,
     }
 
     const result = isNew
@@ -873,10 +875,10 @@ export function VendaEventoFormPage() {
             />
           </div>
 
-          <PlanoContaReceitaField
+          <TipoReceitaField
             empresaId={empresaId}
-            value={form.plano_conta_id}
-            onChange={(value) => update('plano_conta_id', value)}
+            value={form.receita_tipo_id}
+            onChange={(value) => update('receita_tipo_id', value)}
             disabled={saving || !canWrite}
           />
 

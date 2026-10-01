@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
-import { PlanoContaReceitaField } from '@/components/PlanoContaReceitaField'
+import { TipoReceitaField } from '@/components/TipoReceitaField'
 import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
@@ -103,7 +103,7 @@ const emptyForm = {
   data_sorteio: '',
   data_limite_venda: '',
   quantidade_premios: '1',
-  plano_conta_id: '',
+  receita_tipo_id: '',
 }
 
 function unidadeLabel(ramoId: number | null): string {
@@ -301,7 +301,7 @@ export function AcaoEntreAmigosFormPage() {
       const { data, error: loadError } = await supabase
         .from('acao_entre_amigos')
         .select(
-          'acao_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, quantidade_premios, imagem_url, encerrado_em, numero_sorteado, numeros_sorteados, sorteado_em, plano_conta_id',
+          'acao_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_numero, data_sorteio, data_limite_venda, quantidade_premios, imagem_url, encerrado_em, numero_sorteado, numeros_sorteados, sorteado_em, receita_tipo_id',
         )
         .eq('acao_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -341,7 +341,7 @@ export function AcaoEntreAmigosFormPage() {
         quantidade_premios: String(
           Math.max(1, Number(data.quantidade_premios ?? 1) || 1),
         ),
-        plano_conta_id: data.plano_conta_id?.toString() ?? '',
+        receita_tipo_id: data.receita_tipo_id?.toString() ?? '',
       })
       setImagemUrl(data.imagem_url ?? null)
       setImagemPreview(data.imagem_url ?? null)
@@ -536,8 +536,8 @@ export function AcaoEntreAmigosFormPage() {
       const { error: saveError } = await supabase
         .from('acao_entre_amigos')
         .update({
-          plano_conta_id: form.plano_conta_id
-            ? Number(form.plano_conta_id)
+          receita_tipo_id: form.receita_tipo_id
+            ? Number(form.receita_tipo_id)
             : null,
         })
         .eq('acao_id', Number(id))
@@ -548,8 +548,8 @@ export function AcaoEntreAmigosFormPage() {
         return
       }
       toast.success(
-        'Conta salva',
-        'As receitas sem conta desta ação foram classificadas.',
+        'Tipo salvo',
+        'As receitas sem tipo desta ação foram classificadas.',
       )
       return
     }
@@ -614,7 +614,9 @@ export function AcaoEntreAmigosFormPage() {
       data_sorteio: form.data_sorteio || null,
       data_limite_venda: form.data_limite_venda || null,
       quantidade_premios: qtdPremios,
-      plano_conta_id: form.plano_conta_id ? Number(form.plano_conta_id) : null,
+      receita_tipo_id: form.receita_tipo_id
+        ? Number(form.receita_tipo_id)
+        : null,
     }
 
     const result = isNew
@@ -1021,10 +1023,10 @@ export function AcaoEntreAmigosFormPage() {
             />
           </div>
 
-          <PlanoContaReceitaField
+          <TipoReceitaField
             empresaId={empresaId}
-            value={form.plano_conta_id}
-            onChange={(value) => update('plano_conta_id', value)}
+            value={form.receita_tipo_id}
+            onChange={(value) => update('receita_tipo_id', value)}
             disabled={saving || !canWrite}
           />
 

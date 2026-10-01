@@ -57,6 +57,7 @@ import {
   type AcaoLookup,
 } from '@/lib/acoesLookup'
 import type { Ramo } from '@/types/database'
+import { TipoReceitaField } from '@/components/TipoReceitaField'
 
 type Lookup = { id: number; nome: string; ramo?: number | null }
 
@@ -69,6 +70,7 @@ const emptyForm = {
   projeto_id: '',
   evento_id: '',
   acao_id: '',
+  receita_tipo_id: '',
   receita_emissao: '',
   receita_vencimento: '',
   receita_valor: '',
@@ -534,7 +536,7 @@ export function ReceitaFormPage() {
       const { data, error: loadError } = await supabase
         .from('receitas')
         .select(
-          'receita_id, receita_descricao, associado_id, receita_ramo, receita_secao, atividade_id, projeto_id, evento_id, acao_id, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, receita_observacao, receita_origem, receita_documento, plano_contas(codigo, nome)',
+          'receita_id, receita_descricao, associado_id, receita_ramo, receita_secao, atividade_id, projeto_id, evento_id, acao_id, receita_tipo_id, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, receita_observacao, receita_origem, receita_documento, plano_contas(codigo, nome)',
         )
         .eq('receita_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -571,6 +573,7 @@ export function ReceitaFormPage() {
         projeto_id: data.projeto_id?.toString() ?? '',
         evento_id: data.evento_id?.toString() ?? '',
         acao_id: data.acao_id?.toString() ?? '',
+        receita_tipo_id: data.receita_tipo_id?.toString() ?? '',
         receita_emissao: data.receita_emissao?.slice(0, 10) ?? '',
         receita_vencimento: data.receita_vencimento?.slice(0, 10) ?? '',
         receita_valor: data.receita_valor != null ? String(data.receita_valor) : '',
@@ -706,6 +709,7 @@ export function ReceitaFormPage() {
           projeto_id: numOrNull(form.projeto_id),
           evento_id: numOrNull(form.evento_id),
           acao_id: numOrNull(form.acao_id),
+          receita_tipo_id: numOrNull(form.receita_tipo_id),
           receita_emissao: strOrNull(form.receita_emissao),
           receita_vencimento: strOrNull(form.receita_vencimento),
           receita_valor: valor,
@@ -839,6 +843,9 @@ export function ReceitaFormPage() {
           projeto_id: numOrNull(form.projeto_id),
           evento_id: numOrNull(form.evento_id),
           acao_id: numOrNull(form.acao_id),
+          ...(isMensalidadeSave
+            ? {}
+            : { receita_tipo_id: numOrNull(form.receita_tipo_id) }),
           receita_emissao: strOrNull(form.receita_emissao),
           receita_vencimento: strOrNull(form.receita_vencimento),
           receita_valor: valor,
@@ -1021,7 +1028,7 @@ export function ReceitaFormPage() {
             />
           </div>
 
-          {isMensalidade || form.atividade_id || form.evento_id || form.acao_id ? (
+          {isMensalidade ? (
             <div className="field field-span-2">
               <label htmlFor="plano_conta">Plano de contas</label>
               <input
@@ -1032,7 +1039,14 @@ export function ReceitaFormPage() {
                 readOnly
               />
             </div>
-          ) : null}
+          ) : (
+            <TipoReceitaField
+              empresaId={empresaId}
+              value={form.receita_tipo_id}
+              onChange={(value) => update('receita_tipo_id', value)}
+              disabled={disabled || docsOnly}
+            />
+          )}
 
           <div className="field field-span-2">
             <label htmlFor="associado_id">Associado (opcional)</label>

@@ -54,26 +54,32 @@ export function PortalPlanoContasPainel({
   const totalReceitas = soma(receitas)
   const totalDespesas = soma(despesas)
 
-  const despesasPorConta: {
-    key: string
-    label: string
-    planoContaId: number | null
-    rows: PortalPlanoLinha[]
-  }[] = []
-  for (const row of despesas) {
-    const label = contaLabel(row.plano_codigo, row.plano_nome)
-    const atual = despesasPorConta[despesasPorConta.length - 1]
-    if (atual && atual.label === label && atual.planoContaId === row.plano_conta_id) {
-      atual.rows.push(row)
-    } else {
-      despesasPorConta.push({
-        key: chave('despesa', row.plano_conta_id),
-        label,
-        planoContaId: row.plano_conta_id,
-        rows: [row],
-      })
+  function agrupar(lado: 'receita' | 'despesa', rows: PortalPlanoLinha[]) {
+    const grupos: {
+      key: string
+      label: string
+      planoContaId: number | null
+      rows: PortalPlanoLinha[]
+    }[] = []
+    for (const row of rows) {
+      const label = contaLabel(row.plano_codigo, row.plano_nome)
+      const atual = grupos[grupos.length - 1]
+      if (atual && atual.label === label && atual.planoContaId === row.plano_conta_id) {
+        atual.rows.push(row)
+      } else {
+        grupos.push({
+          key: chave(lado, row.plano_conta_id),
+          label,
+          planoContaId: row.plano_conta_id,
+          rows: [row],
+        })
+      }
     }
+    return grupos
   }
+
+  const receitasPorConta = agrupar('receita', receitas)
+  const despesasPorConta = agrupar('despesa', despesas)
 
   async function alternar(
     lado: 'receita' | 'despesa',
@@ -135,7 +141,7 @@ export function PortalPlanoContasPainel({
     const info = detalhes[key]
     return (
       <tr>
-        <td className="portal-plano-detalhe" colSpan={lado === 'receita' ? 4 : 5}>
+        <td className="portal-plano-detalhe" colSpan={5}>
           {info?.loading ? (
             <p className="field-hint">Carregando títulos…</p>
           ) : info?.error ? (
@@ -150,6 +156,7 @@ export function PortalPlanoContasPainel({
                     <th>Emissão</th>
                     <th>Competência</th>
                     <th>Descrição</th>
+                    <th>Tipo de receita</th>
                     <th>Origem</th>
                     {showRamoCol ? <th>Ramo</th> : null}
                     <th>Valor</th>
@@ -164,6 +171,7 @@ export function PortalPlanoContasPainel({
                       <td>{formatPortalDate(row.emissao)}</td>
                       <td>{formatPortalDate(row.competencia)}</td>
                       <td>{row.descricao || '—'}</td>
+                      <td>{row.fornecedor_nome || 'Sem tipo'}</td>
                       <td>{origemReceitaLabel(row.origem)}</td>
                       {showRamoCol ? <td>{row.ramo_nome || 'Grupo'}</td> : null}
                       <td>{formatMoney(row.valor)}</td>
@@ -220,7 +228,11 @@ export function PortalPlanoContasPainel({
     <div className="portal-secao-groups">
       <section className="portal-secao-group">
         <h3>Receitas por plano de contas</h3>
-        {receitas.length === 0 ? (
+        <p className="field-hint">
+          Cada linha soma o que foi recebido no tipo de receita informado
+          naquela conta. Mensalidade continua na conta do tipo de mensalidade.
+        </p>
+        {receitasPorConta.length === 0 ? (
           <div className="empty">Nenhuma receita recebida neste caixa/período.</div>
         ) : (
           <div className="table-wrap">
@@ -228,27 +240,52 @@ export function PortalPlanoContasPainel({
               <thead>
                 <tr>
                   <th>Plano de contas</th>
+                  <th>Tipo de receita</th>
                   <th>Títulos</th>
                   <th>Recebido</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {receitas.map((row) => (
-                  <Fragment key={chave('receita', row.plano_conta_id)}>
-                    <tr>
-                      <td>{contaLabel(row.plano_codigo, row.plano_nome)}</td>
-                      <td>{row.qtd}</td>
-                      <td>{formatMoney(row.total)}</td>
-                      <td>{botaoAbrir('receita', row.plano_conta_id)}</td>
+                {receitasPorConta.map((grupo) => (
+                  <Fragment key={grupo.key}>
+                    {grupo.rows.map((row, index) => (
+                      <tr key={`${grupo.key}|${row.fornecedor_nome}|${index}`}>
+                        <td>{index === 0 ? grupo.label : ''}</td>
+                        <td>{row.fornecedor_nome || 'Sem tipo'}</td>
+                        <td>{row.qtd}</td>
+                        <td>{formatMoney(row.total)}</td>
+                        <td>
+                          {index === 0
+                            ? botaoAbrir('receita', grupo.planoContaId)
+                            : null}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="portal-plano-subtotal">
+                      <td colSpan={2}>
+                        <strong>Total {grupo.label}</strong>
+                      </td>
+                      <td>
+                        <strong>
+                          {grupo.rows.reduce(
+                            (n, row) => n + Number(row.qtd ?? 0),
+                            0,
+                          )}
+                        </strong>
+                      </td>
+                      <td>
+                        <strong>{formatMoney(soma(grupo.rows))}</strong>
+                      </td>
+                      <td />
                     </tr>
-                    {detalhe('receita', row.plano_conta_id)}
+                    {detalhe('receita', grupo.planoContaId)}
                   </Fragment>
                 ))}
               </tbody>
               <tfoot>
                 <tr>
-                  <td>
+                  <td colSpan={2}>
                     <strong>Total das receitas</strong>
                   </td>
                   <td>
