@@ -550,6 +550,9 @@ export function DashboardPage() {
     RegistroVencendoMes[]
   >([])
   const [registrosVencendoOpen, setRegistrosVencendoOpen] = useState(false)
+  const [aba, setAba] = useState<'financeiro' | 'atividades' | 'ramos'>(
+    'financeiro',
+  )
 
   const mesAtual = MESES[new Date().getMonth()]
   const totalAniversariantes = aniversariantes.length
@@ -1653,7 +1656,30 @@ export function DashboardPage() {
       </section>
       ) : null}
 
-      {!associadoView && ramoFiltro == null ? (
+      {!associadoView ? (
+        <div className="tabs" role="tablist" aria-label="Seções do dashboard">
+          {(
+            [
+              ['financeiro', 'Financeiro'],
+              ['atividades', 'Atividades / eventos'],
+              ['ramos', 'Ramos'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              className={`tab${aba === id ? ' active' : ''}`}
+              aria-selected={aba === id}
+              onClick={() => setAba(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {!associadoView && aba === 'financeiro' && ramoFiltro == null ? (
         <section className="panel dashboard-benef-panel">
           <div className="passagem-header">
             <div>
@@ -1744,12 +1770,13 @@ export function DashboardPage() {
         </section>
       ) : null}
 
-      {!associadoView && empresaId ? (
+      {!associadoView && aba === 'financeiro' && empresaId ? (
         <StaffMensalidadesAbertasPanel empresaId={empresaId} />
       ) : null}
 
+      {associadoView || aba === 'financeiro' ? (
       <section
-        className={`dashboard-destaques${associadoView ? ' dashboard-destaques-solo' : ' dashboard-destaques-staff'}`}
+        className={`dashboard-destaques${associadoView ? ' dashboard-destaques-solo' : ' dashboard-destaques-financeiro'}`}
       >
         <div className="panel passagem-panel aniversario-panel">
           <div className="passagem-header">
@@ -1836,9 +1863,11 @@ export function DashboardPage() {
             )}
           </div>
         ) : null}
+      </section>
+      ) : null}
 
-        {!associadoView ? (
-          <div className="panel passagem-panel">
+      {!associadoView && aba === 'ramos' ? (
+          <div className="panel passagem-panel dashboard-passagens-aba">
             <div className="passagem-header">
               <div>
                 <h3>Passagens de ramo</h3>
@@ -1884,8 +1913,7 @@ export function DashboardPage() {
               </div>
             )}
           </div>
-        ) : null}
-      </section>
+      ) : null}
 
       {associadoView && empresaId && profile?.registro ? (
         <AssociadoAtividadesPanel
@@ -1894,7 +1922,15 @@ export function DashboardPage() {
         />
       ) : null}
 
-      {empresaId ? (
+      {!associadoView && aba === 'atividades' && empresaId ? (
+        <StaffAtividadesPanel
+          empresaId={empresaId}
+          codigoRamo={profile?.codigo_ramo ?? null}
+          codigoSecao={profile?.codigo_secao ?? null}
+        />
+      ) : null}
+
+      {empresaId && (associadoView || aba === 'ramos') ? (
         <StaffCompeticoesChart
           empresaId={empresaId}
           codigoRamo={associadoView ? null : ramoFiltro}
@@ -1903,14 +1939,6 @@ export function DashboardPage() {
           somenteVisualizacao={
             associadoView || !hasPermission('competicoes.view')
           }
-        />
-      ) : null}
-
-      {!associadoView && empresaId ? (
-        <StaffAtividadesPanel
-          empresaId={empresaId}
-          codigoRamo={profile?.codigo_ramo ?? null}
-          codigoSecao={profile?.codigo_secao ?? null}
         />
       ) : null}
 

@@ -722,6 +722,10 @@ button {
   margin-top: 0;
 }
 
+.dashboard-passagens-aba {
+  margin-bottom: 1rem;
+}
+
 .associado-atividades-panel {
   margin-bottom: 1rem;
 }
@@ -1946,6 +1950,10 @@ button {
   grid-template-columns: minmax(150px, 190px) minmax(150px, 190px) 1fr;
 }
 
+.dashboard-destaques-financeiro {
+  grid-template-columns: repeat(2, minmax(180px, 320px));
+}
+
 .dashboard-benef-panel {
   margin: 0 0 1rem;
 }
@@ -2720,7 +2728,8 @@ button {
 
 @media (max-width: 900px) {
   .dashboard-destaques,
-  .dashboard-destaques-staff {
+  .dashboard-destaques-staff,
+  .dashboard-destaques-financeiro {
     grid-template-columns: 1fr;
   }
 
