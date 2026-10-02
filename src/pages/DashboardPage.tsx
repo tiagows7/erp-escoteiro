@@ -1738,10 +1738,8 @@ export function DashboardPage() {
         <StaffMensalidadesAbertasPanel empresaId={empresaId} />
       ) : null}
 
-      {associadoView || aba === 'financeiro' ? (
-      <section
-        className={`dashboard-destaques${associadoView ? ' dashboard-destaques-solo' : ' dashboard-destaques-financeiro'}`}
-      >
+      {associadoView ? (
+      <section className="dashboard-destaques dashboard-destaques-solo">
         <div className="panel passagem-panel aniversario-panel">
           <div className="passagem-header">
             <div>
@@ -1780,8 +1778,11 @@ export function DashboardPage() {
             </article>
           )}
         </div>
+      </section>
+      ) : null}
 
-        {!associadoView ? (
+      {!associadoView && aba === 'financeiro' ? (
+      <section className="dashboard-destaques dashboard-destaques-solo">
           <div className="panel passagem-panel aniversario-panel">
             <div className="passagem-header">
               <div>
@@ -1826,7 +1827,6 @@ export function DashboardPage() {
               </article>
             )}
           </div>
-        ) : null}
       </section>
       ) : null}
 
@@ -1864,6 +1864,46 @@ export function DashboardPage() {
                   </div>
                 </article>
               ))}
+          </section>
+          <section className="dashboard-destaques dashboard-destaques-solo">
+            <div className="panel passagem-panel aniversario-panel">
+              <div className="passagem-header">
+                <div>
+                  <h3>Aniversariantes</h3>
+                  <p className="muted">{mesAtual}</p>
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="loading">Carregando…</div>
+              ) : (
+                <article className="aniversario-card">
+                  <AniversarioIllustration className="aniversario-card-img" />
+                  <div className="aniversario-card-body">
+                    <div className="aniversario-card-row">
+                      <strong className="aniversario-card-count">
+                        {totalAniversariantes}
+                      </strong>
+                      <button
+                        type="button"
+                        className="btn btn-soft"
+                        disabled={totalAniversariantes === 0}
+                        onClick={() => setAniversarioOpen(true)}
+                      >
+                        Ver
+                      </button>
+                    </div>
+                    <p className="aniversario-card-meta">
+                      {totalAniversariantes === 0
+                        ? 'Nenhum neste mês'
+                        : aniversariantesHoje > 0
+                          ? `${aniversariantesHoje} hoje`
+                          : 'neste mês'}
+                    </p>
+                  </div>
+                </article>
+              )}
+            </div>
           </section>
           <div className="panel passagem-panel dashboard-passagens-aba">
             <div className="passagem-header">
