@@ -1621,6 +1621,42 @@ export function DashboardPage() {
       ) : null}
 
       {!associadoView ? (
+      <section className="stats-grid">
+        <article className="stat-card stat-card-total">
+          <span>
+            {secaoFiltro != null
+              ? 'Total ativos do ramo/seção'
+              : ramoFiltro != null
+                ? 'Total ativos do ramo'
+                : 'Total ativos'}
+          </span>
+          <strong>{loading ? '—' : totalAtivos}</strong>
+        </article>
+        {ramos
+          .filter((item) => item.ramo_id >= 1 && item.ramo_id <= 5)
+          .map((item, index) => (
+          <article
+            key={item.ramo_id}
+            className={`stat-card ${ramoCardClass(item.ramo_id, item.ramo_nome)}`}
+            style={{ animationDelay: `${index * 60}ms` }}
+          >
+            <span>{item.ramo_nome}</span>
+            <div className="stat-card-row">
+              <strong>{loading ? '—' : item.total}</strong>
+              <button
+                type="button"
+                className="btn btn-soft stat-card-ver"
+                onClick={() => void abrirListaRamo(item)}
+              >
+                Ver
+              </button>
+            </div>
+          </article>
+        ))}
+      </section>
+      ) : null}
+
+      {!associadoView ? (
         <div className="tabs" role="tablist" aria-label="Seções do dashboard">
           {(
             [
@@ -1832,39 +1868,6 @@ export function DashboardPage() {
 
       {!associadoView && aba === 'ramos' ? (
         <>
-          <section className="stats-grid">
-            <article className="stat-card stat-card-total">
-              <span>
-                {secaoFiltro != null
-                  ? 'Total ativos do ramo/seção'
-                  : ramoFiltro != null
-                    ? 'Total ativos do ramo'
-                    : 'Total ativos'}
-              </span>
-              <strong>{loading ? '—' : totalAtivos}</strong>
-            </article>
-            {ramos
-              .filter((item) => item.ramo_id >= 1 && item.ramo_id <= 5)
-              .map((item, index) => (
-                <article
-                  key={item.ramo_id}
-                  className={`stat-card ${ramoCardClass(item.ramo_id, item.ramo_nome)}`}
-                  style={{ animationDelay: `${index * 60}ms` }}
-                >
-                  <span>{item.ramo_nome}</span>
-                  <div className="stat-card-row">
-                    <strong>{loading ? '—' : item.total}</strong>
-                    <button
-                      type="button"
-                      className="btn btn-soft stat-card-ver"
-                      onClick={() => void abrirListaRamo(item)}
-                    >
-                      Ver
-                    </button>
-                  </div>
-                </article>
-              ))}
-          </section>
           <section className="dashboard-destaques dashboard-destaques-solo">
             <div className="panel passagem-panel aniversario-panel">
               <div className="passagem-header">
