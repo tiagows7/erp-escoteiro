@@ -160,6 +160,7 @@ export function GrupoFormPage() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(!isNew)
+  const [aba, setAba] = useState<'geral' | 'parametros'>('geral')
   const logoInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -339,12 +340,14 @@ export function GrupoFormPage() {
 
     const nome = form.nome.trim()
     if (!nome) {
+      setAba('geral')
       setError('Informe o nome do grupo escoteiro.')
       return
     }
 
     const slug = (form.slug.trim() || slugify(nome)).slice(0, 60)
     if (!slug) {
+      setAba('geral')
       setError('Informe um identificador (slug) válido.')
       return
     }
@@ -364,14 +367,17 @@ export function GrupoFormPage() {
         const adminNome = form.adminNome.trim()
         const adminEmail = form.adminEmail.trim().toLowerCase()
         if (!adminNome || !adminEmail) {
+          setAba('geral')
           setError('Informe nome e e-mail do usuário administrador do grupo.')
           return
         }
         if (form.adminPassword.length < 6) {
+          setAba('geral')
           setError('A senha do admin deve ter pelo menos 6 caracteres.')
           return
         }
         if (form.adminPassword !== form.adminPasswordConfirm) {
+          setAba('geral')
           setError('A confirmação de senha não confere.')
           return
         }
@@ -749,6 +755,28 @@ export function GrupoFormPage() {
           </AlertMessage>
         ) : null}
 
+        <div className="tabs" role="tablist" aria-label="Cadastro do grupo">
+          {(
+            [
+              ['geral', 'Geral'],
+              ['parametros', 'Parâmetros'],
+            ] as const
+          ).map(([tabId, label]) => (
+            <button
+              key={tabId}
+              type="button"
+              role="tab"
+              className={`tab${aba === tabId ? ' active' : ''}`}
+              aria-selected={aba === tabId}
+              onClick={() => setAba(tabId)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {aba === 'geral' ? (
+        <>
         <p className="form-section-title">Dados do grupo</p>
 
         <div className="form-grid">
@@ -947,15 +975,6 @@ export function GrupoFormPage() {
               atualizados ao salvar. Sem dia = último dia da competência.
             </p>
           </div>
-          <TipoReceitaField
-            empresaId={isNew ? undefined : Number(id)}
-            value={form.loja_receita_tipo_id}
-            onChange={(value) =>
-              setForm((prev) => ({ ...prev, loja_receita_tipo_id: value }))
-            }
-            disabled={disabled || isNew}
-            hint="Vendas da loja e da loja online entram neste tipo. O portal usa o plano de contas desse contato."
-          />
         </div>
 
         {isSuperAdmin ? (
@@ -1187,6 +1206,27 @@ export function GrupoFormPage() {
             </div>
           </>
         ) : null}
+        </>
+        ) : (
+          <>
+            <p className="form-section-title">Parâmetros</p>
+            <div className="form-grid">
+              <TipoReceitaField
+                empresaId={isNew ? undefined : Number(id)}
+                value={form.loja_receita_tipo_id}
+                onChange={(value) =>
+                  setForm((prev) => ({ ...prev, loja_receita_tipo_id: value }))
+                }
+                disabled={disabled || isNew}
+                hint={
+                  isNew
+                    ? 'Salve o grupo para escolher o tipo. As vendas da loja entram neste tipo e o portal usa o plano de contas desse contato.'
+                    : 'Vendas da loja e da loja online entram neste tipo. O portal usa o plano de contas desse contato.'
+                }
+              />
+            </div>
+          </>
+        )}
 
         <div className="form-actions">
           {canWrite ? (

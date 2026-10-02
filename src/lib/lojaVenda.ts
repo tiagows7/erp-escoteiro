@@ -165,7 +165,7 @@ export async function finalizarVendaLoja(
     return {
       ok: false,
       error:
-        'Tipo de receita da loja não informado. Escolha o tipo no cadastro do grupo.',
+        'Tipo de receita da loja não informado. Escolha o tipo em Grupo escoteiro, aba Parâmetros.',
     }
   }
 

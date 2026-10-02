@@ -11,9 +11,8 @@ import {
   type PixCreateInput,
 } from '@/lib/pixSicredi'
 import { loadPixPendingForEmpresa } from '@/lib/pixSicrediPending'
-import { isAssociadoLogin, isGrupoAdmin } from '@/lib/roles'
+import { isAssociadoLogin } from '@/lib/roles'
 import { linkPublicoLojaOnline } from '@/lib/lojaOnlinePublic'
-import { LojaTipoReceitaBar } from '@/components/LojaTipoReceitaBar'
 
 type ProdutoLoja = {
   produto_id: number
@@ -297,7 +296,7 @@ export function LojaOnlinePage() {
     }
     if (!lojaTipoInformado) {
       setError(
-        'Tipo de receita da loja não informado. Escolha o tipo no topo da página.',
+        'Tipo de receita da loja não informado. Escolha o tipo em Grupo escoteiro, aba Parâmetros.',
       )
       return
     }
@@ -427,12 +426,6 @@ export function LojaOnlinePage() {
           </Link>
         </div>
       </header>
-
-      <LojaTipoReceitaBar
-        empresaId={empresaId}
-        canEdit={isGrupoAdmin(profile?.role)}
-        onInformado={setLojaTipoInformado}
-      />
 
       {error ? (
         <AlertMessage tone="error" title="Atenção">
