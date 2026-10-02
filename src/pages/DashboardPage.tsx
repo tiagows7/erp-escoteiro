@@ -551,7 +551,7 @@ export function DashboardPage() {
   >([])
   const [registrosVencendoOpen, setRegistrosVencendoOpen] = useState(false)
   const [aba, setAba] = useState<'financeiro' | 'atividades' | 'ramos'>(
-    'financeiro',
+    ramoFiltro != null ? 'ramos' : 'financeiro',
   )
 
   const mesAtual = MESES[new Date().getMonth()]
@@ -1661,8 +1661,8 @@ export function DashboardPage() {
           {(
             [
               ['financeiro', 'Financeiro'],
-              ['atividades', 'Atividades / eventos'],
               ['ramos', 'Ramos'],
+              ['atividades', 'Atividades / eventos'],
             ] as const
           ).map(([id, label]) => (
             <button
