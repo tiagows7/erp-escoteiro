@@ -58,6 +58,7 @@ type AuthState = {
   refreshEmpresasContexto: () => Promise<void>
   plataformaAcesso: PlataformaAcessoState
   refreshPlataformaAcesso: () => Promise<void>
+  refreshEmpresa: () => Promise<void>
   hasPermission: (permission: Permission) => boolean
   hasAnyPermission: (permissions: Permission[]) => boolean
   signIn: (
@@ -350,6 +351,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPlataformaAcesso(next)
   }, [profile, empresa])
 
+  const refreshEmpresa = useCallback(async () => {
+    const id = empresa?.id ?? profile?.empresa_id
+    if (id == null) return
+    const next = await fetchEmpresaById(id)
+    if (next) setEmpresa(next)
+  }, [empresa?.id, profile?.empresa_id])
+
   async function signIn(login: string, password: string) {
     const trimmed = login.trim()
     if (!trimmed) {
@@ -411,6 +419,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshEmpresasContexto,
       plataformaAcesso,
       refreshPlataformaAcesso,
+      refreshEmpresa,
       hasPermission: (permission) => canForProfile(role, profile, permission),
       hasAnyPermission: (permissions) =>
         canAnyForProfile(role, profile, permissions),
@@ -429,6 +438,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshEmpresasContexto,
       plataformaAcesso,
       refreshPlataformaAcesso,
+      refreshEmpresa,
     ],
   )
 

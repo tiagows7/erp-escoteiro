@@ -117,7 +117,7 @@ export function GrupoFormPage() {
   const { id } = useParams()
   const isNew = !id || id === 'novo'
   const navigate = useNavigate()
-  const { hasPermission, empresa, isSuperAdmin } = useAuth()
+  const { hasPermission, empresa, isSuperAdmin, refreshEmpresa } = useAuth()
   const canManagePlatform = isSuperAdmin || hasPermission('grupos.write')
   const canEditOwn =
     hasPermission('grupos.view') &&
@@ -514,6 +514,8 @@ export function GrupoFormPage() {
           return
         }
       }
+
+      await refreshEmpresa()
 
       if (canManagePlatform) {
         clearDraft()

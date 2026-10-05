@@ -2,7 +2,8 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { session, profile, loading, signOut } = useAuth()
+  const { session, profile, empresa, isSuperAdmin, loading, signOut } =
+    useAuth()
 
   if (loading) {
     return <div className="loading">Carregando sessão…</div>
@@ -39,6 +40,33 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
         <div className="login-card" style={{ maxWidth: 420 }}>
           <p className="login-lead">Seu usuário está inativo.</p>
           <button className="btn btn-primary" type="button" onClick={() => void signOut()}>
+            Sair
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isSuperAdmin && empresa?.ativo === false) {
+    return (
+      <div className="login-page">
+        <div className="login-card" style={{ maxWidth: 420 }}>
+          <p className="login-lead">Grupo escoteiro inativo</p>
+          <p className="muted" style={{ marginBottom: '1rem' }}>
+            {empresa.nome ? (
+              <>
+                <strong>{empresa.nome}</strong> está inativo. O acesso ao
+                sistema fica bloqueado até a reativação.
+              </>
+            ) : (
+              'Este grupo está inativo. O acesso ao sistema fica bloqueado até a reativação.'
+            )}
+          </p>
+          <button
+            className="btn btn-primary"
+            type="button"
+            onClick={() => void signOut()}
+          >
             Sair
           </button>
         </div>
