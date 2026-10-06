@@ -42,14 +42,11 @@ export function openWhatsApp(opts: {
   return true
 }
 
-/** URL pública do app (VITE_APP_URL ou origem atual). */
+/** Endereço que vai nas mensagens de WhatsApp. */
+const SITE_PUBLICO = 'https://www.erpescoteiro.com.br'
+
 export function appAccessUrl(): string {
-  const fromEnv = String(import.meta.env.VITE_APP_URL ?? '').trim()
-  if (fromEnv) return fromEnv.replace(/\/$/, '')
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin
-  }
-  return ''
+  return SITE_PUBLICO
 }
 
 function blocoAcessoPagamento(registro?: string | number | null): string[] {
