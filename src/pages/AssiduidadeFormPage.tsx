@@ -255,10 +255,6 @@ export function AssiduidadeFormPage() {
       setError('Escolha o ramo.')
       return
     }
-    if (!atividadeId) {
-      setError('Escolha a atividade cadastrada.')
-      return
-    }
     if (!dataAtividade) {
       setError('Informe a data da atividade.')
       return
@@ -269,7 +265,7 @@ export function AssiduidadeFormPage() {
     const payload = {
       empresa_id: empresaId,
       ramo: ramoId,
-      atividade_id: Number(atividadeId),
+      atividade_id: atividadeId ? Number(atividadeId) : null,
       data_atividade: dataAtividade,
     }
 
@@ -524,7 +520,6 @@ export function AssiduidadeFormPage() {
               className="select"
               value={atividadeId}
               disabled={disabled || ramoId == null}
-              required
               onChange={(e) => {
                 const next = e.target.value
                 setAtividadeId(next)
@@ -536,7 +531,7 @@ export function AssiduidadeFormPage() {
                 }
               }}
             >
-              <option value="">Selecione…</option>
+              <option value="">Sem atividade</option>
               {atividadesDoRamo.map((item) => (
                 <option key={item.atividade_id} value={item.atividade_id}>
                   {item.descricao?.trim() || `Atividade #${item.atividade_id}`}
@@ -564,20 +559,23 @@ export function AssiduidadeFormPage() {
 
         {ramoId == null ? (
           <p className="field-hint">
-            Escolha o ramo para trazer as atividades, os jovens e os voluntários.
-          </p>
-        ) : atividadesDoRamo.length === 0 ? (
-          <p className="field-hint">
-            Nenhuma atividade cadastrada neste ramo. Cadastre a atividade antes
-            da chamada.
+            Escolha o ramo para trazer os jovens e os voluntários.
           </p>
         ) : loadingPessoas ? (
           <div className="loading">Carregando jovens e voluntários…</div>
         ) : (
-          <div className="portal-secao-groups">
-            {renderGrupo('Jovens', jovens, 'jovem')}
-            {renderGrupo('Voluntários', voluntarios, 'voluntario')}
-          </div>
+          <>
+            {atividadesDoRamo.length === 0 ? (
+              <p className="field-hint">
+                Nenhuma atividade cadastrada neste ramo. A chamada pode ser
+                salva só com a data.
+              </p>
+            ) : null}
+            <div className="portal-secao-groups">
+              {renderGrupo('Jovens', jovens, 'jovem')}
+              {renderGrupo('Voluntários', voluntarios, 'voluntario')}
+            </div>
+          </>
         )}
 
         <div className="form-actions">
