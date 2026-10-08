@@ -17,6 +17,13 @@ import {
   resolveFinanceiroScope,
 } from '@/lib/financeiroScope'
 
+type PagamentoRow = {
+  data_pagamento: string | null
+  valor: number | null
+}
+
+type VisaoRelatorio = 'todas' | 'a_receber' | 'recebidas'
+
 type ReceitaRow = {
   receita_id: number
   receita_descricao: string | null
@@ -30,6 +37,7 @@ type ReceitaRow = {
   receita_ramo: number | null
   associados: { nome: string | null; registro_provisorio?: boolean | null } | null
   atividades: { descricao: string | null } | null
+  receita_pagamento?: PagamentoRow[] | PagamentoRow | null
 }
 
 type Lookup = { id: number; nome: string }
@@ -64,6 +72,24 @@ function origemLabel(origem: string | null): string {
   return origem === RECEITA_ORIGEM.MENSALIDADE ? 'Mensalidade' : 'Avulsa'
 }
 
+const SELECT_RECEITA =
+  'receita_id, receita_descricao, receita_origem, receita_emissao, receita_vencimento, receita_competencia, receita_valor, receita_saldo, receita_situacao, receita_ramo, associados(nome, registro_provisorio), atividades(descricao)'
+
+function pagamentosDe(row: ReceitaRow): PagamentoRow[] {
+  const raw = row.receita_pagamento
+  if (!raw) return []
+  return Array.isArray(raw) ? raw : [raw]
+}
+
+/** Última data de pagamento da receita, dentro do período quando informado. */
+function dataPagamento(row: ReceitaRow, de: string, ate: string): string | null {
+  const datas = pagamentosDe(row)
+    .map((p) => (p.data_pagamento ?? '').slice(0, 10))
+    .filter((d) => d && (!de || d >= de) && (!ate || d <= ate))
+  if (datas.length === 0) return null
+  return datas.sort().at(-1) ?? null
+}
+
 export function ReceitasRecebimentoPage() {
   const { empresa, profile, hasPermission } = useAuth()
   const canWrite = hasPermission('financeiro.write')
@@ -74,6 +100,7 @@ export function ReceitasRecebimentoPage() {
   const [ramos, setRamos] = useState<Lookup[]>([])
   const [dataDe, setDataDe] = useState(firstDayOfMonth)
   const [dataAte, setDataAte] = useState(todayIso)
+  const [filtroVisao, setFiltroVisao] = useState<VisaoRelatorio>('todas')
   const [filtroRamo, setFiltroRamo] = useState('')
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
@@ -104,35 +131,70 @@ export function ReceitasRecebimentoPage() {
     let mounted = true
     void (async () => {
       setLoading(true)
-      let query = supabase
-        .from('receitas')
-        .select(
-          'receita_id, receita_descricao, receita_origem, receita_emissao, receita_vencimento, receita_competencia, receita_valor, receita_saldo, receita_situacao, receita_ramo, associados(nome, registro_provisorio), atividades(descricao)',
-        )
-        .eq('empresa_id', empresaId)
-        .order('receita_emissao', { ascending: false })
-        .limit(2000)
+      const buscaAbertos = filtroVisao !== 'recebidas'
+      const buscaRecebidas = filtroVisao !== 'a_receber'
+      const consultas: PromiseLike<{
+        data: unknown[] | null
+        error: { message: string } | null
+      }>[] = []
 
-      query = applyReceitaScope(query, scope)
-      if (!scope && filtroRamo) {
-        query = query.eq('receita_ramo', Number(filtroRamo))
-      }
-      if (dataDe) {
-        query = query.gte('receita_emissao', dataDe)
-      }
-      if (dataAte) {
-        query = query.lte('receita_emissao', dataAte)
+      if (buscaAbertos) {
+        let abertosQuery = supabase
+          .from('receitas')
+          .select(SELECT_RECEITA)
+          .eq('empresa_id', empresaId)
+          .in('receita_situacao', [TITULO_SITUACAO.ABERTO, TITULO_SITUACAO.PARCIAL])
+          .order('receita_vencimento', { ascending: false })
+          .limit(2000)
+        abertosQuery = applyReceitaScope(abertosQuery, scope)
+        if (!scope && filtroRamo) {
+          abertosQuery = abertosQuery.eq('receita_ramo', Number(filtroRamo))
+        }
+        if (dataDe) abertosQuery = abertosQuery.gte('receita_emissao', dataDe)
+        if (dataAte) abertosQuery = abertosQuery.lte('receita_emissao', dataAte)
+        consultas.push(abertosQuery)
       }
 
-      const { data, error: queryError } = await query
+      if (buscaRecebidas) {
+        let recebidasQuery = supabase
+          .from('receitas')
+          .select(`${SELECT_RECEITA}, receita_pagamento!inner(data_pagamento, valor)`)
+          .eq('empresa_id', empresaId)
+          .eq('receita_situacao', TITULO_SITUACAO.PAGO)
+          .limit(2000)
+        recebidasQuery = applyReceitaScope(recebidasQuery, scope)
+        if (!scope && filtroRamo) {
+          recebidasQuery = recebidasQuery.eq('receita_ramo', Number(filtroRamo))
+        }
+        if (dataDe) {
+          recebidasQuery = recebidasQuery.gte(
+            'receita_pagamento.data_pagamento',
+            dataDe,
+          )
+        }
+        if (dataAte) {
+          recebidasQuery = recebidasQuery.lte(
+            'receita_pagamento.data_pagamento',
+            dataAte,
+          )
+        }
+        consultas.push(recebidasQuery)
+      }
+
+      const resultados = await Promise.all(consultas)
       if (!mounted) return
-
-      if (queryError) {
-        setError(queryError.message)
+      const falha = resultados.find((r) => r.error)
+      if (falha?.error) {
+        setError(falha.error.message)
         setRows([])
       } else {
+        const juntos = resultados.flatMap(
+          (r) => (r.data ?? []) as unknown as ReceitaRow[],
+        )
+        const porId = new Map<number, ReceitaRow>()
+        for (const row of juntos) porId.set(row.receita_id, row)
         setError(null)
-        setRows((data as unknown as ReceitaRow[]) ?? [])
+        setRows([...porId.values()])
       }
       setLoading(false)
     })()
@@ -140,7 +202,7 @@ export function ReceitasRecebimentoPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, filtroRamo, dataDe, dataAte, scope])
+  }, [empresaId, filtroRamo, filtroVisao, dataDe, dataAte, scope])
 
   const ramoMap = useMemo(
     () => new Map(ramos.map((r) => [r.id, r.nome])),
@@ -169,8 +231,15 @@ export function ReceitasRecebimentoPage() {
   )
 
   const pagos = useMemo(
-    () => filtered.filter((r) => r.receita_situacao === TITULO_SITUACAO.PAGO),
-    [filtered],
+    () =>
+      filtered
+        .filter((r) => r.receita_situacao === TITULO_SITUACAO.PAGO)
+        .sort((a, b) => {
+          const da = dataPagamento(a, dataDe, dataAte) ?? ''
+          const db = dataPagamento(b, dataDe, dataAte) ?? ''
+          return db.localeCompare(da) || b.receita_id - a.receita_id
+        }),
+    [filtered, dataDe, dataAte],
   )
 
   const totais = useMemo(() => {
@@ -184,6 +253,15 @@ export function ReceitasRecebimentoPage() {
     }
     return { emitido, recebido, aberto }
   }, [filtered])
+
+  const rotuloPeriodo =
+    filtroVisao === 'recebidas'
+      ? 'Pagamento'
+      : filtroVisao === 'a_receber'
+        ? 'Emissão'
+        : 'Período'
+  const mostraAbertos = filtroVisao !== 'recebidas'
+  const mostraRecebidas = filtroVisao !== 'a_receber'
 
   if (!empresaId) {
     return (
@@ -219,7 +297,19 @@ export function ReceitasRecebimentoPage() {
       <section className="panel no-print">
         <div className="toolbar filtros-estrutura">
           <label className="field" style={{ margin: 0 }}>
-            <span className="field-hint">Emissão de</span>
+            <span className="field-hint">Situação</span>
+            <select
+              className="select"
+              value={filtroVisao}
+              onChange={(e) => setFiltroVisao(e.target.value as VisaoRelatorio)}
+            >
+              <option value="todas">Todas</option>
+              <option value="a_receber">A receber</option>
+              <option value="recebidas">Recebidas</option>
+            </select>
+          </label>
+          <label className="field" style={{ margin: 0 }}>
+            <span className="field-hint">{rotuloPeriodo} de</span>
             <input
               className="input"
               type="date"
@@ -257,6 +347,15 @@ export function ReceitasRecebimentoPage() {
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
+        {filtroVisao === 'todas' ? (
+          <p className="field-hint" style={{ marginTop: '0.65rem' }}>
+            A receber pela data de emissão. Recebidas pela data do pagamento.
+          </p>
+        ) : filtroVisao === 'recebidas' ? (
+          <p className="field-hint" style={{ marginTop: '0.65rem' }}>
+            Receitas quitadas, ordenadas pela data do pagamento.
+          </p>
+        ) : null}
       </section>
 
       {error ? (
@@ -271,7 +370,7 @@ export function ReceitasRecebimentoPage() {
           <p>
             {empresa?.nome}
             {dataDe || dataAte
-              ? ` · Emissão ${formatDate(dataDe || null)} a ${formatDate(dataAte || null)}`
+              ? ` · ${rotuloPeriodo} ${formatDate(dataDe || null)} a ${formatDate(dataAte || null)}`
               : ''}
           </p>
         </div>
@@ -316,57 +415,69 @@ export function ReceitasRecebimentoPage() {
             <p className="field-hint" style={{ marginTop: '0.85rem' }}>
               {filtered.length === 0
                 ? 'Nenhuma receita no período.'
-                : `${filtered.length} receita(s) emitida(s) no período selecionado.`}
+                : filtroVisao === 'recebidas'
+                  ? `${filtered.length} receita(s) recebida(s) no período, pela data do pagamento.`
+                  : filtroVisao === 'a_receber'
+                    ? `${filtered.length} receita(s) a receber emitida(s) no período.`
+                    : `${abertos.length} a receber pela emissão e ${pagos.length} recebida(s) pela data do pagamento.`}
             </p>
           </>
         )}
       </section>
 
-      {!loading && !error && filtered.length > 0 ? (
+      {!loading && !error ? (
         <>
-          <section className="panel despesas-relatorio-print">
-            <div className="passagem-header">
-              <div>
-                <h3>Em aberto</h3>
-                <p className="muted">
-                  Títulos com saldo a receber (abertos e parciais).
-                </p>
+          {mostraAbertos ? (
+            <section className="panel despesas-relatorio-print">
+              <div className="passagem-header">
+                <div>
+                  <h3>Em aberto</h3>
+                  <p className="muted">
+                    Títulos com saldo a receber (abertos e parciais), pela data de emissão.
+                  </p>
+                </div>
+                <div className="badge badge-danger">
+                  {formatMoney(totais.aberto)}
+                </div>
               </div>
-              <div className="badge badge-danger">
-                {formatMoney(totais.aberto)}
-              </div>
-            </div>
-            <ReceitasRelatorioTabela
-              rows={abertos}
-              ramoMap={ramoMap}
-              mode="aberto"
-              canWrite={canWrite}
-              emptyMessage="Nenhuma receita em aberto no período."
-            />
-          </section>
+              <ReceitasRelatorioTabela
+                rows={abertos}
+                ramoMap={ramoMap}
+                mode="aberto"
+                canWrite={canWrite}
+                dataDe={dataDe}
+                dataAte={dataAte}
+                emptyMessage="Nenhuma receita em aberto no período."
+              />
+            </section>
+          ) : null}
 
-          <section className="panel despesas-relatorio-print">
-            <div className="passagem-header">
-              <div>
-                <h3>Já recebidas</h3>
-                <p className="muted">
-                  Receitas quitadas no período de emissão.
-                </p>
+          {mostraRecebidas ? (
+            <section className="panel despesas-relatorio-print">
+              <div className="passagem-header">
+                <div>
+                  <h3>Já recebidas</h3>
+                  <p className="muted">
+                    Receitas quitadas no período, pela data do pagamento.
+                  </p>
+                </div>
+                <div className="badge">
+                  {formatMoney(
+                    pagos.reduce((s, r) => s + Number(r.receita_valor ?? 0), 0),
+                  )}
+                </div>
               </div>
-              <div className="badge">
-                {formatMoney(
-                  pagos.reduce((s, r) => s + Number(r.receita_valor ?? 0), 0),
-                )}
-              </div>
-            </div>
-            <ReceitasRelatorioTabela
-              rows={pagos}
-              ramoMap={ramoMap}
-              mode="pago"
-              canWrite={canWrite}
-              emptyMessage="Nenhuma receita recebida no período."
-            />
-          </section>
+              <ReceitasRelatorioTabela
+                rows={pagos}
+                ramoMap={ramoMap}
+                mode="pago"
+                canWrite={canWrite}
+                dataDe={dataDe}
+                dataAte={dataAte}
+                emptyMessage="Nenhuma receita recebida no período."
+              />
+            </section>
+          ) : null}
         </>
       ) : null}
     </>
@@ -378,12 +489,16 @@ function ReceitasRelatorioTabela({
   ramoMap,
   mode,
   canWrite,
+  dataDe,
+  dataAte,
   emptyMessage,
 }: {
   rows: ReceitaRow[]
   ramoMap: Map<number, string>
   mode: 'aberto' | 'pago'
   canWrite: boolean
+  dataDe: string
+  dataAte: string
   emptyMessage: string
 }) {
   if (rows.length === 0) {
@@ -402,6 +517,7 @@ function ReceitasRelatorioTabela({
               <th className="no-print"></th>
               <th>Emissão</th>
               <th>Vencimento</th>
+              {mode === 'pago' ? <th>Pagamento</th> : null}
               <th>Descrição</th>
               <th>Associado</th>
               <th>Origem</th>
@@ -439,6 +555,9 @@ function ReceitasRelatorioTabela({
                 </td>
                 <td>{formatDate(row.receita_emissao)}</td>
                 <td>{formatDate(row.receita_vencimento)}</td>
+                {mode === 'pago' ? (
+                  <td>{formatDate(dataPagamento(row, dataDe, dataAte))}</td>
+                ) : null}
                 <td>{row.receita_descricao || '—'}</td>
                 <td>
                   {row.associados?.nome || '—'}{' '}
