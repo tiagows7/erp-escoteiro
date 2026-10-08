@@ -82,6 +82,7 @@ import { ReceitaFormPage } from '@/pages/ReceitaFormPage'
 import { GeraMensalidadePage } from '@/pages/GeraMensalidadePage'
 import { ReceitasRecebimentoPage } from '@/pages/ReceitasRecebimentoPage'
 import { ReceitaRecebimentoFormPage } from '@/pages/ReceitaRecebimentoFormPage'
+import { ConciliacaoBancariaPage } from '@/pages/ConciliacaoBancariaPage'
 import { PortalTransparenciaPage } from '@/pages/PortalTransparenciaPage'
 import { PortalRedirectPage } from '@/pages/PortalRedirectPage'
 import { AtividadesPage } from '@/pages/AtividadesPage'
@@ -427,6 +428,14 @@ export default function App() {
                   anyOf={['financeiro.view', 'financeiro.write']}
                 >
                   <OrcamentoFormPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="financeiro/conciliacao"
+              element={
+                <RequirePermission permission="financeiro.view">
+                  <ConciliacaoBancariaPage />
                 </RequirePermission>
               }
             />

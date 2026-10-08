@@ -269,3 +269,52 @@ export async function checkPixSicrediStatus(
     cobranca: data.cobranca as PixCobrancaResumo,
   }
 }
+
+export type ConciliacaoPixItem = {
+  conta_id: number
+  conta_nome: string
+  end_to_end_id: string
+  txid: string
+  valor: number
+  horario: string
+  info_pagador: string
+  nome_pagador: string
+  situacao: 'conciliado' | 'pendente' | 'sem_cobranca'
+  cobranca_id: number | null
+  cobranca_status: string | null
+  cobranca_descricao: string | null
+  cobranca_tipo: string | null
+  baixado_em: string | null
+}
+
+export async function conciliarPixSicredi(input: {
+  empresaId: number
+  inicio: string
+  fim: string
+  contaId?: number | null
+}): Promise<
+  | { ok: true; avisos: string[]; itens: ConciliacaoPixItem[] }
+  | { ok: false; error: string }
+> {
+  const { data, error } = await supabase.functions.invoke('pix-sicredi', {
+    body: {
+      action: 'conciliar',
+      empresa_id: input.empresaId,
+      inicio: input.inicio,
+      fim: input.fim,
+      conta_id: input.contaId ?? null,
+    },
+  })
+
+  if (error) {
+    const fromBody = await readFunctionsError(error)
+    return { ok: false, error: fromBody || error.message }
+  }
+  if (data?.error) return { ok: false, error: String(data.error) }
+
+  return {
+    ok: true,
+    avisos: Array.isArray(data?.avisos) ? data.avisos.map(String) : [],
+    itens: (data?.itens ?? []) as ConciliacaoPixItem[],
+  }
+}

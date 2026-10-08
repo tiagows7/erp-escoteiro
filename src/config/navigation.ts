@@ -262,6 +262,12 @@ export const NAV_ITEMS: NavItem[] = [
         label: 'Orçamento',
         permission: 'financeiro.view',
       },
+      {
+        type: 'link',
+        to: '/financeiro/conciliacao',
+        label: 'Conciliação bancária',
+        permission: 'financeiro.view',
+      },
     ],
   },
   {

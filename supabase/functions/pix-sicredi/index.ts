@@ -81,6 +81,14 @@ type PollPendingBody = {
   action: 'poll_pending'
 }
 
+type ConciliarBody = {
+  action: 'conciliar'
+  empresa_id: number
+  inicio: string
+  fim: string
+  conta_id?: number | null
+}
+
 type PixRequestBody =
   | CreateBody
   | StatusBody
@@ -90,6 +98,7 @@ type PixRequestBody =
   | CreatePublicLojaBody
   | StatusPublicBody
   | PollPendingBody
+  | ConciliarBody
 
 function tipoUsaPixRamo(tipo: string): boolean {
   return (
@@ -997,6 +1006,77 @@ async function createCob(
         typeof data.location === 'string' ? data.location : null,
       pixCopiaECola,
     }
+  } finally {
+    client.close()
+  }
+}
+
+type PixRecebidoBanco = {
+  endToEndId?: string
+  txid?: string
+  valor?: string
+  horario?: string
+  infoPagador?: string
+  pagador?: { nome?: string }
+}
+
+async function listarPixRecebidos(
+  cfg: SicrediConfig,
+  inicio: string,
+  fim: string,
+): Promise<PixRecebidoBanco[]> {
+  const token = await getAccessToken(cfg)
+  const client = createMtlsClient(cfg)
+  const itens: PixRecebidoBanco[] = []
+  try {
+    let pagina = 0
+    let paginas = 1
+    while (pagina < paginas && pagina < 20) {
+      const qs = new URLSearchParams({
+        inicio,
+        fim,
+        'paginacao.paginaAtual': String(pagina),
+        'paginacao.itensPorPagina': '100',
+      })
+      const res = await fetch(`${cfg.baseUrl}${cfg.apiPath}/pix?${qs}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+        client,
+      })
+      const raw = await res.text()
+      if (!res.ok) {
+        let detail = ''
+        try {
+          const parsed = JSON.parse(raw) as {
+            detail?: string
+            title?: string
+            mensagem?: string
+          }
+          detail = parsed.detail || parsed.mensagem || parsed.title || ''
+        } catch {
+          detail = raw.slice(0, 180)
+        }
+        throw new Error(
+          detail || `Falha ao consultar PIX recebidos (${res.status}).`,
+        )
+      }
+      const data = JSON.parse(raw) as {
+        pix?: PixRecebidoBanco[]
+        parametros?: {
+          paginacao?: { quantidadeDePaginas?: number }
+        }
+      }
+      const lote = Array.isArray(data.pix) ? data.pix : []
+      itens.push(...lote)
+      const total = Number(data.parametros?.paginacao?.quantidadeDePaginas ?? 1)
+      paginas = Number.isFinite(total) && total > 0 ? total : 1
+      pagina += 1
+      if (lote.length === 0) break
+    }
+    return itens
   } finally {
     client.close()
   }
@@ -2636,12 +2716,179 @@ Deno.serve(async (req) => {
 
     const { data: profile } = await admin
       .from('profiles')
-      .select('id, empresa_id, ativo, registro')
+      .select('id, empresa_id, ativo, registro, role')
       .eq('id', user.id)
       .maybeSingle()
 
     if (!profile || profile.ativo === false) {
       return json({ error: 'Perfil inválido.' }, 403)
+    }
+
+    if (body.action === 'conciliar') {
+      const empresaId = Number(body.empresa_id || profile.empresa_id)
+      if (!empresaId || profile.empresa_id !== empresaId) {
+        return json({ error: 'Grupo inválido para esta conciliação.' }, 403)
+      }
+      const role = String(
+        (profile as { role?: string | null }).role ?? '',
+      )
+      if (
+        !['super_admin', 'admin', 'tesoureiro', 'leitura'].includes(role)
+      ) {
+        return json({ error: 'Sem permissão para conciliar.' }, 403)
+      }
+
+      const inicioDia = String(body.inicio ?? '').slice(0, 10)
+      const fimDia = String(body.fim ?? '').slice(0, 10)
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(inicioDia) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(fimDia) ||
+        inicioDia > fimDia
+      ) {
+        return json({ error: 'Informe o período da conciliação.' }, 400)
+      }
+      const dias =
+        (Date.parse(`${fimDia}T00:00:00Z`) - Date.parse(`${inicioDia}T00:00:00Z`)) /
+        86_400_000
+      if (dias > 31) {
+        return json({ error: 'O período pode ter no máximo 31 dias.' }, 400)
+      }
+
+      const { data: contas, error: contasError } = await admin
+        .from('empresa_conta_bancaria')
+        .select(
+          'id, descricao, banco_nome, agencia, conta, ramo_id, secao_id, api_client_id, api_client_secret, api_pix_chave, api_pix_cert, api_pix_key, api_pix_base_url, api_pix_ativo, api_pix_provedor',
+        )
+        .eq('empresa_id', empresaId)
+        .eq('api_pix_ativo', true)
+        .order('id', { ascending: true })
+
+      if (contasError) {
+        return json({ error: contasError.message }, 400)
+      }
+
+      const contaId = body.conta_id ? Number(body.conta_id) : null
+      const lista = ((contas ?? []) as Array<
+        DbContaBancariaPix & {
+          descricao?: string | null
+          banco_nome?: string | null
+          agencia?: string | null
+          conta?: string | null
+        }
+      >).filter((row) => (contaId ? Number(row.id) === contaId : true))
+
+      if (lista.length === 0) {
+        return json({
+          error:
+            'Nenhuma conta com PIX ativo. Cadastre a conta em Grupo escoteiro.',
+        }, 400)
+      }
+
+      const inicio = `${inicioDia}T00:00:00-03:00`
+      const fim = `${fimDia}T23:59:59-03:00`
+      const avisos: string[] = []
+      const recebidos: Array<{
+        conta_id: number
+        conta_nome: string
+        end_to_end_id: string
+        txid: string
+        valor: number
+        horario: string
+        info_pagador: string
+        nome_pagador: string
+      }> = []
+
+      for (const row of lista) {
+        const nome =
+          (row.descricao ?? '').trim() ||
+          (row.banco_nome ?? '').trim() ||
+          `Conta ${row.id}`
+        if ((row.api_pix_provedor ?? '').trim().toLowerCase() === 'bradesco') {
+          avisos.push(`${nome}: conciliação automática disponível para Sicredi.`)
+          continue
+        }
+        const cfg = configFromContaBancaria(row, `conta:${row.id}`)
+        if (!cfg) {
+          avisos.push(`${nome}: credenciais PIX incompletas.`)
+          continue
+        }
+        try {
+          const pix = await listarPixRecebidos(cfg, inicio, fim)
+          for (const item of pix) {
+            recebidos.push({
+              conta_id: Number(row.id),
+              conta_nome: nome,
+              end_to_end_id: String(item.endToEndId ?? ''),
+              txid: String(item.txid ?? ''),
+              valor: Number(item.valor ?? 0),
+              horario: String(item.horario ?? ''),
+              info_pagador: String(item.infoPagador ?? ''),
+              nome_pagador: String(item.pagador?.nome ?? ''),
+            })
+          }
+        } catch (e) {
+          avisos.push(
+            `${nome}: ${e instanceof Error ? e.message : 'falha ao consultar o banco.'}`,
+          )
+        }
+      }
+
+      const txids = [
+        ...new Set(recebidos.map((item) => item.txid).filter((txid) => txid)),
+      ]
+      const cobrancas = new Map<
+        string,
+        {
+          id: number
+          status: string
+          descricao: string
+          baixado_em: string | null
+          tipo: string
+        }
+      >()
+      if (txids.length > 0) {
+        const { data: cobs, error: cobError } = await admin
+          .from('pix_cobrancas')
+          .select('id, txid, status, descricao, baixado_em, tipo')
+          .eq('empresa_id', empresaId)
+          .in('txid', txids)
+        if (cobError) return json({ error: cobError.message }, 400)
+        for (const cob of cobs ?? []) {
+          cobrancas.set(String(cob.txid), {
+            id: Number(cob.id),
+            status: String(cob.status ?? ''),
+            descricao: String(cob.descricao ?? ''),
+            baixado_em: (cob.baixado_em as string | null) ?? null,
+            tipo: String(cob.tipo ?? ''),
+          })
+        }
+      }
+
+      const itens = recebidos
+        .map((item) => {
+          const cob = item.txid ? cobrancas.get(item.txid) : undefined
+          const situacao = !cob
+            ? 'sem_cobranca'
+            : cob.baixado_em
+              ? 'conciliado'
+              : 'pendente'
+          return {
+            ...item,
+            situacao,
+            cobranca_id: cob?.id ?? null,
+            cobranca_status: cob?.status ?? null,
+            cobranca_descricao: cob?.descricao ?? null,
+            cobranca_tipo: cob?.tipo ?? null,
+            baixado_em: cob?.baixado_em ?? null,
+          }
+        })
+        .sort((a, b) => b.horario.localeCompare(a.horario))
+
+      return json({
+        ok: true,
+        avisos,
+        itens,
+      })
     }
 
     if (body.action === 'config') {
