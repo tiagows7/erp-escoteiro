@@ -233,7 +233,7 @@ export function GrupoFormPage() {
         supabase
           .from('empresa_saldo_local')
           .select(
-            'id, empresa_id, caixa_id, secao_id, nome, valor, ordem, ativo',
+            'id, empresa_id, caixa_id, secao_id, nome, valor, data_saldo, ordem, ativo',
           )
           .eq('empresa_id', Number(id))
           .order('ordem', { ascending: true })
@@ -1431,7 +1431,8 @@ export function GrupoFormPage() {
                 <h3 id="saldo-lista-title">Locais do saldo</h3>
                 <p className="muted">
                   Onde está o dinheiro de cada caixa (conta, investimento,
-                  dinheiro em caixa…). Aparece no Portal da Transparência.
+                  dinheiro em caixa), com a data daquele saldo. O portal usa
+                  essa data quando o local for exibido.
                 </p>
               </div>
               <button
@@ -1468,6 +1469,7 @@ export function GrupoFormPage() {
                       <th>Local</th>
                       <th>Caixa</th>
                       <th>Seção</th>
+                      <th>Data</th>
                       <th>Valor</th>
                       <th>Portal</th>
                       <th></th>
@@ -1486,6 +1488,7 @@ export function GrupoFormPage() {
                             ? (secaoMap.get(local.secao_id) ?? local.secao_id)
                             : '—'}
                         </td>
+                        <td>{formatDataSaldo(local.data_saldo)}</td>
                         <td>{formatMoney(local.valor)}</td>
                         <td>{local.ativo === false ? 'Oculto' : 'Sim'}</td>
                         <td>
@@ -1554,6 +1557,13 @@ export function GrupoFormPage() {
       ) : null}
     </>
   )
+}
+
+function formatDataSaldo(value: string | null | undefined): string {
+  if (!value) return '—'
+  const [ano, mes, dia] = value.slice(0, 10).split('-')
+  if (!ano || !mes || !dia) return value
+  return `${dia}/${mes}/${ano}`
 }
 
 function labelContaEscopo(

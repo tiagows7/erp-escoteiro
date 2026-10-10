@@ -117,6 +117,7 @@ export type PortalSaldoLocal = {
   ordem: number
   secao_id: number | null
   secao_nome: string | null
+  data_saldo?: string | null
 }
 
 /** -1 = Geral (todos); 0 = caixa do grupo; 1-4 = ramos */

@@ -5,6 +5,13 @@ import { PORTAL_CAIXAS, type PortalCaixaId } from '@/lib/portal'
 import { supabase } from '@/lib/supabase'
 import type { Ramo } from '@/types/database'
 
+function todayIso(date = new Date()): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export type SaldoLocalRow = {
   id: number
   empresa_id: number
@@ -12,6 +19,7 @@ export type SaldoLocalRow = {
   secao_id: number | null
   nome: string
   valor: number
+  data_saldo: string
   ordem: number
   ativo: boolean
 }
@@ -38,6 +46,7 @@ export function SaldoLocalModal({
   const [caixaId, setCaixaId] = useState<PortalCaixaId>(0)
   const [secaoId, setSecaoId] = useState('')
   const [valor, setValor] = useState('0,00')
+  const [dataSaldo, setDataSaldo] = useState(todayIso)
   const [ordem, setOrdem] = useState('0')
   const [ativo, setAtivo] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -58,6 +67,7 @@ export function SaldoLocalModal({
           maximumFractionDigits: 2,
         }),
       )
+      setDataSaldo((editing.data_saldo ?? '').slice(0, 10) || todayIso())
       setOrdem(String(editing.ordem ?? 0))
       setAtivo(editing.ativo !== false)
     } else {
@@ -65,6 +75,7 @@ export function SaldoLocalModal({
       setCaixaId(0)
       setSecaoId('')
       setValor('0,00')
+      setDataSaldo(todayIso())
       setOrdem('0')
       setAtivo(true)
     }
@@ -89,6 +100,10 @@ export function SaldoLocalModal({
       setError('Informe um valor válido.')
       return
     }
+    if (!dataSaldo) {
+      setError('Informe a data do saldo.')
+      return
+    }
 
     setSaving(true)
     setError(null)
@@ -100,6 +115,7 @@ export function SaldoLocalModal({
         caixaId >= 1 && secaoId ? Number(secaoId) : null,
       nome: nomeTrim,
       valor: valorNum,
+      data_saldo: dataSaldo,
       ordem: Number(ordem) || 0,
       ativo,
       updated_at: new Date().toISOString(),
@@ -112,7 +128,7 @@ export function SaldoLocalModal({
         .eq('id', editing.id)
         .eq('empresa_id', empresaId)
         .select(
-          'id, empresa_id, caixa_id, secao_id, nome, valor, ordem, ativo',
+          'id, empresa_id, caixa_id, secao_id, nome, valor, data_saldo, ordem, ativo',
         )
         .single()
 
@@ -129,7 +145,7 @@ export function SaldoLocalModal({
     const { data, error: insError } = await supabase
       .from('empresa_saldo_local')
       .insert(payload)
-      .select('id, empresa_id, caixa_id, secao_id, nome, valor, ordem, ativo')
+      .select('id, empresa_id, caixa_id, secao_id, nome, valor, data_saldo, ordem, ativo')
       .single()
 
     setSaving(false)
@@ -221,6 +237,18 @@ export function SaldoLocalModal({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="field">
+              <label htmlFor="saldo-local-data">Data do saldo</label>
+              <input
+                id="saldo-local-data"
+                className="input"
+                type="date"
+                value={dataSaldo}
+                onChange={(e) => setDataSaldo(e.target.value)}
+                required
+              />
             </div>
 
             <div className="field">
