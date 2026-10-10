@@ -1028,6 +1028,10 @@ button {
   overflow: auto;
 }
 
+.saldo-local-dialog {
+  width: min(1080px, 100%);
+}
+
 .conta-bancaria-fields .tabs {
   margin-top: 1.15rem;
   margin-bottom: 1rem;

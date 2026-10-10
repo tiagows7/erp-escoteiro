@@ -1536,7 +1536,7 @@ export function GrupoFormPage() {
             setSaldoModalOpen(false)
             setSaldoEditando(null)
           }}
-          onSaved={(row) => {
+          onSaved={(row, opts) => {
             setSaldoLocais((prev) => {
               const idx = prev.findIndex((l) => l.id === row.id)
               if (idx >= 0) {
@@ -1549,9 +1549,7 @@ export function GrupoFormPage() {
                   a.ordem - b.ordem || a.nome.localeCompare(b.nome, 'pt-BR'),
               )
             })
-            toast.success(
-              saldoEditando ? 'Local atualizado.' : 'Local cadastrado.',
-            )
+            if (!opts?.silent) toast.success('Local salvo.')
           }}
         />
       ) : null}
