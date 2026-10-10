@@ -191,6 +191,43 @@ export function PortalTransparenciaPage() {
       ? 'Todas as seções'
       : (secoes.find((s) => s.secao_id === secaoId)?.secao_nome ?? 'Seção')
 
+  const movimentoLocais = useMemo(() => {
+    let receita = 0
+    let despesa = 0
+    for (const linha of saldoMovimentos) {
+      if (linha.movimento_id == null) continue
+      receita +=
+        Number(linha.valor_resgatado ?? 0) + Number(linha.valor_creditos ?? 0)
+      despesa +=
+        Number(linha.valor_aplicado ?? 0) + Number(linha.valor_debitos ?? 0)
+    }
+    return {
+      receita: Math.round(receita * 100) / 100,
+      despesa: Math.round(despesa * 100) / 100,
+    }
+  }, [saldoMovimentos])
+
+  const receitasCard = resumo
+    ? Math.round(
+        (Number(resumo.receitas_recebidas ?? resumo.total_receitas ?? 0) +
+          movimentoLocais.receita) *
+          100,
+      ) / 100
+    : 0
+  const despesasCard = resumo
+    ? Math.round(
+        (Number(resumo.despesas_pagas ?? resumo.total_despesas ?? 0) +
+          movimentoLocais.despesa) *
+          100,
+      ) / 100
+    : 0
+  const saldoFinalCard = resumo
+    ? Math.round(
+        (Number(resumo.saldo_anterior ?? 0) + receitasCard - despesasCard) *
+          100,
+      ) / 100
+    : 0
+
   return (
     <div className="portal-page">
       <div className="portal-sky" aria-hidden="true" />
@@ -355,34 +392,26 @@ export function PortalTransparenciaPage() {
                 </article>
                 <article className="stat-card">
                   <span>Receitas</span>
-                  <strong>
-                    {formatMoney(
-                      resumo.receitas_recebidas ?? resumo.total_receitas,
-                    )}
-                  </strong>
-                  <em className="stat-card-hint">Somente valores recebidos</em>
+                  <strong>{formatMoney(receitasCard)}</strong>
+                  <em className="stat-card-hint">
+                    {movimentoLocais.receita !== 0
+                      ? 'Recebidos, resgates e créditos'
+                      : 'Somente valores recebidos'}
+                  </em>
                 </article>
                 <article className="stat-card">
                   <span>Despesas</span>
-                  <strong>
-                    {formatMoney(
-                      resumo.despesas_pagas ?? resumo.total_despesas,
-                    )}
-                  </strong>
-                  <em className="stat-card-hint">Somente valores pagos</em>
+                  <strong>{formatMoney(despesasCard)}</strong>
+                  <em className="stat-card-hint">
+                    {movimentoLocais.despesa !== 0
+                      ? 'Pagos, aplicados e débitos'
+                      : 'Somente valores pagos'}
+                  </em>
                 </article>
                 <article className="stat-card stat-card-total">
                   <span>Saldo final</span>
-                  <strong
-                    className={
-                      Number(resumo.saldo_final ?? resumo.saldo_realizado) < 0
-                        ? 'is-neg'
-                        : undefined
-                    }
-                  >
-                    {formatMoney(
-                      resumo.saldo_final ?? resumo.saldo_realizado,
-                    )}
+                  <strong className={saldoFinalCard < 0 ? 'is-neg' : undefined}>
+                    {formatMoney(saldoFinalCard)}
                   </strong>
                   <em className="stat-card-hint">
                     Anterior + recebido − pago
