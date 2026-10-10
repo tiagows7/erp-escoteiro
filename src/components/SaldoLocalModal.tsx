@@ -352,11 +352,12 @@ export function SaldoLocalModal({
 }
 
 const MOVIMENTO_SELECT =
-  'id, data_movimento, valor_aplicado, valor_resgatado, valor_creditos, valor_debitos, saldo_final'
+  'id, data_movimento, saldo_anterior, valor_aplicado, valor_resgatado, valor_creditos, valor_debitos, saldo_final'
 
 type MovimentoRow = {
   id: number
   data_movimento: string
+  saldo_anterior: number
   valor_aplicado: number
   valor_resgatado: number
   valor_creditos: number
@@ -369,6 +370,17 @@ function formatDataMovimento(value: string | null | undefined): string {
   const [ano, mes, dia] = value.slice(0, 10).split('-')
   if (!ano || !mes || !dia) return value
   return `${dia}/${mes}/${ano}`
+}
+
+function saldoAnteriorSugerido(lista: MovimentoRow[]): string {
+  const ultimo = lista[lista.length - 1]
+  return formatMoneyInput(ultimo?.saldo_final ?? 0)
+}
+
+function maskSaldoAnterior(raw: string): string {
+  const negativo = raw.trim().startsWith('-')
+  const masked = maskMoneyInput(raw.replace('-', ''))
+  return negativo ? `-${masked}` : masked
 }
 
 function SaldoLocalMovimentos({
@@ -389,6 +401,7 @@ function SaldoLocalMovimentos({
   const [error, setError] = useState<string | null>(null)
   const [editId, setEditId] = useState<number | null>(null)
   const [dataMovimento, setDataMovimento] = useState(todayIso)
+  const [saldoAnterior, setSaldoAnterior] = useState('0,00')
   const [aplicado, setAplicado] = useState('0,00')
   const [resgatado, setResgatado] = useState('0,00')
   const [creditos, setCreditos] = useState('0,00')
@@ -405,23 +418,28 @@ function SaldoLocalMovimentos({
       setError(queryError.message)
       setRows([])
       onCount(false)
-    } else {
-      const lista = (data ?? []) as MovimentoRow[]
-      setRows(lista)
-      onCount(lista.length > 0)
-      setError(null)
+      setLoading(false)
+      return []
     }
+    const lista = (data ?? []) as MovimentoRow[]
+    setRows(lista)
+    onCount(lista.length > 0)
+    setError(null)
     setLoading(false)
+    return lista
   }, [empresaId, localId, onCount])
 
   useEffect(() => {
     setLoading(true)
-    void carregar()
+    void carregar().then((lista) => {
+      setSaldoAnterior(saldoAnteriorSugerido(lista))
+    })
   }, [carregar])
 
-  function limpar() {
+  function limpar(lista: MovimentoRow[] = rows) {
     setEditId(null)
     setDataMovimento(todayIso())
+    setSaldoAnterior(saldoAnteriorSugerido(lista))
     setAplicado('0,00')
     setResgatado('0,00')
     setCreditos('0,00')
@@ -431,6 +449,7 @@ function SaldoLocalMovimentos({
   function preencher(row: MovimentoRow) {
     setEditId(row.id)
     setDataMovimento(row.data_movimento.slice(0, 10))
+    setSaldoAnterior(formatMoneyInput(row.saldo_anterior))
     setAplicado(formatMoneyInput(row.valor_aplicado))
     setResgatado(formatMoneyInput(row.valor_resgatado))
     setCreditos(formatMoneyInput(row.valor_creditos))
@@ -457,6 +476,11 @@ function SaldoLocalMovimentos({
       return
     }
     const valores = [aplicado, resgatado, creditos, debitos].map(parseMoneyInput)
+    const anterior = parseMoneyInput(saldoAnterior)
+    if (!Number.isFinite(anterior)) {
+      setError('Informe o saldo anterior.')
+      return
+    }
     if (valores.some((n) => !Number.isFinite(n) || n < 0)) {
       setError('Os valores do movimento não podem ser negativos.')
       return
@@ -467,6 +491,7 @@ function SaldoLocalMovimentos({
       empresa_id: empresaId,
       local_id: localId,
       data_movimento: dataMovimento,
+      saldo_anterior: anterior,
       valor_aplicado: valores[0],
       valor_resgatado: valores[1],
       valor_creditos: valores[2],
@@ -491,8 +516,8 @@ function SaldoLocalMovimentos({
       return
     }
     const atualizando = editId != null
-    limpar()
-    await carregar()
+    const lista = await carregar()
+    limpar(lista)
     await sincronizarLocal()
     toast.success(atualizando ? 'Movimento atualizado.' : 'Movimento lançado.')
   }
@@ -500,7 +525,7 @@ function SaldoLocalMovimentos({
   async function excluir(row: MovimentoRow) {
     const ok = await toast.confirm({
       title: 'Excluir movimento?',
-      message: `O lançamento de ${formatDataMovimento(row.data_movimento)} será excluído e os saldos seguintes serão recalculados.`,
+      message: `O lançamento de ${formatDataMovimento(row.data_movimento)} será excluído.`,
       confirmLabel: 'Excluir',
       danger: true,
     })
@@ -516,11 +541,22 @@ function SaldoLocalMovimentos({
       setError(delError.message)
       return
     }
-    if (editId === row.id) limpar()
-    await carregar()
+    if (editId === row.id) {
+      const lista = await carregar()
+      limpar(lista)
+    } else {
+      await carregar()
+    }
     await sincronizarLocal()
     toast.success('Movimento excluído.')
   }
+
+  const saldoFinalLinha =
+    parseMoneyInput(saldoAnterior) +
+    parseMoneyInput(aplicado) -
+    parseMoneyInput(resgatado) +
+    parseMoneyInput(creditos) -
+    parseMoneyInput(debitos)
 
   return (
     <section style={{ marginTop: '1.25rem' }}>
@@ -545,6 +581,16 @@ function SaldoLocalMovimentos({
               value={dataMovimento}
               onChange={(e) => setDataMovimento(e.target.value)}
               required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="mov-anterior">Saldo anterior</label>
+            <input
+              id="mov-anterior"
+              className="input"
+              inputMode="decimal"
+              value={saldoAnterior}
+              onChange={(e) => setSaldoAnterior(maskSaldoAnterior(e.target.value))}
             />
           </div>
           <div className="field">
@@ -588,6 +634,7 @@ function SaldoLocalMovimentos({
             />
           </div>
         </div>
+        <p className="field-hint">Saldo final deste lançamento: {formatMoney(saldoFinalLinha)}</p>
         <div className="form-actions">
           <button className="btn btn-primary" type="submit" disabled={saving}>
             {saving
@@ -601,7 +648,7 @@ function SaldoLocalMovimentos({
               type="button"
               className="btn btn-soft"
               disabled={saving}
-              onClick={limpar}
+              onClick={() => limpar()}
             >
               Cancelar edição
             </button>
@@ -618,6 +665,7 @@ function SaldoLocalMovimentos({
             <thead>
               <tr>
                 <th>Data</th>
+                <th>Saldo anterior</th>
                 <th>Aplicado</th>
                 <th>Resgatado</th>
                 <th>Créditos</th>
@@ -630,6 +678,7 @@ function SaldoLocalMovimentos({
               {rows.map((row) => (
                 <tr key={row.id}>
                   <td>{formatDataMovimento(row.data_movimento)}</td>
+                  <td>{formatMoney(row.saldo_anterior)}</td>
                   <td>{formatMoney(row.valor_aplicado)}</td>
                   <td>{formatMoney(row.valor_resgatado)}</td>
                   <td>{formatMoney(row.valor_creditos)}</td>
