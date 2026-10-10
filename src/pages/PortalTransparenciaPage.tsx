@@ -16,10 +16,13 @@ import {
   type PortalGrupo,
   type PortalPlanoLinha,
   type PortalResumo,
-  type PortalSaldoLocal,
   type PortalSecao,
 } from '@/lib/portal'
 import { PortalPlanoContasPainel } from '@/components/PortalPlanoContasPainel'
+import {
+  PortalSaldoLocaisPainel,
+  type PortalSaldoMovimentoLinha,
+} from '@/components/PortalSaldoLocaisPainel'
 
 export function PortalTransparenciaPage() {
   const { slug = '' } = useParams()
@@ -29,14 +32,15 @@ export function PortalTransparenciaPage() {
   const [resumo, setResumo] = useState<PortalResumo | null>(null)
   const [planoLinhas, setPlanoLinhas] = useState<PortalPlanoLinha[]>([])
   const [secoes, setSecoes] = useState<PortalSecao[]>([])
-  const [saldoLocais, setSaldoLocais] = useState<PortalSaldoLocal[]>([])
+  const [saldoMovimentos, setSaldoMovimentos] = useState<
+    PortalSaldoMovimentoLinha[]
+  >([])
   const [ano, setAno] = useState(currentPortalYear())
   const [mes, setMes] = useState<number | null>(() => new Date().getMonth() + 1)
   const [caixa, setCaixa] = useState<PortalCaixaId>(() => {
     return parsePortalCaixaId(searchParams.get('caixa')) ?? PORTAL_CAIXA_GERAL
   })
   const [secaoId, setSecaoId] = useState<number | null>(null)
-  const [locaisAbertos, setLocaisAbertos] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -62,12 +66,7 @@ export function PortalTransparenciaPage() {
 
   useEffect(() => {
     setSecaoId(null)
-    setLocaisAbertos(false)
   }, [caixa])
-
-  useEffect(() => {
-    setLocaisAbertos(false)
-  }, [ano, mes, secaoId])
 
   useEffect(() => {
     if (secaoId != null && !secoes.some((s) => s.secao_id === secaoId)) {
@@ -138,10 +137,12 @@ export function PortalTransparenciaPage() {
           p_mes: mes,
         }),
         secoesPromise,
-        supabase.rpc('portal_saldo_locais', {
+        supabase.rpc('portal_saldo_movimentos', {
           p_slug: cleanSlug,
+          p_ano: ano,
           p_caixa: caixa,
           p_secao: secaoId,
+          p_mes: mes,
         }),
       ])
 
@@ -157,7 +158,7 @@ export function PortalTransparenciaPage() {
         setResumo(null)
         setPlanoLinhas([])
         setSecoes([])
-        setSaldoLocais([])
+        setSaldoMovimentos([])
       } else {
         const resumoRow = (
           Array.isArray(resumoRes.data) ? resumoRes.data[0] : resumoRes.data
@@ -167,9 +168,11 @@ export function PortalTransparenciaPage() {
         setSecoes((secoesRes.data as PortalSecao[]) ?? [])
         if (locaisRes.error) {
           console.warn('Locais do saldo:', locaisRes.error.message)
-          setSaldoLocais([])
+          setSaldoMovimentos([])
         } else {
-          setSaldoLocais((locaisRes.data as PortalSaldoLocal[]) ?? [])
+          setSaldoMovimentos(
+            (locaisRes.data as PortalSaldoMovimentoLinha[]) ?? [],
+          )
         }
       }
 
@@ -187,12 +190,6 @@ export function PortalTransparenciaPage() {
     secaoId == null
       ? 'Todas as seções'
       : (secoes.find((s) => s.secao_id === secaoId)?.secao_nome ?? 'Seção')
-
-  const totalLocais = useMemo(
-    () =>
-      saldoLocais.reduce((sum, local) => sum + Number(local.valor ?? 0), 0),
-    [saldoLocais],
-  )
 
   return (
     <div className="portal-page">
@@ -407,54 +404,6 @@ export function PortalTransparenciaPage() {
                   </em>
                 </article>
               </div>
-
-              {/* Oculto temporariamente: "Onde está o valor" */}
-              {false && saldoLocais.length > 0 ? (
-                <div className="portal-locais">
-                  <div className="portal-locais-toolbar">
-                    <div>
-                      <p className="portal-locais-title">Onde está o valor</p>
-                      <p className="muted portal-locais-hint">
-                        Distribuição cadastrada do caixa (oculta por padrão).
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-soft"
-                      onClick={() => setLocaisAbertos((v) => !v)}
-                      aria-expanded={locaisAbertos}
-                    >
-                      {locaisAbertos ? 'Ocultar' : 'Visualizar'}
-                    </button>
-                  </div>
-                  {locaisAbertos ? (
-                    <div className="stats-grid portal-stats-grid portal-stats-grid-compact portal-locais-row">
-                      {saldoLocais.map((local) => (
-                        <article key={local.id} className="stat-card">
-                          <span>{local.nome}</span>
-                          <strong>{formatMoney(local.valor)}</strong>
-                          {local.secao_nome ? (
-                            <em className="stat-card-hint">
-                              {local.secao_nome}
-                            </em>
-                          ) : null}
-                        </article>
-                      ))}
-                      <article className="stat-card stat-card-total">
-                        <span>Saldo final</span>
-                        <strong
-                          className={totalLocais < 0 ? 'is-neg' : undefined}
-                        >
-                          {formatMoney(totalLocais)}
-                        </strong>
-                        <em className="stat-card-hint">
-                          Soma de todos os locais
-                        </em>
-                      </article>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
             </>
           ) : null}
         </section>
@@ -472,6 +421,10 @@ export function PortalTransparenciaPage() {
               showRamoCol={showRamoCol}
             />
           </section>
+        ) : null}
+
+        {!loading && grupo ? (
+          <PortalSaldoLocaisPainel linhas={saldoMovimentos} />
         ) : null}
       </main>
 
