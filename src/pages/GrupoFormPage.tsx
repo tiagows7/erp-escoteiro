@@ -105,6 +105,7 @@ const emptyForm = {
   plataforma_isento: false,
   plataforma_dia_vencimento: '',
   dia_vencimento_mensalidade: '',
+  envia_email_vencimento: false,
   loja_receita_tipo_id: '',
   logo_url: '' as string | null,
   adminNome: '',
@@ -216,7 +217,7 @@ export function GrupoFormPage() {
         supabase
           .from('empresa')
           .select(
-            'id, nome, cnpj, email, slug, telefone, estado, cidade, logo_url, ativo, portal_transparencia, plataforma_plano_id, plataforma_isento, plataforma_dia_vencimento, dia_vencimento_mensalidade, loja_receita_tipo_id',
+            'id, nome, cnpj, email, slug, telefone, estado, cidade, logo_url, ativo, portal_transparencia, plataforma_plano_id, plataforma_isento, plataforma_dia_vencimento, dia_vencimento_mensalidade, envia_email_vencimento, loja_receita_tipo_id',
           )
           .eq('id', Number(id))
           .maybeSingle(),
@@ -275,6 +276,7 @@ export function GrupoFormPage() {
           data.dia_vencimento_mensalidade != null
             ? String(data.dia_vencimento_mensalidade)
             : '',
+        envia_email_vencimento: data.envia_email_vencimento === true,
         loja_receita_tipo_id: data.loja_receita_tipo_id?.toString() ?? '',
         logo_url: data.logo_url,
       })
@@ -429,6 +431,7 @@ export function GrupoFormPage() {
             dia_vencimento_mensalidade: form.dia_vencimento_mensalidade
               ? Number(form.dia_vencimento_mensalidade)
               : null,
+            envia_email_vencimento: form.envia_email_vencimento === true,
             loja_receita_tipo_id: form.loja_receita_tipo_id
               ? Number(form.loja_receita_tipo_id)
               : null,
@@ -477,6 +480,7 @@ export function GrupoFormPage() {
           dia_vencimento_mensalidade: form.dia_vencimento_mensalidade
             ? Number(form.dia_vencimento_mensalidade)
             : null,
+          envia_email_vencimento: form.envia_email_vencimento === true,
           loja_receita_tipo_id: form.loja_receita_tipo_id
             ? Number(form.loja_receita_tipo_id)
             : null,
@@ -1213,6 +1217,36 @@ export function GrupoFormPage() {
           <>
             <p className="form-section-title">Parâmetros</p>
             <div className="form-grid">
+              <label
+                className="field field-span-2"
+                style={{
+                  display: 'flex',
+                  gap: '0.5rem',
+                  alignItems: 'flex-start',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.envia_email_vencimento === true}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      envia_email_vencimento: e.target.checked,
+                    }))
+                  }
+                  disabled={disabled}
+                  style={{ marginTop: '0.2rem' }}
+                />
+                <span>
+                  Enviar e-mail de mensalidade vencida
+                  <span className="field-hint" style={{ display: 'block' }}>
+                    Com a opção marcada, o servidor avisa por e-mail 2 dias
+                    depois do vencimento e repete a cada 2 dias, enquanto o
+                    título estiver em aberto. Sem a marca, esse grupo não entra
+                    na rotina.
+                  </span>
+                </span>
+              </label>
               <TipoReceitaField
                 empresaId={isNew ? undefined : Number(id)}
                 value={form.loja_receita_tipo_id}

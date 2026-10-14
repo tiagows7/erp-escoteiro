@@ -21,6 +21,7 @@ import {
   normalizeWhatsAppPhone,
   openWhatsApp,
 } from '@/lib/whatsapp'
+import { enviarEmailsMensalidade } from '@/lib/emailMensalidade'
 
 type TipoMensalidade = {
   tipomensalidade_id: number
@@ -42,6 +43,8 @@ type PreviewRow = {
   already: boolean
   celular: string | null
   responsavel_fonecelular: string | null
+  email: string | null
+  responsavel_email: string | null
 }
 
 export function GeraMensalidadePage() {
@@ -62,6 +65,7 @@ export function GeraMensalidadePage() {
   const [info, setInfo] = useState<string | null>(null)
   const [whatsQueue, setWhatsQueue] = useState<PreviewRow[]>([])
   const [whatsIndex, setWhatsIndex] = useState(0)
+  const [sendingEmail, setSendingEmail] = useState(false)
   const [diaVencimento, setDiaVencimento] = useState<number | null>(null)
 
   useEffect(() => {
@@ -123,7 +127,7 @@ export function GeraMensalidadePage() {
     let associadosQuery = supabase
       .from('associados')
       .select(
-        'associado_id, nome, registro, registro_provisorio, ramo, tipo_mensalidade, isento, ativo, celular, responsavel_fonecelular',
+        'associado_id, nome, registro, registro_provisorio, ramo, tipo_mensalidade, isento, ativo, celular, responsavel_fonecelular, email, responsavel_email',
       )
       .eq('empresa_id', empresaId)
       .eq('ativo', true)
@@ -197,6 +201,8 @@ export function GeraMensalidadePage() {
         celular: (a.celular as string | null) ?? null,
         responsavel_fonecelular:
           (a.responsavel_fonecelular as string | null) ?? null,
+        email: (a.email as string | null) ?? null,
+        responsavel_email: (a.responsavel_email as string | null) ?? null,
       })
     }
 
@@ -280,6 +286,8 @@ export function GeraMensalidadePage() {
       `${inserted} receita(s) criada(s) com sucesso.`,
     )
 
+    await oferecerEmail(aGerar, vencimento)
+
     const comWhats = aGerar.filter((row) =>
       normalizeWhatsAppPhone(row.responsavel_fonecelular || row.celular),
     )
@@ -297,6 +305,80 @@ export function GeraMensalidadePage() {
     }
 
     void carregarPreview()
+  }
+
+  function emailDestino(row: PreviewRow): string | null {
+    for (const raw of [row.responsavel_email, row.email]) {
+      const email = (raw ?? '').trim().toLowerCase()
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return email
+    }
+    return null
+  }
+
+  async function oferecerEmail(rows: PreviewRow[], vencimento: string) {
+    if (!empresaId) return
+    const comEmail = rows.filter((row) => emailDestino(row))
+    const semEmail = rows.length - comEmail.length
+    if (comEmail.length === 0) {
+      if (semEmail > 0) {
+        toast.info(
+          'Sem e-mail',
+          'Nenhum associado desta geração tem e-mail do responsável ou do próprio cadastro.',
+        )
+      }
+      return
+    }
+
+    const avisoSem =
+      semEmail > 0
+        ? ` ${semEmail} ficam de fora porque não têm e-mail.`
+        : ''
+    const enviar = await toast.confirm({
+      title: 'Enviar cobrança por e-mail?',
+      message: `${comEmail.length} mensalidade(s) serão enviadas de adm@erpescoteiro.com.br.${avisoSem}`,
+      confirmLabel: 'Sim, enviar',
+      cancelLabel: 'Agora não',
+    })
+    if (!enviar) return
+
+    const compLabel = formatCompetencia(competenciaToDate(competencia))
+    const vencLabel = vencimento.split('-').reverse().join('/')
+    setSendingEmail(true)
+    setProgressDetail(`0 de ${comEmail.length}`)
+    try {
+      const resultado = await enviarEmailsMensalidade({
+        empresaId,
+        itens: comEmail.map((row) => ({
+          associado_id: row.associado_id,
+          tipo_nome: row.tipo_nome,
+          valor: row.valor,
+          competencia: compLabel,
+          vencimento: vencLabel,
+        })),
+        onProgress: (feitos, total) => setProgressDetail(`${feitos} de ${total}`),
+      })
+      const partes = [`${resultado.enviados} e-mail(s) enviado(s).`]
+      if (resultado.sem_email.length > 0) {
+        partes.push(`${resultado.sem_email.length} sem e-mail.`)
+      }
+      if (resultado.falhas.length > 0) {
+        const exemplo = resultado.falhas[0]
+        partes.push(
+          `${resultado.falhas.length} falha(s). ${exemplo.nome}: ${exemplo.erro}`,
+        )
+        toast.error('E-mail', partes.join(' '))
+      } else {
+        toast.success('E-mail', partes.join(' '))
+      }
+    } catch (err) {
+      toast.error(
+        'E-mail',
+        err instanceof Error ? err.message : 'Falha ao enviar os e-mails.',
+      )
+    } finally {
+      setSendingEmail(false)
+      setProgressDetail(null)
+    }
   }
 
   function phoneOf(row: PreviewRow): string | null {
@@ -372,14 +454,16 @@ export function GeraMensalidadePage() {
   return (
     <>
       <WaitingOverlay
-        open={generating || loading}
-        title={generating ? 'Montando movimentos' : 'Aguarde'}
+        open={generating || loading || sendingEmail}
+        title={sendingEmail ? 'Enviando e-mails' : generating ? 'Montando movimentos' : 'Aguarde'}
         message={
-          generating
-            ? 'Gerando as mensalidades no financeiro. Não feche esta tela.'
-            : 'Montando a prévia dos movimentos de mensalidade…'
+          sendingEmail
+            ? 'Enviando a cobrança das mensalidades. Não feche esta tela.'
+            : generating
+              ? 'Gerando as mensalidades no financeiro. Não feche esta tela.'
+              : 'Montando a prévia dos movimentos de mensalidade…'
         }
-        detail={generating ? progressDetail : null}
+        detail={generating || sendingEmail ? progressDetail : null}
       />
 
       <header className="page-header">

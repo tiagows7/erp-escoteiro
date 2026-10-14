@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 type TipoOpcao = {
   fordespesa_id: number
   fordespesa_nome: string | null
+  fordespesa_despesa: string | null
 }
 
 export function TipoReceitaField({
@@ -29,9 +30,8 @@ export function TipoReceitaField({
     let mounted = true
     void supabase
       .from('fornecedor_despesa')
-      .select('fordespesa_id, fordespesa_nome')
+      .select('fordespesa_id, fordespesa_nome, fordespesa_despesa')
       .eq('empresa_id', empresaId)
-      .eq('fordespesa_despesa', 'R')
       .order('fordespesa_nome')
       .then(({ data }) => {
         if (mounted) setTipos((data ?? []) as TipoOpcao[])
@@ -52,11 +52,17 @@ export function TipoReceitaField({
         disabled={disabled}
       >
         <option value="">Sem tipo</option>
-        {tipos.map((tipo) => (
-          <option key={tipo.fordespesa_id} value={tipo.fordespesa_id}>
-            {tipo.fordespesa_nome?.trim() || `Tipo #${tipo.fordespesa_id}`}
-          </option>
-        ))}
+        {tipos
+          .filter(
+            (tipo) =>
+              tipo.fordespesa_despesa !== 'D' ||
+              String(tipo.fordespesa_id) === value,
+          )
+          .map((tipo) => (
+            <option key={tipo.fordespesa_id} value={tipo.fordespesa_id}>
+              {tipo.fordespesa_nome?.trim() || `Tipo #${tipo.fordespesa_id}`}
+            </option>
+          ))}
       </select>
       <span className="field-hint">
         {hint ??

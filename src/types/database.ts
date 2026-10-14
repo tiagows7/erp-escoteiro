@@ -92,6 +92,8 @@ export type Empresa = {
   plataforma_dia_vencimento?: number | null
   /** Dia do mês (1–28) do vencimento das mensalidades dos associados. */
   dia_vencimento_mensalidade?: number | null
+  /** Aviso automático por e-mail quando a mensalidade vence. */
+  envia_email_vencimento?: boolean | null
   /** Ref do PDF do regimento (empresa-regimento:…). */
   regimento_interno?: string | null
   /** Ref do PDF do estatuto (empresa-regimento:…). */

@@ -1,0 +1,549 @@
+import { createClient } from 'npm:@supabase/supabase-js@2.49.8'
+import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-retry-count, traceparent, tracestate, baggage',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+const FINANCEIRO_WRITE = ['super_admin', 'admin', 'tesoureiro']
+const SITE = 'https://www.erpescoteiro.com.br'
+const MAX_ITENS = 40
+
+type Item = {
+  associado_id: number
+  tipo_nome: string
+  valor: number
+  competencia: string
+  vencimento: string
+}
+
+type AssociadoMail = {
+  associado_id: number
+  nome: string | null
+  registro: number | null
+  email: string | null
+  responsavel_email: string | null
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+    const smtpPassword = Deno.env.get('LOCAWEB_SMTP_PASSWORD')?.trim() ?? ''
+    const smtpUser =
+      Deno.env.get('LOCAWEB_SMTP_USER')?.trim() || 'adm@erpescoteiro.com.br'
+    const smtpHost = Deno.env.get('LOCAWEB_SMTP_HOST')?.trim() || 'email-ssl.com.br'
+    const smtpPort = Number(Deno.env.get('LOCAWEB_SMTP_PORT') || '465')
+
+    if (!smtpPassword) {
+      return json(
+        {
+          error:
+            'A senha da caixa adm@erpescoteiro.com.br ainda não foi configurada no servidor.',
+        },
+        503,
+      )
+    }
+
+    const body = await req.json().catch(() => null)
+    if (body?.action === 'lembrete_vencidas') {
+      return await lembreteVencidas(req, body)
+    }
+
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) return json({ error: 'Não autenticado.' }, 401)
+
+    const callerClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    })
+    const {
+      data: { user: caller },
+      error: callerError,
+    } = await callerClient.auth.getUser()
+    if (callerError || !caller) return json({ error: 'Sessão inválida.' }, 401)
+
+    const admin = createClient(supabaseUrl, serviceKey)
+    const { data: callerProfile } = await admin
+      .from('profiles')
+      .select('role, ativo, empresa_id')
+      .eq('id', caller.id)
+      .maybeSingle()
+
+    if (!callerProfile || callerProfile.ativo === false) {
+      return json({ error: 'Perfil inválido.' }, 403)
+    }
+    if (!FINANCEIRO_WRITE.includes(callerProfile.role ?? '')) {
+      return json({ error: 'Sem permissão para enviar cobranças.' }, 403)
+    }
+
+    const empresaId = Number(body?.empresa_id)
+    const itens = Array.isArray(body?.itens) ? (body.itens as Item[]) : []
+    if (!Number.isFinite(empresaId) || empresaId <= 0) {
+      return json({ error: 'Grupo inválido.' }, 400)
+    }
+    if (
+      callerProfile.role !== 'super_admin' &&
+      Number(callerProfile.empresa_id) !== empresaId
+    ) {
+      return json({ error: 'Grupo diferente do seu usuário.' }, 403)
+    }
+    if (itens.length === 0 || itens.length > MAX_ITENS) {
+      return json({ error: `Envie de 1 a ${MAX_ITENS} mensalidades por vez.` }, 400)
+    }
+
+    const { data: empresa } = await admin
+      .from('empresa')
+      .select('id, nome')
+      .eq('id', empresaId)
+      .maybeSingle()
+    if (!empresa) return json({ error: 'Grupo não encontrado.' }, 404)
+
+    const ids = [
+      ...new Set(
+        itens
+          .map((item) => Number(item.associado_id))
+          .filter((id) => Number.isFinite(id) && id > 0),
+      ),
+    ]
+    const { data: associados, error: assocError } = await admin
+      .from('associados')
+      .select('associado_id, nome, registro, email, responsavel_email')
+      .eq('empresa_id', empresaId)
+      .in('associado_id', ids)
+
+    if (assocError) return json({ error: assocError.message }, 500)
+
+    const porId = new Map(
+      ((associados ?? []) as AssociadoMail[]).map((row) => [
+        row.associado_id,
+        row,
+      ]),
+    )
+
+    const semEmail: { associado_id: number; nome: string }[] = []
+    const prontos: {
+      associado_id: number
+      nome: string
+      email: string
+      item: Item
+      registro: number | null
+    }[] = []
+
+    for (const item of itens) {
+      const id = Number(item.associado_id)
+      const associado = porId.get(id)
+      const nome = (associado?.nome ?? '').trim() || 'Associado'
+      const destino = emailDestino(
+        associado?.responsavel_email,
+        associado?.email,
+      )
+      if (!associado || !destino) {
+        semEmail.push({ associado_id: id, nome })
+        continue
+      }
+      prontos.push({
+        associado_id: id,
+        nome,
+        email: destino,
+        item,
+        registro: associado.registro,
+      })
+    }
+
+    const enviados: number[] = []
+    const falhas: { associado_id: number; nome: string; erro: string }[] = []
+
+    if (prontos.length > 0) {
+      const client = new SMTPClient({
+        connection: {
+          hostname: smtpHost,
+          port: smtpPort,
+          tls: true,
+          auth: { username: smtpUser, password: smtpPassword },
+        },
+      })
+      try {
+        for (const row of prontos) {
+          const texto = montarTexto({
+            grupo: empresa.nome as string,
+            nome: row.nome,
+            registro: row.registro,
+            tipo: String(row.item.tipo_nome ?? '').trim(),
+            valor: Number(row.item.valor),
+            competencia: String(row.item.competencia ?? '').trim(),
+            vencimento: String(row.item.vencimento ?? '').trim(),
+          })
+          try {
+            await client.send({
+              from: smtpUser,
+              to: row.email,
+              subject: `Mensalidade ${row.item.competencia} — ${empresa.nome}`,
+              content: texto,
+              html: textoParaHtml(texto),
+            })
+            enviados.push(row.associado_id)
+          } catch (err) {
+            const erro = err instanceof Error ? err.message : String(err)
+            falhas.push({
+              associado_id: row.associado_id,
+              nome: row.nome,
+              erro,
+            })
+            if (/auth|535|503|password|senha/i.test(erro)) break
+          }
+        }
+      } finally {
+        try {
+          await client.close()
+        } catch {
+          /* a conexão pode já ter caído */
+        }
+      }
+    }
+
+    return json({
+      enviados: enviados.length,
+      sem_email: semEmail,
+      falhas,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return json({ error: message }, 500)
+  }
+})
+
+function emailDestino(
+  responsavel: string | null | undefined,
+  proprio: string | null | undefined,
+): string | null {
+  for (const raw of [responsavel, proprio]) {
+    const email = (raw ?? '').trim().toLowerCase()
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return email
+  }
+  return null
+}
+
+function montarTexto(opts: {
+  grupo: string
+  nome: string
+  registro: number | null
+  tipo: string
+  valor: number
+  competencia: string
+  vencimento: string
+}): string {
+  const grupo = opts.grupo.trim() || 'Grupo Escoteiro'
+  const reg =
+    opts.registro != null && String(opts.registro).trim()
+      ? ` (reg. ${opts.registro})`
+      : ''
+  const valor = opts.valor.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  })
+  const linhas = [
+    `Olá! Mensagem do ${grupo}.`,
+    '',
+    `${opts.nome}${reg} possui 1 mensalidade em aberto.`,
+    `Total: ${valor}.`,
+    '',
+    `• Competência ${opts.competencia}`,
+  ]
+  if (opts.tipo) linhas.push(`• ${opts.tipo}: ${valor}`)
+  if (opts.vencimento) linhas.push(`• Vencimento ${opts.vencimento}`)
+  linhas.push(
+    '',
+    'Para efetuar o pagamento, acesse o aplicativo do grupo:',
+    SITE,
+    '',
+    'No login, use o número de registro do associado e a senha cadastrada.',
+  )
+  if (opts.registro != null && String(opts.registro).trim()) {
+    linhas.push(`Registro para login: ${String(opts.registro).replace(/\D/g, '')}`)
+  }
+  linhas.push(
+    'No painel inicial, abra Mensalidades em aberto e toque em Pagar.',
+    '',
+    'Qualquer dúvida, fale conosco. Obrigado!',
+  )
+  return linhas.join('\n')
+}
+
+function textoParaHtml(texto: string): string {
+  const corpo = escapeHtml(texto).replaceAll('\n', '<br>')
+  return `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#1f2933">${corpo}</div>`
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
+
+type ReceitaVencida = {
+  receita_id: number
+  empresa_id: number
+  associado_id: number
+  receita_vencimento: string
+  receita_competencia: string | null
+  receita_saldo: number
+  receita_descricao: string | null
+}
+
+async function lembreteVencidas(req: Request, _body: unknown): Promise<Response> {
+  const esperado = Deno.env.get('MENSALIDADE_LEMBRETE_SECRET')?.trim() ?? ''
+  const recebido = req.headers.get('x-lembrete-secret')?.trim() ?? ''
+  if (!esperado || recebido !== esperado) {
+    return json({ error: 'Não autorizado.' }, 401)
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const admin = createClient(supabaseUrl, serviceKey)
+  const hoje = new Date().toLocaleDateString('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+  })
+  const limite = somarDias(hoje, -2)
+
+  const { data: receitas, error } = await admin
+    .from('receitas')
+    .select(
+      'receita_id, empresa_id, associado_id, receita_vencimento, receita_competencia, receita_saldo, receita_descricao',
+    )
+    .eq('receita_origem', 'M')
+    .in('receita_situacao', [1, 2])
+    .gt('receita_saldo', 0)
+    .lte('receita_vencimento', limite)
+    .not('associado_id', 'is', null)
+    .limit(2000)
+
+  if (error) return json({ error: error.message }, 500)
+
+  const deHoje = ((receitas ?? []) as ReceitaVencida[]).filter((row) => {
+    const dias = diasEntre(row.receita_vencimento, hoje)
+    return dias >= 2 && dias % 2 === 0
+  })
+  if (deHoje.length === 0) {
+    return json({ enviados: 0, sem_email: 0, pulados: 0 })
+  }
+
+  const ids = deHoje.map((row) => row.receita_id)
+  const { data: jaEnviados } = await admin
+    .from('mensalidade_lembrete_email')
+    .select('receita_id')
+    .eq('enviado_em', hoje)
+    .in('receita_id', ids)
+  const enviadosHoje = new Set(
+    (jaEnviados ?? []).map((row) => row.receita_id as number),
+  )
+  const pendentes = deHoje.filter((row) => !enviadosHoje.has(row.receita_id))
+  if (pendentes.length === 0) {
+    return json({ enviados: 0, sem_email: 0, pulados: deHoje.length })
+  }
+
+  const empresaIds = [...new Set(pendentes.map((row) => row.empresa_id))]
+  const { data: empresas, error: empresaError } = await admin
+    .from('empresa')
+    .select('id, nome, envia_email_vencimento')
+    .in('id', empresaIds)
+  if (empresaError) return json({ error: empresaError.message }, 500)
+  const gruposAtivos = (empresas ?? []).filter(
+    (row) => row.envia_email_vencimento === true,
+  )
+  const ativos = new Set(gruposAtivos.map((row) => row.id as number))
+  const liberados = pendentes.filter((row) => ativos.has(row.empresa_id))
+  if (liberados.length === 0) {
+    return json({
+      enviados: 0,
+      sem_email: 0,
+      pulados: deHoje.length,
+      grupos_inativos: empresaIds.length,
+    })
+  }
+
+  const associadoIds = [...new Set(liberados.map((row) => row.associado_id))]
+  const { data: associados } = await admin
+    .from('associados')
+    .select('associado_id, nome, registro, email, responsavel_email')
+    .in('associado_id', associadoIds)
+  const grupoNome = new Map(
+    gruposAtivos.map((row) => [row.id as number, String(row.nome ?? '')]),
+  )
+  const pessoas = new Map(
+    ((associados ?? []) as AssociadoMail[]).map((row) => [row.associado_id, row]),
+  )
+
+  const grupos = new Map<string, ReceitaVencida[]>()
+  for (const row of liberados) {
+    const chave = `${row.empresa_id}:${row.associado_id}`
+    const lista = grupos.get(chave) ?? []
+    lista.push(row)
+    grupos.set(chave, lista)
+  }
+
+  const smtpPassword = Deno.env.get('LOCAWEB_SMTP_PASSWORD')?.trim() ?? ''
+  const smtpUser =
+    Deno.env.get('LOCAWEB_SMTP_USER')?.trim() || 'adm@erpescoteiro.com.br'
+  const smtpHost = Deno.env.get('LOCAWEB_SMTP_HOST')?.trim() || 'email-ssl.com.br'
+  const smtpPort = Number(Deno.env.get('LOCAWEB_SMTP_PORT') || '465')
+  const client = new SMTPClient({
+    connection: {
+      hostname: smtpHost,
+      port: smtpPort,
+      tls: true,
+      auth: { username: smtpUser, password: smtpPassword },
+    },
+  })
+
+  let enviados = 0
+  let semEmail = 0
+  let falhas = 0
+  const MAX_ENVIOS = 60
+  try {
+    for (const lista of grupos.values()) {
+      if (enviados >= MAX_ENVIOS) break
+      const primeiro = lista[0]
+      const pessoa = pessoas.get(primeiro.associado_id)
+      const destino = emailDestino(pessoa?.responsavel_email, pessoa?.email)
+      const nome = (pessoa?.nome ?? '').trim() || 'Associado'
+      if (!destino) {
+        semEmail += 1
+        continue
+      }
+      const grupo = grupoNome.get(primeiro.empresa_id)?.trim() || 'Grupo Escoteiro'
+      const texto = montarTextoVencido({
+        grupo,
+        nome,
+        registro: pessoa?.registro ?? null,
+        titulos: lista,
+      })
+      try {
+        await client.send({
+          from: smtpUser,
+          to: destino,
+          subject: `Mensalidade vencida — ${grupo}`,
+          content: texto,
+          html: textoParaHtml(texto),
+        })
+        const { error: logError } = await admin
+          .from('mensalidade_lembrete_email')
+          .insert(
+            lista.map((row) => ({
+              receita_id: row.receita_id,
+              enviado_em: hoje,
+            })),
+          )
+        if (logError) {
+          falhas += 1
+          continue
+        }
+        enviados += 1
+      } catch {
+        falhas += 1
+      }
+    }
+  } finally {
+    try {
+      await client.close()
+    } catch {
+      /* a conexão pode já ter caído */
+    }
+  }
+
+  return json({
+    enviados,
+    sem_email: semEmail,
+    falhas,
+    pendentes: grupos.size,
+  })
+}
+
+function montarTextoVencido(opts: {
+  grupo: string
+  nome: string
+  registro: number | null
+  titulos: ReceitaVencida[]
+}): string {
+  const reg =
+    opts.registro != null && String(opts.registro).trim()
+      ? ` (reg. ${opts.registro})`
+      : ''
+  const linhas = [
+    `Olá! Mensagem do ${opts.grupo}.`,
+    '',
+    `${opts.nome}${reg} possui ${opts.titulos.length} mensalidade(s) vencida(s).`,
+    '',
+  ]
+  let total = 0
+  for (const titulo of opts.titulos) {
+    const saldo = Number(titulo.receita_saldo ?? 0)
+    total += saldo
+    const valor = saldo.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    })
+    linhas.push(
+      `• ${formatarCompetencia(titulo.receita_competencia)} — vencimento ${formatarData(titulo.receita_vencimento)} — em aberto ${valor}`,
+    )
+  }
+  linhas.push(
+    '',
+    `Total em aberto: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.`,
+    '',
+    'Para efetuar o pagamento, acesse o aplicativo do grupo:',
+    SITE,
+    '',
+    'No login, use o número de registro do associado e a senha cadastrada.',
+  )
+  if (opts.registro != null && String(opts.registro).trim()) {
+    linhas.push(`Registro para login: ${String(opts.registro).replace(/\D/g, '')}`)
+  }
+  linhas.push(
+    'No painel inicial, abra Mensalidades em aberto e toque em Pagar.',
+    '',
+    'Qualquer dúvida, fale conosco. Obrigado!',
+  )
+  return linhas.join('\n')
+}
+
+function formatarData(iso: string | null): string {
+  if (!iso) return '—'
+  const [ano, mes, dia] = iso.slice(0, 10).split('-')
+  if (!ano || !mes || !dia) return iso
+  return `${dia}/${mes}/${ano}`
+}
+
+function formatarCompetencia(iso: string | null): string {
+  if (!iso) return 'Mensalidade'
+  const [ano, mes] = iso.slice(0, 10).split('-')
+  if (!ano || !mes) return 'Mensalidade'
+  return `${mes}/${ano}`
+}
+
+function diasEntre(inicio: string, fim: string): number {
+  const a = Date.parse(`${inicio.slice(0, 10)}T00:00:00Z`)
+  const b = Date.parse(`${fim.slice(0, 10)}T00:00:00Z`)
+  return Math.round((b - a) / 86_400_000)
+}
+
+function somarDias(iso: string, dias: number): string {
+  const data = new Date(`${iso.slice(0, 10)}T00:00:00Z`)
+  data.setUTCDate(data.getUTCDate() + dias)
+  return data.toISOString().slice(0, 10)
+}

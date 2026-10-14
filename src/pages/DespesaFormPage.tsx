@@ -52,6 +52,8 @@ import type { Ramo } from '@/types/database'
 
 type Lookup = { id: number; nome: string; ramo?: number | null; secao?: number | null }
 
+type FornecedorOpcao = { id: number; nome: string; natureza: string | null }
+
 const emptyForm = {
   despesa_fornecedor: '',
   despesa_ramo: '',
@@ -128,7 +130,7 @@ export function DespesaFormPage() {
   const [ramos, setRamos] = useState<Ramo[]>([])
   const [secoes, setSecoes] = useState<Lookup[]>([])
   const [patrulhas, setPatrulhas] = useState<Lookup[]>([])
-  const [fornecedores, setFornecedores] = useState<Lookup[]>([])
+  const [fornecedores, setFornecedores] = useState<FornecedorOpcao[]>([])
   const [atividades, setAtividades] = useState<AtividadeLookup[]>([])
   const [projetos, setProjetos] = useState<ProjetoLookup[]>([])
   const [eventos, setEventos] = useState<EventoLookup[]>([])
@@ -196,7 +198,7 @@ export function DespesaFormPage() {
         .order('nome'),
       supabase
         .from('fornecedor_despesa')
-        .select('fordespesa_id, fordespesa_nome')
+        .select('fordespesa_id, fordespesa_nome, fordespesa_despesa')
         .eq('empresa_id', empresaId)
         .order('fordespesa_nome'),
     ]).then(([r, s, p, f]) => {
@@ -222,6 +224,7 @@ export function DespesaFormPage() {
           nome:
             (row.fordespesa_nome as string) ||
             `Fornecedor #${row.fordespesa_id}`,
+          natureza: (row.fordespesa_despesa as string | null) ?? null,
         })),
       )
     })
@@ -1023,11 +1026,17 @@ export function DespesaFormPage() {
               disabled={disabled || isPaid}
             >
               <option value="">Selecione</option>
-              {fornecedores.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.nome}
-                </option>
-              ))}
+              {fornecedores
+                .filter(
+                  (f) =>
+                    f.natureza !== 'R' ||
+                    String(f.id) === form.despesa_fornecedor,
+                )
+                .map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.nome}
+                  </option>
+                ))}
             </select>
           </div>
 
