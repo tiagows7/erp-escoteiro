@@ -76,6 +76,9 @@ export function RequirePermission({
     // Equipe: vale o que foi marcado no cadastro.
     const menuBypass =
       pathMatchesMenuKey(location.pathname, '/dashboard') ||
+      (isGrupoAdmin(role) &&
+        (location.pathname === '/grupos/meu' ||
+          /^\/grupos\/\d+$/.test(location.pathname))) ||
       (isAssociadoLogin(profile) &&
         (pathMatchesMenuKey(location.pathname, '/calendario') ||
           pathMatchesMenuKey(location.pathname, '/projetos') ||

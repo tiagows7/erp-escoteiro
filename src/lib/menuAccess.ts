@@ -168,31 +168,12 @@ export function pathMatchesMenuKey(pathname: string, menuKey: string): boolean {
       return true
     }
   }
+  // "Grupo escoteiro" redireciona para a ficha /grupos/:id.
+  if (menuKey === '/grupos/meu') {
+    return pathname === '/grupos/meu' || /^\/grupos\/\d+$/.test(pathname)
+  }
   return pathname === menuKey || pathname.startsWith(`${menuKey}/`)
 }
-
-/** Menus sempre liberados mesmo com menu_keys restrito (equipe e associado). */
-export const ALWAYS_VISIBLE_MENU_KEYS = [
-  '/dashboard',
-  '/calendario',
-  '/competicoes',
-  '/assiduidade',
-  '/conquistas',
-  '/voluntarios',
-  '/regimento-interno',
-  '/estatuto',
-  '/documentos/por-online',
-  '/solicitacoes',
-  // Cadastro novo: libera mesmo com menu_keys antigo (rota exige grupoAdmin).
-  '/cadastros/funcao',
-  // Cadastro novo do financeiro: aparece mesmo com menu_keys antigo.
-  '/cadastros/plano-contas',
-  '/financeiro/orcamentos',
-  '/financeiro/conciliacao',
-  // Admin do grupo: item só entra no nav se role=admin.
-  '/grupos/meu',
-  '/sugestoes-melhoria',
-] as const
 
 /**
  * Menus do portal do associado que continuam visíveis mesmo se menu_keys
@@ -211,28 +192,6 @@ export const ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS = [
   '/vendas/loja-online',
 ] as const
 
-function isAlwaysVisibleMenuKey(
-  to: string,
-  associadoLogin: boolean,
-): boolean {
-  if (
-    ALWAYS_VISIBLE_MENU_KEYS.includes(
-      to as (typeof ALWAYS_VISIBLE_MENU_KEYS)[number],
-    )
-  ) {
-    return true
-  }
-  if (
-    associadoLogin &&
-    ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS.includes(
-      to as (typeof ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS)[number],
-    )
-  ) {
-    return true
-  }
-  return false
-}
-
 export function pathAllowedByMenuKeys(
   pathname: string,
   menuKeys: string[] | null | undefined,
@@ -240,11 +199,6 @@ export function pathAllowedByMenuKeys(
 ): boolean {
   if (menuKeys == null) return true
   const associadoLogin = opts?.associadoLogin === true
-  if (
-    ALWAYS_VISIBLE_MENU_KEYS.some((key) => pathMatchesMenuKey(pathname, key))
-  ) {
-    return true
-  }
   if (
     associadoLogin &&
     ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS.some((key) =>
@@ -279,10 +233,12 @@ export function filterNavItemsByMenuKeys(
     return list
       .map((item) => {
         if (item.type === 'link') {
-          return keys.includes(item.to) ||
-            isAlwaysVisibleMenuKey(item.to, associadoLogin)
-            ? item
-            : null
+          const associadoAlways =
+            associadoLogin &&
+            ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS.includes(
+              item.to as (typeof ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS)[number],
+            )
+          return keys.includes(item.to) || associadoAlways ? item : null
         }
         const children = filterItems(item.children)
         if (children.length === 0) return null
