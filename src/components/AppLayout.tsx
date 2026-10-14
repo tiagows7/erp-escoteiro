@@ -171,6 +171,19 @@ export function AppLayout() {
         ) {
           return false
         }
+        // Super admin já tem o cadastro de grupos; o item "Grupo escoteiro" é do admin do grupo.
+        if (item.to === '/grupos/meu' && profile?.role === 'super_admin') {
+          return false
+        }
+        // Plataforma: super admin sempre; demais só se marcado no cadastro.
+        if (
+          item.to === '/grupos' ||
+          item.to === '/backup' ||
+          item.to === '/mensalidade-plataforma'
+        ) {
+          if (profile?.role === 'super_admin') return true
+          return menuKeys != null && menuKeys.includes(item.to)
+        }
         if (!item.permission) return true
         if (hasPermission(item.permission)) return true
         // Menu marcado no cadastro: libera visualização mesmo se o papel base não tiver.

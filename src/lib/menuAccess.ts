@@ -41,23 +41,30 @@ export function associadoPortalMenuKeys(): string[] {
   return [...ASSOCIADO_PORTAL_MENU_KEYS]
 }
 
-/** Menus que o admin do grupo pode marcar no cadastro de usuário. */
+/**
+ * Itens do menu que o papel enxerga por padrão.
+ * O formulário lista todos; o padrão do papel não marca o que o papel não abre.
+ */
+function menuKeyInRoleDefault(role: AppRole, key: string): boolean {
+  if (
+    key === '/grupos' ||
+    key === '/backup' ||
+    key === '/mensalidade-plataforma' ||
+    key.startsWith('/plataforma/')
+  ) {
+    return role === 'super_admin'
+  }
+  if (key === '/grupos/meu') return role === 'admin'
+  return true
+}
+
+/** Todas as opções do menu lateral, para marcar no cadastro de usuário. */
 export function menuAccessCatalog(): MenuAccessOption[] {
   const options: MenuAccessOption[] = []
 
   function walk(items: NavItem[], groupLabel: string) {
     for (const item of items) {
       if (item.type === 'link') {
-        // Reservados à plataforma / admin do grupo via papel.
-        if (
-          item.to === '/grupos' ||
-          item.to === '/backup' ||
-          item.to === '/grupos/meu' ||
-          item.to === '/mensalidade-plataforma' ||
-          item.to.startsWith('/plataforma/')
-        ) {
-          continue
-        }
         options.push({
           key: item.to,
           label: item.label,
@@ -67,9 +74,6 @@ export function menuAccessCatalog(): MenuAccessOption[] {
         })
         continue
       }
-
-      // Grupo "Mensalidade plataforma" só para super_admin.
-      if (item.id === 'plataforma') continue
 
       walk(item.children, item.label)
     }
@@ -83,6 +87,7 @@ export function menuAccessCatalog(): MenuAccessOption[] {
 export function menuAccessCatalogForRole(role: AppRole): MenuAccessOption[] {
   const admin = isGrupoAdmin(role)
   return menuAccessCatalog().filter((opt) => {
+    if (!menuKeyInRoleDefault(role, opt.key)) return false
     if (opt.grupoAdminOnly && !admin) return false
     if (!opt.permission) return true
     return can(role, opt.permission)
@@ -206,17 +211,6 @@ export const ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS = [
   '/vendas/loja-online',
 ] as const
 
-/** Itens só de plataforma — nunca filtrar por menu_keys. */
-export const PLATFORM_MENU_KEYS = [
-  '/grupos',
-  '/backup',
-  '/plataforma/planos',
-  '/plataforma/cobrancas',
-  '/plataforma/gerar',
-  '/plataforma/efi-pix',
-  '/mensalidade-plataforma',
-] as const
-
 function isAlwaysVisibleMenuKey(
   to: string,
   associadoLogin: boolean,
@@ -236,9 +230,7 @@ function isAlwaysVisibleMenuKey(
   ) {
     return true
   }
-  return PLATFORM_MENU_KEYS.includes(
-    to as (typeof PLATFORM_MENU_KEYS)[number],
-  )
+  return false
 }
 
 export function pathAllowedByMenuKeys(
@@ -258,11 +250,6 @@ export function pathAllowedByMenuKeys(
     ASSOCIADO_ALWAYS_VISIBLE_MENU_KEYS.some((key) =>
       pathMatchesMenuKey(pathname, key),
     )
-  ) {
-    return true
-  }
-  if (
-    PLATFORM_MENU_KEYS.some((key) => pathMatchesMenuKey(pathname, key))
   ) {
     return true
   }

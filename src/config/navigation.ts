@@ -674,23 +674,7 @@ export function navItemsForProfile(
       children: filterAdminOnly(item.children),
     }
   }).filter((item) => {
-    // Super admin: lista de grupos + backup + mensalidade plataforma.
-    // Admin do grupo: só "Grupo escoteiro".
-    if (item.type === 'group' && item.id === 'plataforma') {
-      return profile?.role === 'super_admin'
-    }
     if (item.type !== 'link') return true
-    if (item.to === '/grupos' || item.to === '/backup') {
-      return profile?.role === 'super_admin'
-    }
-    // Admin do grupo (não super_admin da plataforma).
-    if (item.to === '/grupos/meu') {
-      return profile?.role === 'admin'
-    }
-    // Só o super admin vê "Mensalidade do sistema" (com grupo em contexto).
-    if (item.to === '/mensalidade-plataforma') {
-      return profile?.role === 'super_admin'
-    }
     // Só login por e-mail (equipe); associados (registro) não veem.
     if (item.to === '/sugestoes-melhoria') {
       return !isAssociadoLogin(profile)
