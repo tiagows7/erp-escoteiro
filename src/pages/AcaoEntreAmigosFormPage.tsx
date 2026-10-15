@@ -22,6 +22,7 @@ import { DocumentosLinks } from '@/components/DocumentosLinks'
 import {
   faixaConflitaComOutras,
   faixaDentroDaAcao,
+  planejarFaixasAutomaticas,
   formatDateBR,
   executarSorteioAcao,
   isAcaoPrazoVendasExpirado,
@@ -144,6 +145,7 @@ export function AcaoEntreAmigosFormPage() {
     numero_inicial: '',
     numero_final: '',
   })
+  const [qtdePorJovem, setQtdePorJovem] = useState('10')
   const [error, setError] = useState<string | null>(null)
   const [faixaError, setFaixaError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -199,6 +201,25 @@ export function AcaoEntreAmigosFormPage() {
       return true
     })
   }, [associados, faixas, ramoId, secaoId, patrulhaId])
+
+  const planoFaixas = useMemo(() => {
+    const quantidade = Number(String(qtdePorJovem).replace(/\D/g, ''))
+    const acaoIni = Number(String(form.numero_inicial).replace(/\D/g, ''))
+    const acaoFim = Number(String(form.numero_final).replace(/\D/g, ''))
+    return planejarFaixasAutomaticas(
+      acaoIni,
+      acaoFim,
+      quantidade,
+      faixas,
+      associadosDisponiveis.map((a) => a.associado_id),
+    )
+  }, [
+    qtdePorJovem,
+    form.numero_inicial,
+    form.numero_final,
+    faixas,
+    associadosDisponiveis,
+  ])
 
   useEffect(() => {
     if (ramoScoped == null || !isNew) return
@@ -747,6 +768,66 @@ export function AcaoEntreAmigosFormPage() {
     toast.success('Pronto!', 'Faixa atribuída ao jovem.')
   }
 
+  async function onGerarFaixas(event: FormEvent) {
+    event.preventDefault()
+    if (!canWrite || isNew || !empresaId) return
+    if (isEncerrado(encerradoEm)) {
+      setFaixaError('Ação encerrada — não é possível alterar faixas.')
+      return
+    }
+
+    const quantidade = Number(String(qtdePorJovem).replace(/\D/g, ''))
+    if (!Number.isInteger(quantidade) || quantidade < 1) {
+      setFaixaError('Informe quantos números cada jovem recebe.')
+      return
+    }
+    if (associadosDisponiveis.length === 0) {
+      setFaixaError('Todos os jovens desta ação já têm faixa.')
+      return
+    }
+    if (planoFaixas.length < associadosDisponiveis.length) {
+      setFaixaError(
+        `Com ${quantidade} números por jovem, cabem ${planoFaixas.length} dos ${associadosDisponiveis.length}. Aumente o número final da ação ou reduza a quantidade.`,
+      )
+      return
+    }
+
+    const primeira = planoFaixas[0]
+    const ultima = planoFaixas[planoFaixas.length - 1]
+    const ok = await toast.confirm({
+      title: 'Gerar faixas automáticas?',
+      message: `${planoFaixas.length} jovens recebem ${quantidade} números cada, de ${primeira.numero_inicial} a ${ultima.numero_final}. Quem já tem faixa não muda.`,
+      confirmLabel: 'Gerar',
+    })
+    if (!ok) return
+
+    setSavingFaixa(true)
+    setFaixaError(null)
+    const { error: insertError } = await supabase
+      .from('acao_entre_amigos_faixa')
+      .insert(
+        planoFaixas.map((faixa) => ({
+          empresa_id: empresaId,
+          acao_id: Number(id),
+          associado_id: faixa.associado_id,
+          numero_inicial: faixa.numero_inicial,
+          numero_final: faixa.numero_final,
+        })),
+      )
+    setSavingFaixa(false)
+
+    if (insertError) {
+      setFaixaError(insertError.message)
+      return
+    }
+
+    await loadFaixas(Number(id))
+    toast.success(
+      'Pronto!',
+      `Faixas geradas para ${planoFaixas.length} jovens.`,
+    )
+  }
+
   async function onDeleteFaixa(faixaId: number) {
     if (!canWrite || !empresaId) return
     if (isEncerrado(encerradoEm)) {
@@ -1272,13 +1353,55 @@ export function AcaoEntreAmigosFormPage() {
         <section className="panel" style={{ marginTop: '1rem' }}>
           <h3 style={{ marginTop: 0 }}>Números por jovem</h3>
           <p className="muted">
-            Selecione o associado e o intervalo de numeração que fica com ele.
+            Informe quantos números cada jovem recebe para gerar as faixas e
+            atribuir a todos de uma vez, ou escolha um jovem e o intervalo.
           </p>
 
           {faixaError ? (
             <AlertMessage tone="error" title="Atenção">
               {faixaError}
             </AlertMessage>
+          ) : null}
+
+          {canWrite && !encerrado ? (
+            <form
+              className="form-grid form-grid-2"
+              onSubmit={(e) => void onGerarFaixas(e)}
+              style={{ marginBottom: '1rem' }}
+            >
+              <div className="field">
+                <label htmlFor="qtde_por_jovem">Números por jovem</label>
+                <input
+                  id="qtde_por_jovem"
+                  className="input"
+                  inputMode="numeric"
+                  value={qtdePorJovem}
+                  onChange={(e) => setQtdePorJovem(e.target.value)}
+                  disabled={savingFaixa}
+                  required
+                />
+              </div>
+              <div className="form-actions" style={{ alignSelf: 'end' }}>
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  disabled={
+                    savingFaixa ||
+                    planoFaixas.length === 0 ||
+                    planoFaixas.length < associadosDisponiveis.length
+                  }
+                >
+                  Gerar faixas automáticas
+                </button>
+              </div>
+              <p className="muted field-span-2" style={{ margin: 0 }}>
+                {associadosDisponiveis.length === 0
+                  ? 'Todos os jovens desta ação já têm faixa.'
+                  : planoFaixas.length === associadosDisponiveis.length
+                    ? `${planoFaixas.length} jovens recebem ${Number(String(qtdePorJovem).replace(/\D/g, '')) || 0} números cada. A primeira faixa é ${planoFaixas[0].numero_inicial}–${planoFaixas[0].numero_final} e a última é ${planoFaixas[planoFaixas.length - 1].numero_inicial}–${planoFaixas[planoFaixas.length - 1].numero_final}. Quem já tem faixa permanece como está.`
+                    : `Com essa quantidade cabem ${planoFaixas.length} dos ${associadosDisponiveis.length} jovens sem faixa. Aumente o número final da ação ou reduza a quantidade.`}
+              </p>
+            </form>
           ) : null}
 
           {canWrite && !encerrado ? (

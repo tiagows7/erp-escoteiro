@@ -32,6 +32,52 @@ export function faixaConflitaComOutras(
   })
 }
 
+/** Faixas seguidas, pulando intervalos já ocupados, dentro da numeração da ação. */
+export function planejarFaixasAutomaticas(
+  acaoIni: number,
+  acaoFim: number,
+  quantidade: number,
+  ocupadas: { numero_inicial: number; numero_final: number }[],
+  associadoIds: number[],
+): { associado_id: number; numero_inicial: number; numero_final: number }[] {
+  if (!Number.isInteger(quantidade) || quantidade < 1) return []
+  if (!Number.isFinite(acaoIni) || !Number.isFinite(acaoFim) || acaoFim < acaoIni) {
+    return []
+  }
+
+  const ocupadasOrd = [...ocupadas].sort(
+    (a, b) => a.numero_inicial - b.numero_inicial,
+  )
+  const plano: {
+    associado_id: number
+    numero_inicial: number
+    numero_final: number
+  }[] = []
+  let cursor = acaoIni
+
+  for (const associadoId of associadoIds) {
+    while (cursor <= acaoFim) {
+      const bloqueio = ocupadasOrd.find(
+        (faixa) =>
+          cursor <= faixa.numero_final &&
+          cursor + quantidade - 1 >= faixa.numero_inicial,
+      )
+      if (!bloqueio) break
+      cursor = bloqueio.numero_final + 1
+    }
+    const fim = cursor + quantidade - 1
+    if (fim > acaoFim) break
+    plano.push({
+      associado_id: associadoId,
+      numero_inicial: cursor,
+      numero_final: fim,
+    })
+    cursor = fim + 1
+  }
+
+  return plano
+}
+
 export function numerosDaFaixa(ini: number, fim: number): number[] {
   if (!Number.isFinite(ini) || !Number.isFinite(fim) || fim < ini) return []
   const out: number[] = []
