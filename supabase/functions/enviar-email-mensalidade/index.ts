@@ -1,5 +1,4 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.49.8'
-import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -162,13 +161,11 @@ Deno.serve(async (req) => {
     const falhas: { associado_id: number; nome: string; erro: string }[] = []
 
     if (prontos.length > 0) {
-      const client = new SMTPClient({
-        connection: {
-          hostname: smtpHost,
-          port: smtpPort,
-          tls: true,
-          auth: { username: smtpUser, password: smtpPassword },
-        },
+      const smtp = await SmtpSession.connect({
+        host: smtpHost,
+        port: smtpPort,
+        user: smtpUser,
+        password: smtpPassword,
       })
       try {
         for (const row of prontos) {
@@ -182,11 +179,11 @@ Deno.serve(async (req) => {
             vencimento: String(row.item.vencimento ?? '').trim(),
           })
           try {
-            await client.send({
+            await smtp.send({
               from: smtpUser,
               to: row.email,
               subject: `Mensalidade ${row.item.competencia} — ${empresa.nome}`,
-              content: texto,
+              text: texto,
               html: textoParaHtml(texto),
             })
             enviados.push(row.associado_id)
@@ -201,11 +198,7 @@ Deno.serve(async (req) => {
           }
         }
       } finally {
-        try {
-          await client.close()
-        } catch {
-          /* a conexão pode já ter caído */
-        }
+        await smtp.close()
       }
     }
 
@@ -219,6 +212,161 @@ Deno.serve(async (req) => {
     return json({ error: message }, 500)
   }
 })
+
+/** SMTP TLS na porta 465 (Localweb), sem dependência externa. */
+class SmtpSession {
+  private conn: Deno.TcpConn | Deno.TlsConn
+  private buffer = new Uint8Array(0)
+  private encoder = new TextEncoder()
+  private decoder = new TextDecoder()
+
+  private constructor(conn: Deno.TcpConn | Deno.TlsConn) {
+    this.conn = conn
+  }
+
+  static async connect(opts: {
+    host: string
+    port: number
+    user: string
+    password: string
+  }): Promise<SmtpSession> {
+    const conn =
+      opts.port === 465
+        ? await Deno.connectTls({ hostname: opts.host, port: opts.port })
+        : await Deno.connect({ hostname: opts.host, port: opts.port })
+    const session = new SmtpSession(conn)
+    try {
+      await session.expect(220)
+      await session.command(`EHLO erpescoteiro.com.br`, 250)
+      if (opts.port !== 465) {
+        await session.command('STARTTLS', 220)
+        // Deno.startTls exists on Deno Deploy / recent Deno
+        const tls = await Deno.startTls(conn as Deno.TcpConn, {
+          hostname: opts.host,
+        })
+        session.conn = tls
+        session.buffer = new Uint8Array(0)
+        await session.command(`EHLO erpescoteiro.com.br`, 250)
+      }
+      await session.command('AUTH LOGIN', 334)
+      await session.command(b64(opts.user), 334)
+      await session.command(b64(opts.password), 235)
+      return session
+    } catch (err) {
+      try {
+        conn.close()
+      } catch {
+        /* ignore */
+      }
+      throw err
+    }
+  }
+
+  async send(opts: {
+    from: string
+    to: string
+    subject: string
+    text: string
+    html: string
+  }) {
+    const boundary = `b${crypto.randomUUID().replaceAll('-', '')}`
+    const subject = encodeSubject(opts.subject)
+    const headers = [
+      `From: ${opts.from}`,
+      `To: ${opts.to}`,
+      `Subject: ${subject}`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    ].join('\r\n')
+    const body = [
+      `--${boundary}`,
+      'Content-Type: text/plain; charset=UTF-8',
+      'Content-Transfer-Encoding: 8bit',
+      '',
+      opts.text.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'),
+      `--${boundary}`,
+      'Content-Type: text/html; charset=UTF-8',
+      'Content-Transfer-Encoding: 8bit',
+      '',
+      opts.html.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'),
+      `--${boundary}--`,
+      '',
+    ].join('\r\n')
+
+    await this.command(`MAIL FROM:<${opts.from}>`, 250)
+    await this.command(`RCPT TO:<${opts.to}>`, 250)
+    await this.command('DATA', 354)
+    await this.write(`${headers}\r\n\r\n${body}\r\n.\r\n`)
+    await this.expect(250)
+  }
+
+  async close() {
+    try {
+      await this.command('QUIT', 221)
+    } catch {
+      /* ignore */
+    }
+    try {
+      this.conn.close()
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private async command(line: string, code: number) {
+    await this.write(`${line}\r\n`)
+    await this.expect(code)
+  }
+
+  private async write(text: string) {
+    await this.conn.write(this.encoder.encode(text))
+  }
+
+  private async expect(code: number) {
+    const lines: string[] = []
+    while (true) {
+      const line = await this.readLine()
+      lines.push(line)
+      if (line.length >= 4 && line[3] === ' ') break
+    }
+    const joined = lines.join('\n')
+    const got = Number(joined.slice(0, 3))
+    if (got !== code) {
+      throw new Error(`SMTP ${code} esperado, veio: ${joined}`)
+    }
+  }
+
+  private async readLine(): Promise<string> {
+    while (true) {
+      for (let i = 0; i < this.buffer.length - 1; i++) {
+        if (this.buffer[i] === 13 && this.buffer[i + 1] === 10) {
+          const line = this.decoder.decode(this.buffer.subarray(0, i))
+          this.buffer = this.buffer.subarray(i + 2)
+          return line
+        }
+      }
+      const chunk = new Uint8Array(4096)
+      const n = await this.conn.read(chunk)
+      if (n === null) throw new Error('SMTP: conexão fechada')
+      const next = new Uint8Array(this.buffer.length + n)
+      next.set(this.buffer)
+      next.set(chunk.subarray(0, n), this.buffer.length)
+      this.buffer = next
+    }
+  }
+}
+
+function b64(value: string): string {
+  return btoa(value)
+}
+
+function encodeSubject(value: string): string {
+  if (/^[\x20-\x7E]*$/.test(value)) return value
+  const bytes = new TextEncoder().encode(value)
+  let bin = ''
+  for (const b of bytes) bin += String.fromCharCode(b)
+  return `=?UTF-8?B?${btoa(bin)}?=`
+}
 
 function emailDestino(
   responsavel: string | null | undefined,
@@ -402,13 +550,20 @@ async function lembreteVencidas(req: Request, _body: unknown): Promise<Response>
     Deno.env.get('LOCAWEB_SMTP_USER')?.trim() || 'adm@erpescoteiro.com.br'
   const smtpHost = Deno.env.get('LOCAWEB_SMTP_HOST')?.trim() || 'email-ssl.com.br'
   const smtpPort = Number(Deno.env.get('LOCAWEB_SMTP_PORT') || '465')
-  const client = new SMTPClient({
-    connection: {
-      hostname: smtpHost,
-      port: smtpPort,
-      tls: true,
-      auth: { username: smtpUser, password: smtpPassword },
-    },
+  if (!smtpPassword) {
+    return json(
+      {
+        error:
+          'A senha da caixa adm@erpescoteiro.com.br ainda não foi configurada no servidor.',
+      },
+      503,
+    )
+  }
+  const smtp = await SmtpSession.connect({
+    host: smtpHost,
+    port: smtpPort,
+    user: smtpUser,
+    password: smtpPassword,
   })
 
   let enviados = 0
@@ -434,11 +589,11 @@ async function lembreteVencidas(req: Request, _body: unknown): Promise<Response>
         titulos: lista,
       })
       try {
-        await client.send({
+        await smtp.send({
           from: smtpUser,
           to: destino,
           subject: `Mensalidade vencida — ${grupo}`,
-          content: texto,
+          text: texto,
           html: textoParaHtml(texto),
         })
         const { error: logError } = await admin
@@ -459,11 +614,7 @@ async function lembreteVencidas(req: Request, _body: unknown): Promise<Response>
       }
     }
   } finally {
-    try {
-      await client.close()
-    } catch {
-      /* a conexão pode já ter caído */
-    }
+    await smtp.close()
   }
 
   return json({

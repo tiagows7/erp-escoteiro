@@ -4,12 +4,13 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { MoneyInput } from '@/components/MoneyInput'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   formDraftKey,
   usePersistedFormState,
 } from '@/hooks/usePersistedFormState'
-import { parseMoneyInput } from '@/lib/despesas'
+import { formatMoneyInput, parseMoneyInput } from '@/lib/despesas'
 import { formatQty } from '@/lib/estoque'
 import {
   removerProdutoImagem,
@@ -18,19 +19,13 @@ import {
 
 type GrupoOpt = { grupoproduto_id: number; nome: string }
 
-function formatValorInput(value: number): string {
-  return value.toLocaleString('pt-BR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
 
 const emptyForm = {
   descricao: '',
   grupo: '',
   controla_estoque: true,
   venda: true,
-  valor: '',
+  valor: '0,00',
   ativo: true,
 }
 
@@ -97,8 +92,8 @@ export function ProdutoFormPage() {
         venda: data.venda !== false,
         valor:
           data.valor_venda != null && Number(data.valor_venda) !== 0
-            ? formatValorInput(Number(data.valor_venda))
-            : '',
+            ? formatMoneyInput(Number(data.valor_venda))
+            : '0,00',
         ativo: data.ativo !== false,
       })
       setEstoqueAtual(Number(data.estoque_atual ?? 0))
@@ -351,14 +346,11 @@ export function ProdutoFormPage() {
 
           <div className="field">
             <label htmlFor="valor">Valor</label>
-            <input
+            <MoneyInput
               id="valor"
-              className="input"
-              inputMode="decimal"
-              placeholder="0,00"
               value={form.valor}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, valor: e.target.value }))
+              onChange={(value) =>
+                setForm((prev) => ({ ...prev, valor: value }))
               }
               disabled={disabled}
             />

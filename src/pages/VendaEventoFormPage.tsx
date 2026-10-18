@@ -12,6 +12,7 @@ import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
 import { TipoReceitaField } from '@/components/TipoReceitaField'
 import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
+import { MoneyInput } from '@/components/MoneyInput'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   formDraftKey,
@@ -996,21 +997,17 @@ export function VendaEventoFormPage() {
                     }}
                     required
                   />
-                  <input
-                    className="input"
-                    inputMode="decimal"
+                  <MoneyInput
                     value={tipo.valor}
-                    placeholder="0,00"
                     disabled={disabled}
-                    onChange={(e) => {
-                      const value = e.target.value
+                    required
+                    onChange={(value) => {
                       setTiposForm((prev) =>
                         prev.map((t, i) =>
                           i === index ? { ...t, valor: value } : t,
                         ),
                       )
                     }}
-                    required
                   />
                   <button
                     type="button"

@@ -4,11 +4,13 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { MoneyInput } from '@/components/MoneyInput'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
+import { formatMoneyInput, parseMoneyInput } from '@/lib/despesas'
 
 const emptyForm = {
   nome: '',
-  valor: '0',
+  valor: '0,00',
   plano_conta_id: '',
 }
 
@@ -75,7 +77,7 @@ export function TipoMensalidadeFormPage() {
 
       setForm({
         nome: data.nome ?? '',
-        valor: String(data.valor ?? 0),
+        valor: formatMoneyInput(Number(data.valor ?? 0)),
         plano_conta_id: data.plano_conta_id?.toString() ?? '',
       })
       setLoading(false)
@@ -101,10 +103,7 @@ export function TipoMensalidadeFormPage() {
       return
     }
 
-    const rawValor = form.valor.trim().replace(/\s/g, '')
-    const valor = rawValor.includes(',')
-      ? Number(rawValor.replace(/\./g, '').replace(',', '.'))
-      : Number(rawValor || '0')
+    const valor = parseMoneyInput(form.valor)
     if (!Number.isFinite(valor) || valor < 0) {
       setError('Informe um valor válido.')
       return
@@ -251,14 +250,11 @@ export function TipoMensalidadeFormPage() {
           </div>
           <div className="field">
             <label htmlFor="valor">Valor (R$)</label>
-            <input
+            <MoneyInput
               id="valor"
-              className="input"
-              inputMode="decimal"
-              placeholder="0,00"
               value={form.valor}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, valor: e.target.value }))
+              onChange={(value) =>
+                setForm((prev) => ({ ...prev, valor: value }))
               }
               disabled={disabled}
               required

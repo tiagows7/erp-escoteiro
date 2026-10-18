@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { MoneyInput } from '@/components/MoneyInput'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   clearFormDraftsForResource,
@@ -13,6 +14,8 @@ import {
 import {
   DESPESA_SITUACAO,
   formatMoney,
+  formatMoneyInput,
+  parseMoneyInput,
   situacaoDespesaLabel,
   situacaoFromSaldo,
 } from '@/lib/despesas'
@@ -84,7 +87,7 @@ function todayISO() {
 }
 
 function valorCampo(value: number): string {
-  return value.toFixed(2).replace('.', ',')
+  return formatMoneyInput(value)
 }
 
 export function DespesaFormPage() {
@@ -663,7 +666,10 @@ export function DespesaFormPage() {
         despesa_numeronota: data.despesa_numeronota ?? '',
         despesa_emissao: data.despesa_emissao?.slice(0, 10) ?? '',
         despesa_vencimento: data.despesa_vencimento?.slice(0, 10) ?? '',
-        despesa_valor: data.despesa_valor != null ? String(data.despesa_valor) : '',
+        despesa_valor:
+          data.despesa_valor != null
+            ? formatMoneyInput(Number(data.despesa_valor))
+            : '0,00',
         despesa_finalidade: data.despesa_finalidade ?? '',
       })
       setSaldo(saldoNum)
@@ -731,7 +737,7 @@ export function DespesaFormPage() {
       setError('Informe a finalidade.')
       return
     }
-    const valor = Number(String(form.despesa_valor).replace(',', '.'))
+    const valor = parseMoneyInput(form.despesa_valor)
     if (!Number.isFinite(valor) || valor <= 0) {
       setError('Informe um valor maior que zero.')
       return
@@ -1275,12 +1281,10 @@ export function DespesaFormPage() {
 
           <div className="field">
             <label htmlFor="despesa_valor">Valor</label>
-            <input
+            <MoneyInput
               id="despesa_valor"
-              className="input"
-              inputMode="decimal"
               value={form.despesa_valor}
-              onChange={(e) => update('despesa_valor', e.target.value)}
+              onChange={(value) => update('despesa_valor', value)}
               disabled={disabled || isPaid}
               required
             />

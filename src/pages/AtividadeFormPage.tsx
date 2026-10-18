@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { MoneyInput } from '@/components/MoneyInput'
 import { TipoReceitaField } from '@/components/TipoReceitaField'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
@@ -721,12 +722,10 @@ export function AtividadeFormPage() {
 
             <div className="field">
               <label htmlFor="valor">Valor da atividade</label>
-              <input
+              <MoneyInput
                 id="valor"
-                className="input"
-                inputMode="decimal"
                 value={form.valor}
-                onChange={(e) => update('valor', e.target.value)}
+                onChange={(value) => update('valor', value)}
                 disabled={!canWrite || encerrado}
               />
             </div>

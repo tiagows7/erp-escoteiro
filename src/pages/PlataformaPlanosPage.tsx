@@ -5,11 +5,13 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AddIcon } from '@/components/AddIcon'
 import { AlertMessage } from '@/components/AlertMessage'
+import { MoneyInput } from '@/components/MoneyInput'
+import { formatMoneyInput, parseMoneyInput } from '@/lib/despesas'
 import { formatMoney, type PlataformaPlano } from '@/lib/plataforma'
 
 const emptyForm = {
   nome: '',
-  valor: '',
+  valor: '0,00',
   ativo: true,
 }
 
@@ -60,7 +62,7 @@ export function PlataformaPlanosPage() {
     setEditingId(row.plano_id)
     setForm({
       nome: row.nome,
-      valor: String(row.valor ?? ''),
+      valor: formatMoneyInput(Number(row.valor ?? 0)),
       ativo: row.ativo !== false,
     })
     setShowForm(true)
@@ -71,7 +73,7 @@ export function PlataformaPlanosPage() {
     e.preventDefault()
     if (!canWrite) return
     const nome = form.nome.trim()
-    const valor = Number(String(form.valor).replace(',', '.'))
+    const valor = parseMoneyInput(form.valor)
     if (!nome) {
       setError('Informe o nome do plano.')
       return
@@ -170,13 +172,11 @@ export function PlataformaPlanosPage() {
             </div>
             <div className="field">
               <label htmlFor="plano_valor">Valor mensal</label>
-              <input
+              <MoneyInput
                 id="plano_valor"
-                className="input"
-                inputMode="decimal"
                 value={form.valor}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, valor: e.target.value }))
+                onChange={(value) =>
+                  setForm((prev) => ({ ...prev, valor: value }))
                 }
                 required
                 disabled={saving}

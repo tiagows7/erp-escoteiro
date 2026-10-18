@@ -3,12 +3,12 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { MoneyInput } from '@/components/MoneyInput'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import { useToast } from '@/contexts/ToastContext'
 import {
   formatMoney,
   formatMoneyInput,
-  maskMoneyInput,
   parseMoneyInput,
 } from '@/lib/despesas'
 import { staffRamoScope } from '@/lib/roles'
@@ -545,15 +545,11 @@ export function OrcamentoFormPage() {
                       />
                     </td>
                     <td>
-                      <input
-                        className="input"
-                        inputMode="numeric"
+                      <MoneyInput
                         value={item.valor}
                         disabled={disabled}
-                        onChange={(e) =>
-                          atualizarItem(item.key, {
-                            valor: maskMoneyInput(e.target.value),
-                          })
+                        onChange={(value) =>
+                          atualizarItem(item.key, { valor: value })
                         }
                       />
                     </td>

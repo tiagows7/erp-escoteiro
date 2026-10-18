@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { MoneyInput } from '@/components/MoneyInput'
 import { TipoReceitaField } from '@/components/TipoReceitaField'
 import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
@@ -1187,12 +1188,10 @@ export function AcaoEntreAmigosFormPage() {
 
           <div className="field">
             <label htmlFor="valor_numero">Valor de cada número</label>
-            <input
+            <MoneyInput
               id="valor_numero"
-              className="input"
-              inputMode="decimal"
               value={form.valor_numero}
-              onChange={(e) => update('valor_numero', e.target.value)}
+              onChange={(value) => update('valor_numero', value)}
               disabled={disabled}
             />
           </div>

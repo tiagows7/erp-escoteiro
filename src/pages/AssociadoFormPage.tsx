@@ -17,6 +17,9 @@ import {
   textoConsentimentoLgpd,
 } from '@/lib/lgpdConsent'
 import { syncConquistasFromAssociado } from '@/lib/conquistas'
+import { createUsuariosLote } from '@/lib/createUsuario'
+import { passwordForAssociadoLogin } from '@/lib/importAssociadosPaxtu'
+import { associadoPortalMenuKeys } from '@/lib/menuAccess'
 import {
   removerAssociadoFoto,
   uploadAssociadoFoto,
@@ -28,6 +31,51 @@ type TabId = 'geral' | 'endereco' | 'outras' | 'responsavel'
 
 function categoriaEhBeneficiario(nome: string | null | undefined): boolean {
   return (nome ?? '').toUpperCase().includes('BENEFICI')
+}
+
+/** Mesma regra da importação: login pelo registro, senha do nascimento. */
+async function criarLoginDoAssociadoNovo(opts: {
+  empresaId: number
+  nome: string
+  registro: number | null
+  dataNascimento: string | null
+  ramo: number | null
+  secao: number | null
+  ativo: boolean
+}): Promise<string> {
+  if (opts.registro == null) {
+    return ' Sem número de registro, o login não foi criado.'
+  }
+  const codigoRamo =
+    opts.ramo != null && opts.ramo >= 1 && opts.ramo <= 4 ? opts.ramo : null
+  const lote = await createUsuariosLote(opts.empresaId, [
+    {
+      nome: opts.nome,
+      registro: String(opts.registro),
+      password: passwordForAssociadoLogin(opts.dataNascimento, opts.registro),
+      role: 'leitura',
+      ativo: opts.ativo,
+      codigo_ramo: codigoRamo,
+      codigo_secao: opts.secao,
+      menu_keys: associadoPortalMenuKeys(),
+    },
+  ])
+  if (!lote.ok) {
+    return ` O login não foi criado: ${lote.error ?? 'erro desconhecido'}.`
+  }
+  if ((lote.failed ?? 0) > 0) {
+    const motivo = lote.details?.failed?.[0]?.error
+    return motivo
+      ? ` O login não foi criado: ${motivo}.`
+      : ' O login não foi criado.'
+  }
+  if ((lote.created ?? 0) > 0) {
+    return ' Login criado com o número de registro.'
+  }
+  if ((lote.skipped ?? 0) > 0) {
+    return ' O login desse registro já existia.'
+  }
+  return ' O login não foi criado.'
 }
 
 const emptyForm = {
@@ -452,6 +500,18 @@ export function AssociadoFormPage() {
     }
 
     const associadoId = Number(result.data?.associado_id)
+    let loginNota = ''
+    if (isNew && Number.isFinite(associadoId) && associadoId > 0) {
+      loginNota = await criarLoginDoAssociadoNovo({
+        empresaId,
+        nome: payload.nome,
+        registro: payload.registro,
+        dataNascimento: payload.data_nascimento,
+        ramo: payload.ramo,
+        secao: payload.secao,
+        ativo: payload.ativo,
+      })
+    }
     if (Number.isFinite(associadoId) && associadoId > 0) {
       const sync = await syncConquistasFromAssociado(supabase, {
         empresaId,
@@ -495,7 +555,7 @@ export function AssociadoFormPage() {
       if (!sync.ok) {
         setSaving(false)
         setError(
-          `Associado salvo, mas a tabela de conquistas não sincronizou: ${sync.error}`,
+          `Associado salvo, mas a tabela de conquistas não sincronizou: ${sync.error}${loginNota}`,
         )
         return
       }
@@ -509,7 +569,7 @@ export function AssociadoFormPage() {
             clearDraft()
             navigate(`/associados/${associadoId}`, {
               state: {
-                flashSuccess: 'Associado salvo. Ajuste a foto se precisar.',
+                flashSuccess: `Associado salvo. Ajuste a foto se precisar.${loginNota}`,
               },
             })
           }
@@ -543,7 +603,7 @@ export function AssociadoFormPage() {
       if (!consent.ok) {
         setSaving(false)
         setError(
-          `Associado salvo, mas o aceite LGPD não foi registrado: ${consent.error}`,
+          `Associado salvo, mas o aceite LGPD não foi registrado: ${consent.error}${loginNota}`,
         )
         return
       }
@@ -552,7 +612,7 @@ export function AssociadoFormPage() {
     setSaving(false)
     clearDraft()
     navigate('/associados', {
-      state: { flashSuccess: 'Salvo com sucesso!' },
+      state: { flashSuccess: `Salvo com sucesso!${loginNota}` },
     })
   }
 

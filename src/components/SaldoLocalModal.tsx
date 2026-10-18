@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AlertMessage } from '@/components/AlertMessage'
+import { MoneyInput } from '@/components/MoneyInput'
 import { useToast } from '@/contexts/ToastContext'
 import {
   formatMoney,
@@ -266,12 +267,10 @@ export function SaldoLocalModal({
 
             <div className="field">
               <label htmlFor="saldo-local-valor">Valor</label>
-              <input
+              <MoneyInput
                 id="saldo-local-valor"
-                className="input"
-                inputMode="decimal"
                 value={valor}
-                onChange={(e) => setValor(e.target.value)}
+                onChange={setValor}
                 required
                 disabled={temMovimentos}
               />
@@ -595,42 +594,34 @@ function SaldoLocalMovimentos({
           </div>
           <div className="field">
             <label htmlFor="mov-aplicado">Valor aplicado</label>
-            <input
+            <MoneyInput
               id="mov-aplicado"
-              className="input"
-              inputMode="decimal"
               value={aplicado}
-              onChange={(e) => setAplicado(maskMoneyInput(e.target.value))}
+              onChange={setAplicado}
             />
           </div>
           <div className="field">
             <label htmlFor="mov-resgatado">Valor resgatado</label>
-            <input
+            <MoneyInput
               id="mov-resgatado"
-              className="input"
-              inputMode="decimal"
               value={resgatado}
-              onChange={(e) => setResgatado(maskMoneyInput(e.target.value))}
+              onChange={setResgatado}
             />
           </div>
           <div className="field">
             <label htmlFor="mov-creditos">Valor créditos</label>
-            <input
+            <MoneyInput
               id="mov-creditos"
-              className="input"
-              inputMode="decimal"
               value={creditos}
-              onChange={(e) => setCreditos(maskMoneyInput(e.target.value))}
+              onChange={setCreditos}
             />
           </div>
           <div className="field">
             <label htmlFor="mov-debitos">Valor débitos</label>
-            <input
+            <MoneyInput
               id="mov-debitos"
-              className="input"
-              inputMode="decimal"
               value={debitos}
-              onChange={(e) => setDebitos(maskMoneyInput(e.target.value))}
+              onChange={setDebitos}
             />
           </div>
         </div>

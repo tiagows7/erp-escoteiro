@@ -3,9 +3,12 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { MoneyInput } from '@/components/MoneyInput'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   formatMoney,
+  formatMoneyInput,
+  parseMoneyInput,
   situacaoDespesaLabel,
   situacaoFromSaldo,
 } from '@/lib/despesas'
@@ -157,7 +160,7 @@ export function DespesaPagamentoFormPage() {
         fornecedor_nome: row.fornecedor_despesa?.fordespesa_nome ?? null,
       })
       setAtividadeId(row.atividade_id?.toString() ?? '')
-      setValorPago(saldo > 0 ? String(saldo) : '')
+      setValorPago(saldo > 0 ? formatMoneyInput(saldo) : '0,00')
       setTipos((t.data as TipoPagamento[]) ?? [])
       setHistorico((h.data as unknown as PagamentoRow[]) ?? [])
       setAtividades(ativ.data)
@@ -186,7 +189,7 @@ export function DespesaPagamentoFormPage() {
     event.preventDefault()
     if (!canWrite || !empresaId || !despesa) return
 
-    const valor = Number(String(valorPago).replace(',', '.'))
+    const valor = parseMoneyInput(valorPago)
     if (!Number.isFinite(valor) || valor <= 0) {
       setError('Informe um valor de pagamento válido.')
       return
@@ -369,12 +372,10 @@ export function DespesaPagamentoFormPage() {
             </div>
             <div className="field">
               <label htmlFor="valorPago">Valor do pagamento</label>
-              <input
+              <MoneyInput
                 id="valorPago"
-                className="input"
-                inputMode="decimal"
                 value={valorPago}
-                onChange={(e) => setValorPago(e.target.value)}
+                onChange={setValorPago}
                 disabled={disabled}
                 required
               />

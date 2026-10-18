@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { formatMoney } from '@/lib/despesas'
+import { MoneyInput } from '@/components/MoneyInput'
+import { formatMoney, maskDecimalInput } from '@/lib/despesas'
 import {
   valorGrupoTipoLabel,
   type ValorGrupoTipo,
@@ -42,14 +43,23 @@ export function RepasseGrupoCampos({
         <label htmlFor="valor_grupo">
           {percentual ? 'Percentual do grupo (%)' : 'Valor por jovem'}
         </label>
-        <input
-          id="valor_grupo"
-          className="input"
-          inputMode="decimal"
-          value={valor}
-          disabled={disabled}
-          onChange={(e) => onValor(e.target.value)}
-        />
+        {percentual ? (
+          <input
+            id="valor_grupo"
+            className="input"
+            inputMode="decimal"
+            value={valor}
+            disabled={disabled}
+            onChange={(e) => onValor(maskDecimalInput(e.target.value))}
+          />
+        ) : (
+          <MoneyInput
+            id="valor_grupo"
+            value={valor}
+            disabled={disabled}
+            onChange={onValor}
+          />
+        )}
         <span className="field-hint">
           {percentual
             ? 'Percentual sobre o valor já recebido. O repasse é fixado ao encerrar.'

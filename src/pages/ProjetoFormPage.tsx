@@ -4,13 +4,19 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { MoneyInput } from '@/components/MoneyInput'
 import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   formDraftKey,
   usePersistedFormState,
 } from '@/hooks/usePersistedFormState'
-import { formatMoney, parseMoneyInput, situacaoDespesaLabel } from '@/lib/despesas'
+import {
+  formatMoney,
+  formatMoneyInput,
+  parseMoneyInput,
+  situacaoDespesaLabel,
+} from '@/lib/despesas'
 import { DocumentosLinks } from '@/components/DocumentosLinks'
 import { isEncerrado } from '@/lib/encerrado'
 import { situacaoTituloLabel } from '@/lib/receitas'
@@ -199,9 +205,7 @@ export function ProjetoFormPage() {
         ramo: proj.ramo?.toString() ?? '',
         secao: proj.secao?.toString() ?? '',
         descricao: proj.descricao ?? '',
-        valor: formatMoney(Number(proj.valor ?? 0))
-          .replace('R$', '')
-          .trim(),
+        valor: formatMoneyInput(Number(proj.valor ?? 0)),
       })
 
       const [r, d] = await Promise.all([
@@ -747,12 +751,10 @@ export function ProjetoFormPage() {
 
           <div className="field">
             <label htmlFor="valor">Valor do projeto</label>
-            <input
+            <MoneyInput
               id="valor"
-              className="input"
-              inputMode="decimal"
               value={form.valor}
-              onChange={(e) => update('valor', e.target.value)}
+              onChange={(value) => update('valor', value)}
               disabled={disabled}
             />
           </div>

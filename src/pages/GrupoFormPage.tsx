@@ -431,7 +431,11 @@ export function GrupoFormPage() {
             dia_vencimento_mensalidade: form.dia_vencimento_mensalidade
               ? Number(form.dia_vencimento_mensalidade)
               : null,
-            envia_email_vencimento: form.envia_email_vencimento === true,
+            ...(isSuperAdmin
+              ? {
+                  envia_email_vencimento: form.envia_email_vencimento === true,
+                }
+              : {}),
             loja_receita_tipo_id: form.loja_receita_tipo_id
               ? Number(form.loja_receita_tipo_id)
               : null,
@@ -480,7 +484,11 @@ export function GrupoFormPage() {
           dia_vencimento_mensalidade: form.dia_vencimento_mensalidade
             ? Number(form.dia_vencimento_mensalidade)
             : null,
-          envia_email_vencimento: form.envia_email_vencimento === true,
+          ...(isSuperAdmin
+            ? {
+                envia_email_vencimento: form.envia_email_vencimento === true,
+              }
+            : {}),
           loja_receita_tipo_id: form.loja_receita_tipo_id
             ? Number(form.loja_receita_tipo_id)
             : null,
@@ -1217,36 +1225,38 @@ export function GrupoFormPage() {
           <>
             <p className="form-section-title">Parâmetros</p>
             <div className="form-grid">
-              <label
-                className="field field-span-2"
-                style={{
-                  display: 'flex',
-                  gap: '0.5rem',
-                  alignItems: 'flex-start',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={form.envia_email_vencimento === true}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      envia_email_vencimento: e.target.checked,
-                    }))
-                  }
-                  disabled={disabled}
-                  style={{ marginTop: '0.2rem' }}
-                />
-                <span>
-                  Enviar e-mail de mensalidade vencida
-                  <span className="field-hint" style={{ display: 'block' }}>
-                    Com a opção marcada, o servidor avisa por e-mail 2 dias
-                    depois do vencimento e repete a cada 2 dias, enquanto o
-                    título estiver em aberto. Sem a marca, esse grupo não entra
-                    na rotina.
+              {isSuperAdmin ? (
+                <label
+                  className="field field-span-2"
+                  style={{
+                    display: 'flex',
+                    gap: '0.5rem',
+                    alignItems: 'flex-start',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.envia_email_vencimento === true}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        envia_email_vencimento: e.target.checked,
+                      }))
+                    }
+                    disabled={disabled}
+                    style={{ marginTop: '0.2rem' }}
+                  />
+                  <span>
+                    Enviar e-mail de mensalidade vencida
+                    <span className="field-hint" style={{ display: 'block' }}>
+                      Com a opção marcada, o servidor avisa por e-mail 2 dias
+                      depois do vencimento e repete a cada 2 dias, enquanto o
+                      título estiver em aberto. Sem a marca, esse grupo não entra
+                      na rotina.
+                    </span>
                   </span>
-                </span>
-              </label>
+                </label>
+              ) : null}
               <TipoReceitaField
                 empresaId={isNew ? undefined : Number(id)}
                 value={form.loja_receita_tipo_id}

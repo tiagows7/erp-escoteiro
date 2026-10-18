@@ -57,3 +57,18 @@ export function parseMoneyInput(value: string): number {
   const n = Number(cleaned)
   return Number.isFinite(n) ? n : 0
 }
+
+/** Máscara decimal simples (ex.: percentual): só dígitos e uma vírgula. */
+export function maskDecimalInput(raw: string, maxDecimals = 2): string {
+  let s = String(raw ?? '').replace(/[^\d,]/g, '')
+  const comma = s.indexOf(',')
+  if (comma >= 0) {
+    const intPart = s.slice(0, comma).replace(/^0+(?=\d)/, '') || '0'
+    const decPart = s
+      .slice(comma + 1)
+      .replace(/,/g, '')
+      .slice(0, maxDecimals)
+    return `${intPart},${decPart}`
+  }
+  return s.replace(/^0+(?=\d)/, '')
+}

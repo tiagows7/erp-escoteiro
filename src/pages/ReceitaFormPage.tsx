@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { MoneyInput } from '@/components/MoneyInput'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   clearFormDraftsForResource,
@@ -22,6 +23,7 @@ import {
   situacaoTituloLabel,
   TITULO_SITUACAO,
 } from '@/lib/receitas'
+import { formatMoneyInput, parseMoneyInput } from '@/lib/despesas'
 import {
   isReceitaDocumentoImage,
   uploadReceitaDocumentos,
@@ -576,7 +578,10 @@ export function ReceitaFormPage() {
         receita_tipo_id: data.receita_tipo_id?.toString() ?? '',
         receita_emissao: data.receita_emissao?.slice(0, 10) ?? '',
         receita_vencimento: data.receita_vencimento?.slice(0, 10) ?? '',
-        receita_valor: data.receita_valor != null ? String(data.receita_valor) : '',
+        receita_valor:
+          data.receita_valor != null
+            ? formatMoneyInput(Number(data.receita_valor))
+            : '0,00',
         receita_observacao: data.receita_observacao ?? '',
       })
       setOrigem(data.receita_origem ?? RECEITA_ORIGEM.AVULSA)
@@ -658,7 +663,7 @@ export function ReceitaFormPage() {
       setError('Informe a descrição.')
       return
     }
-    const valor = Number(String(form.receita_valor).replace(',', '.'))
+    const valor = parseMoneyInput(form.receita_valor)
     if (!Number.isFinite(valor) || valor <= 0) {
       setError('Informe um valor maior que zero.')
       return
@@ -1277,12 +1282,10 @@ export function ReceitaFormPage() {
 
           <div className="field">
             <label htmlFor="receita_valor">Valor</label>
-            <input
+            <MoneyInput
               id="receita_valor"
-              className="input"
-              inputMode="decimal"
               value={form.receita_valor}
-              onChange={(e) => update('receita_valor', e.target.value)}
+              onChange={(value) => update('receita_valor', value)}
               disabled={disabled || docsOnly}
               required
             />

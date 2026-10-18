@@ -3,9 +3,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { MoneyInput } from '@/components/MoneyInput'
 import { RegistroProvisorioBadge } from '@/components/RegistroProvisorioBadge'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
-import { formatMoneyInput, maskMoneyInput, parseMoneyInput } from '@/lib/despesas'
+import { formatMoneyInput, parseMoneyInput } from '@/lib/despesas'
 import {
   formatMoney,
   situacaoFromSaldo,
@@ -426,12 +427,10 @@ export function ReceitaRecebimentoFormPage() {
             </div>
             <div className="field">
               <label htmlFor="valorBaixar">Valor a baixar</label>
-              <input
+              <MoneyInput
                 id="valorBaixar"
-                className="input"
-                inputMode="numeric"
                 value={valorBaixar}
-                onChange={(e) => setValorBaixar(maskMoneyInput(e.target.value))}
+                onChange={setValorBaixar}
                 disabled={disabled}
                 required
               />
@@ -441,26 +440,20 @@ export function ReceitaRecebimentoFormPage() {
             </div>
             <div className="field">
               <label htmlFor="desconto">Desconto</label>
-              <input
+              <MoneyInput
                 id="desconto"
-                className="input"
-                inputMode="numeric"
                 value={desconto}
-                onChange={(e) => setDesconto(maskMoneyInput(e.target.value))}
+                onChange={setDesconto}
                 disabled={disabled}
-                placeholder="0,00"
               />
             </div>
             <div className="field">
               <label htmlFor="acrescimo">Acréscimo</label>
-              <input
+              <MoneyInput
                 id="acrescimo"
-                className="input"
-                inputMode="numeric"
                 value={acrescimo}
-                onChange={(e) => setAcrescimo(maskMoneyInput(e.target.value))}
+                onChange={setAcrescimo}
                 disabled={disabled}
-                placeholder="0,00"
               />
             </div>
             <div className="field">
