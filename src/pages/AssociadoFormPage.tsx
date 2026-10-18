@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
 import { AlertMessage } from '@/components/AlertMessage'
+import { AssociadoFamiliaPainel } from '@/components/AssociadoFamiliaPainel'
 import { WaitingOverlay } from '@/components/WaitingOverlay'
 import {
   formDraftKey,
@@ -27,7 +28,7 @@ import {
 import type { Ramo } from '@/types/database'
 
 type Lookup = { id: number; nome: string }
-type TabId = 'geral' | 'endereco' | 'outras' | 'responsavel'
+type TabId = 'geral' | 'endereco' | 'outras' | 'responsavel' | 'familia'
 
 function categoriaEhBeneficiario(nome: string | null | undefined): boolean {
   return (nome ?? '').toUpperCase().includes('BENEFICI')
@@ -128,6 +129,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'geral', label: 'Geral' },
   { id: 'endereco', label: 'Endereço' },
   { id: 'outras', label: 'Outras informações' },
+  { id: 'familia', label: 'Família' },
   { id: 'responsavel', label: 'Responsáveis' },
 ]
 
@@ -159,7 +161,6 @@ export function AssociadoFormPage() {
   const [categorias, setCategorias] = useState<Lookup[]>([])
   const [funcoes, setFuncoes] = useState<Lookup[]>([])
   const [mensalidades, setMensalidades] = useState<Lookup[]>([])
-  const [familias, setFamilias] = useState<Lookup[]>([])
   const [estados, setEstados] = useState<{ codigo: string; nome: string }[]>([])
   const [cidades, setCidades] = useState<Lookup[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -186,13 +187,7 @@ export function AssociadoFormPage() {
         .select('tipomensalidade_id, nome')
         .eq('empresa_id', empresaId)
         .order('nome'),
-      supabase
-        .from('familia')
-        .select('familia_id, nome')
-        .eq('empresa_id', empresaId)
-        .eq('ativo', true)
-        .order('nome'),
-    ]).then(([r, c, f, estadosList, m, fam]) => {
+    ]).then(([r, c, f, estadosList, m]) => {
       setRamos((r.data as Ramo[]) ?? [])
       setCategorias(
         (c.data ?? []).map((row) => ({
@@ -210,12 +205,6 @@ export function AssociadoFormPage() {
       setMensalidades(
         (m.data ?? []).map((row) => ({
           id: row.tipomensalidade_id as number,
-          nome: row.nome as string,
-        })),
-      )
-      setFamilias(
-        (fam.data ?? []).map((row) => ({
-          id: row.familia_id as number,
           nome: row.nome as string,
         })),
       )
@@ -946,27 +935,6 @@ export function AssociadoFormPage() {
                 ))}
               </select>
             </div>
-            <div className="field">
-              <label htmlFor="familia_id">Família</label>
-              <select
-                id="familia_id"
-                className="select"
-                value={form.familia_id}
-                onChange={(e) => update('familia_id', e.target.value)}
-                disabled={disabled}
-              >
-                <option value="">Sem família</option>
-                {familias.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.nome}
-                  </option>
-                ))}
-              </select>
-              <span className="field-hint">
-                Com família, a mensalidade gera um título único do grupo. Cadastre
-                em Cadastros → Famílias.
-              </span>
-            </div>
             <div className="field field-checks">
               <label>
                 <input
@@ -1345,6 +1313,19 @@ export function AssociadoFormPage() {
               </select>
             </div>
           </div>
+        ) : null}
+
+        {tab === 'familia' ? (
+          <AssociadoFamiliaPainel
+            empresaId={empresaId}
+            associadoId={isNew ? null : Number(id)}
+            associadoNome={form.nome}
+            canWrite={canWrite}
+            familiaId={numOrNull(form.familia_id)}
+            onFamiliaIdChange={(fid) =>
+              update('familia_id', fid != null ? String(fid) : '')
+            }
+          />
         ) : null}
 
         {tab === 'responsavel' ? (

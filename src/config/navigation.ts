@@ -149,12 +149,6 @@ export const NAV_ITEMS: NavItem[] = [
       },
       {
         type: 'link',
-        to: '/cadastros/familias',
-        label: 'Famílias',
-        permission: 'associados.view',
-      },
-      {
-        type: 'link',
         to: '/cadastros/usuarios',
         label: 'Usuários',
         permission: 'usuarios.view',
