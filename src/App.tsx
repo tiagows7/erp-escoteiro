@@ -13,6 +13,8 @@ import { PrivacidadePage } from '@/pages/PrivacidadePage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { AssociadosPage } from '@/pages/AssociadosPage'
 import { AssociadoFormPage } from '@/pages/AssociadoFormPage'
+import { FamiliasPage } from '@/pages/FamiliasPage'
+import { FamiliaFormPage } from '@/pages/FamiliaFormPage'
 import { GruposPage } from '@/pages/GruposPage'
 import { GrupoFormPage } from '@/pages/GrupoFormPage'
 import { SecoesPage } from '@/pages/SecoesPage'
@@ -170,6 +172,22 @@ export default function App() {
               element={
                 <RequirePermission permission="associados.view">
                   <AssociadoFormPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="cadastros/familias"
+              element={
+                <RequirePermission permission="associados.view">
+                  <FamiliasPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="cadastros/familias/:id"
+              element={
+                <RequirePermission permission="associados.view">
+                  <FamiliaFormPage />
                 </RequirePermission>
               }
             />

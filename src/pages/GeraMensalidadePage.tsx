@@ -31,12 +31,14 @@ type TipoMensalidade = {
 }
 
 type PreviewRow = {
+  key: string
   associado_id: number
+  familia_id: number | null
   nome: string
   registro: number | null
   registro_provisorio: boolean
   ramo: number | null
-  tipomensalidade_id: number
+  tipomensalidade_id: number | null
   tipo_nome: string
   plano_conta_id: number | null
   valor: number
@@ -99,9 +101,9 @@ export function GeraMensalidadePage() {
     [aGerar],
   )
 
-  function excluirDaPrevia(associadoId: number) {
+  function excluirDaPrevia(key: string) {
     setPreview((rows) => {
-      const next = rows.filter((r) => r.associado_id !== associadoId)
+      const next = rows.filter((r) => r.key !== key)
       const novas = next.filter((r) => !r.already).length
       const existentes = next.filter((r) => r.already).length
       setInfo(
@@ -127,7 +129,7 @@ export function GeraMensalidadePage() {
     let associadosQuery = supabase
       .from('associados')
       .select(
-        'associado_id, nome, registro, registro_provisorio, ramo, tipo_mensalidade, isento, ativo, celular, responsavel_fonecelular, email, responsavel_email',
+        'associado_id, nome, registro, registro_provisorio, ramo, tipo_mensalidade, isento, ativo, celular, responsavel_fonecelular, email, responsavel_email, familia_id',
       )
       .eq('empresa_id', empresaId)
       .eq('ativo', true)
@@ -140,7 +142,7 @@ export function GeraMensalidadePage() {
       )
     }
 
-    const [assocRes, tiposRes, existentesRes] = await Promise.all([
+    const [assocRes, tiposRes, existentesRes, familiasRes] = await Promise.all([
       associadosQuery.order('nome').limit(5000),
       supabase
         .from('tipo_mensalidade')
@@ -148,18 +150,28 @@ export function GeraMensalidadePage() {
         .eq('empresa_id', empresaId),
       supabase
         .from('receitas')
-        .select('associado_id')
+        .select('associado_id, familia_id')
         .eq('empresa_id', empresaId)
         .eq('receita_origem', RECEITA_ORIGEM.MENSALIDADE)
         .eq('receita_competencia', compDate),
+      supabase
+        .from('familia')
+        .select('familia_id, nome, ativo, responsavel_associado_id')
+        .eq('empresa_id', empresaId),
     ])
 
-    if (assocRes.error || tiposRes.error || existentesRes.error) {
+    if (
+      assocRes.error ||
+      tiposRes.error ||
+      existentesRes.error ||
+      familiasRes.error
+    ) {
       setLoading(false)
       setError(
         assocRes.error?.message ??
           tiposRes.error?.message ??
           existentesRes.error?.message ??
+          familiasRes.error?.message ??
           'Erro ao carregar prévia',
       )
       return
@@ -171,41 +183,137 @@ export function GeraMensalidadePage() {
         t,
       ]),
     )
-    const existentes = new Set(
+    const existentesAssoc = new Set(
       (existentesRes.data ?? [])
         .map((r) => r.associado_id as number | null)
         .filter((id): id is number => id != null),
     )
+    const existentesFamilia = new Set(
+      (existentesRes.data ?? [])
+        .map((r) => r.familia_id as number | null)
+        .filter((id): id is number => id != null),
+    )
+    const familiaMap = new Map(
+      (
+        (familiasRes.data ?? []) as Array<{
+          familia_id: number
+          nome: string
+          ativo: boolean
+          responsavel_associado_id: number | null
+        }>
+      )
+        .filter((f) => f.ativo !== false)
+        .map((f) => [f.familia_id, f]),
+    )
+
+    type AssocRow = {
+      associado_id: number
+      nome: string
+      registro: number | null
+      registro_provisorio: boolean
+      ramo: number | null
+      tipo_mensalidade: number | null
+      isento: boolean | null
+      celular: string | null
+      responsavel_fonecelular: string | null
+      email: string | null
+      responsavel_email: string | null
+      familia_id: number | null
+    }
 
     const rows: PreviewRow[] = []
-    for (const a of assocRes.data ?? []) {
+    const porFamilia = new Map<number, AssocRow[]>()
+
+    for (const raw of assocRes.data ?? []) {
+      const a = raw as AssocRow
       if (a.isento === true) continue
-      const tipoId = a.tipo_mensalidade as number | null
+      const tipoId = a.tipo_mensalidade
       if (!tipoId) continue
       const tipo = tipoMap.get(tipoId)
       if (!tipo) continue
       const valor = Number(tipo.valor ?? 0)
       if (valor <= 0) continue
 
+      const familiaId = a.familia_id
+      if (familiaId != null && familiaMap.has(familiaId)) {
+        const lista = porFamilia.get(familiaId) ?? []
+        lista.push(a)
+        porFamilia.set(familiaId, lista)
+        continue
+      }
+
       rows.push({
-        associado_id: a.associado_id as number,
-        nome: a.nome as string,
-        registro: (a.registro as number | null) ?? null,
+        key: `a-${a.associado_id}`,
+        associado_id: a.associado_id,
+        familia_id: null,
+        nome: a.nome,
+        registro: a.registro,
         registro_provisorio: a.registro_provisorio === true,
-        ramo: (a.ramo as number | null) ?? null,
+        ramo: a.ramo,
         tipomensalidade_id: tipoId,
         tipo_nome: tipo.nome,
         plano_conta_id: tipo.plano_conta_id ?? null,
         valor,
-        already: existentes.has(a.associado_id as number),
-        celular: (a.celular as string | null) ?? null,
-        responsavel_fonecelular:
-          (a.responsavel_fonecelular as string | null) ?? null,
-        email: (a.email as string | null) ?? null,
-        responsavel_email: (a.responsavel_email as string | null) ?? null,
+        already: existentesAssoc.has(a.associado_id),
+        celular: a.celular,
+        responsavel_fonecelular: a.responsavel_fonecelular,
+        email: a.email,
+        responsavel_email: a.responsavel_email,
       })
     }
 
+    for (const [familiaId, membros] of porFamilia) {
+      const familia = familiaMap.get(familiaId)
+      if (!familia || membros.length === 0) continue
+
+      let valor = 0
+      let tipoId: number | null = null
+      let planoConta: number | null = null
+      const tiposNomes = new Set<string>()
+      for (const m of membros) {
+        const tipo = tipoMap.get(m.tipo_mensalidade as number)
+        if (!tipo) continue
+        const v = Number(tipo.valor ?? 0)
+        if (v <= 0) continue
+        valor += v
+        tiposNomes.add(tipo.nome)
+        if (tipoId == null) {
+          tipoId = tipo.tipomensalidade_id
+          planoConta = tipo.plano_conta_id ?? null
+        }
+      }
+      if (valor <= 0) continue
+
+      const titular =
+        membros.find(
+          (m) => m.associado_id === familia.responsavel_associado_id,
+        ) ?? membros[0]
+
+      const nomesMembros = membros.map((m) => m.nome).join(', ')
+      rows.push({
+        key: `f-${familiaId}`,
+        associado_id: titular.associado_id,
+        familia_id: familiaId,
+        nome: `${familia.nome} (${nomesMembros})`,
+        registro: titular.registro,
+        registro_provisorio: titular.registro_provisorio === true,
+        ramo: titular.ramo,
+        tipomensalidade_id: tipoId,
+        tipo_nome:
+          tiposNomes.size === 1
+            ? [...tiposNomes][0]
+            : `Família · ${tiposNomes.size} tipos`,
+        plano_conta_id: planoConta,
+        valor,
+        already: existentesFamilia.has(familiaId),
+        celular: titular.celular,
+        responsavel_fonecelular: titular.responsavel_fonecelular,
+        email: titular.email,
+        responsavel_email: titular.responsavel_email,
+      })
+    }
+
+    rows.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
     setPreview(rows)
     setLoading(false)
     setInfo(
@@ -242,10 +350,15 @@ export function GeraMensalidadePage() {
     const payload = aGerar.map((row) => ({
       empresa_id: empresaId,
       associado_id: row.associado_id,
+      familia_id: row.familia_id,
       tipomensalidade_id: row.tipomensalidade_id,
       plano_conta_id: row.plano_conta_id,
       receita_origem: RECEITA_ORIGEM.MENSALIDADE,
-      receita_descricao: `Mensalidade ${competencia.slice(5, 7)}/${competencia.slice(0, 4)} — ${row.tipo_nome}`,
+      receita_descricao: (
+        row.familia_id
+          ? `Mensalidade ${competencia.slice(5, 7)}/${competencia.slice(0, 4)} — ${row.nome}`
+          : `Mensalidade ${competencia.slice(5, 7)}/${competencia.slice(0, 4)} — ${row.tipo_nome}`
+      ).slice(0, 120),
       // Conta do grupo: não atribui movimento ao ramo/seção do associado.
       receita_ramo: null,
       receita_secao: null,
@@ -635,9 +748,12 @@ export function GeraMensalidadePage() {
                 </thead>
                 <tbody>
                   {preview.map((row) => (
-                    <tr key={row.associado_id}>
+                    <tr key={row.key}>
                       <td>
                         {row.nome}{' '}
+                        {row.familia_id != null ? (
+                          <span className="badge">Família</span>
+                        ) : null}{' '}
                         <RegistroProvisorioBadge
                           provisorio={row.registro_provisorio}
                         />
@@ -664,8 +780,8 @@ export function GeraMensalidadePage() {
                               type="button"
                               className="btn btn-soft"
                               disabled={generating}
-                              onClick={() => excluirDaPrevia(row.associado_id)}
-                              title="Não gerar mensalidade para este associado"
+                              onClick={() => excluirDaPrevia(row.key)}
+                              title="Não gerar este título nesta competência"
                             >
                               Excluir
                             </button>

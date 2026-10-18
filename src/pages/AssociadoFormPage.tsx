@@ -91,6 +91,7 @@ const emptyForm = {
   validade_registro: '',
   registro_provisorio: false,
   tipo_mensalidade: '',
+  familia_id: '',
   ativo: true,
   isento: false,
   conquista_cruzeiro_do_sul: false,
@@ -158,6 +159,7 @@ export function AssociadoFormPage() {
   const [categorias, setCategorias] = useState<Lookup[]>([])
   const [funcoes, setFuncoes] = useState<Lookup[]>([])
   const [mensalidades, setMensalidades] = useState<Lookup[]>([])
+  const [familias, setFamilias] = useState<Lookup[]>([])
   const [estados, setEstados] = useState<{ codigo: string; nome: string }[]>([])
   const [cidades, setCidades] = useState<Lookup[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -184,7 +186,13 @@ export function AssociadoFormPage() {
         .select('tipomensalidade_id, nome')
         .eq('empresa_id', empresaId)
         .order('nome'),
-    ]).then(([r, c, f, estadosList, m]) => {
+      supabase
+        .from('familia')
+        .select('familia_id, nome')
+        .eq('empresa_id', empresaId)
+        .eq('ativo', true)
+        .order('nome'),
+    ]).then(([r, c, f, estadosList, m, fam]) => {
       setRamos((r.data as Ramo[]) ?? [])
       setCategorias(
         (c.data ?? []).map((row) => ({
@@ -202,6 +210,12 @@ export function AssociadoFormPage() {
       setMensalidades(
         (m.data ?? []).map((row) => ({
           id: row.tipomensalidade_id as number,
+          nome: row.nome as string,
+        })),
+      )
+      setFamilias(
+        (fam.data ?? []).map((row) => ({
+          id: row.familia_id as number,
           nome: row.nome as string,
         })),
       )
@@ -296,6 +310,7 @@ export function AssociadoFormPage() {
         validade_registro: data.validade_registro ?? '',
         registro_provisorio: data.registro_provisorio === true,
         tipo_mensalidade: data.tipo_mensalidade?.toString() ?? '',
+        familia_id: data.familia_id?.toString() ?? '',
         ativo: data.ativo ?? true,
         isento: data.isento ?? false,
         conquista_cruzeiro_do_sul: data.conquista_cruzeiro_do_sul === true,
@@ -437,6 +452,7 @@ export function AssociadoFormPage() {
       validade_registro: strOrNull(form.validade_registro),
       registro_provisorio: form.registro_provisorio === true,
       tipo_mensalidade: numOrNull(form.tipo_mensalidade),
+      familia_id: numOrNull(form.familia_id),
       ativo: form.ativo,
       isento: form.isento,
       conquista_cruzeiro_do_sul: form.conquista_cruzeiro_do_sul,
@@ -929,6 +945,27 @@ export function AssociadoFormPage() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="field">
+              <label htmlFor="familia_id">Família</label>
+              <select
+                id="familia_id"
+                className="select"
+                value={form.familia_id}
+                onChange={(e) => update('familia_id', e.target.value)}
+                disabled={disabled}
+              >
+                <option value="">Sem família</option>
+                {familias.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.nome}
+                  </option>
+                ))}
+              </select>
+              <span className="field-hint">
+                Com família, a mensalidade gera um título único do grupo. Cadastre
+                em Cadastros → Famílias.
+              </span>
             </div>
             <div className="field field-checks">
               <label>

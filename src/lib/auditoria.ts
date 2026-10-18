@@ -6,6 +6,7 @@ export type AuditoriaAcao = (typeof AUDITORIA_ACOES)[number]
 
 export const AUDITORIA_TABELA_LABELS: Record<string, string> = {
   associados: 'Associados',
+  familia: 'Famílias',
   profiles: 'Usuários',
   secao: 'Seções',
   secao_nome: 'Matilhas / Patrulhas / Clã',

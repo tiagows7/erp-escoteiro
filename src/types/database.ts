@@ -33,6 +33,8 @@ export type Associado = {
   ativo: boolean | null
   isento: boolean | null
   tipo_mensalidade: number | null
+  /** Família para cobrança unificada de mensalidade. */
+  familia_id?: number | null
   validade_registro: string | null
   /** true = provisório; false = definitivo */
   registro_provisorio: boolean | null
@@ -52,6 +54,15 @@ export type Associado = {
   lgpd_aceite_versao: string | null
   lgpd_aceite_texto: string | null
   foto_url: string | null
+}
+
+export type Familia = {
+  familia_id: number
+  empresa_id: number
+  nome: string
+  responsavel_associado_id: number | null
+  ativo: boolean
+  created_at?: string
 }
 
 export type Profile = {
