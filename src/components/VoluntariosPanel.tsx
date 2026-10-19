@@ -11,7 +11,8 @@ type VoluntarioPessoa = {
   registro: number | null
   registro_provisorio: boolean
   secaoNome: string | null
-  funcaoNome: string | null
+  /** Função e Função 2 (quando houver). */
+  funcoes: string[]
   foto_url: string | null
 }
 
@@ -54,11 +55,15 @@ function sortByNome(a: VoluntarioPessoa, b: VoluntarioPessoa) {
   return a.nome.localeCompare(b.nome, 'pt-BR')
 }
 
+function algumaFuncaoContem(funcoes: string[], termo: string) {
+  return funcoes.some((nome) => nomeContem(nome, termo))
+}
+
 /** Nos cards de ramo: chefes de seção primeiro, depois assistentes, depois os demais. */
 function sortEscotistasRamo(a: VoluntarioPessoa, b: VoluntarioPessoa) {
   const rank = (p: VoluntarioPessoa) => {
-    if (nomeContem(p.funcaoNome, 'ASSISTENTE')) return 1
-    if (nomeContem(p.funcaoNome, 'CHEFE')) return 0
+    if (algumaFuncaoContem(p.funcoes, 'CHEFE')) return 0
+    if (algumaFuncaoContem(p.funcoes, 'ASSISTENTE')) return 1
     return 2
   }
   const byFuncao = rank(a) - rank(b)
@@ -66,11 +71,11 @@ function sortEscotistasRamo(a: VoluntarioPessoa, b: VoluntarioPessoa) {
   return sortByNome(a, b)
 }
 
-function isFuncaoDirigente(funcNome: string | null) {
+function isFuncaoDirigente(funcoes: string[]) {
   return (
-    nomeContem(funcNome, 'DIRIGENTE') ||
-    nomeContem(funcNome, 'DIRETOR') ||
-    nomeContem(funcNome, 'DIRETO')
+    algumaFuncaoContem(funcoes, 'DIRIGENTE') ||
+    algumaFuncaoContem(funcoes, 'DIRETOR') ||
+    algumaFuncaoContem(funcoes, 'DIRETO')
   )
 }
 
@@ -95,7 +100,7 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
       supabase
         .from('associados')
         .select(
-          'associado_id, nome, registro, registro_provisorio, categoria, funcao, ramo, secao, foto_url',
+          'associado_id, nome, registro, registro_provisorio, categoria, funcao, funcao2, ramo, secao, foto_url',
         )
         .eq('empresa_id', empresaId)
         .or('ativo.is.null,ativo.eq.true')
@@ -146,6 +151,7 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
       registro_provisorio: boolean | null
       categoria: number | null
       funcao: number | null
+      funcao2: number | null
       ramo: number | null
       secao: number | null
       foto_url: string | null
@@ -154,16 +160,18 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
     for (const row of (assocRes.data as Row[]) ?? []) {
       const catNome =
         row.categoria != null ? (catMap.get(row.categoria) ?? null) : null
-      const funcNome =
-        row.funcao != null ? (funcMap.get(row.funcao) ?? null) : null
+      const funcoes = [...new Set([row.funcao, row.funcao2])]
+        .filter((id): id is number => id != null)
+        .map((id) => funcMap.get(id))
+        .filter((nome): nome is string => !!nome?.trim())
 
       const isDirigente =
-        nomeContem(catNome, 'DIRIGENTE') || isFuncaoDirigente(funcNome)
+        nomeContem(catNome, 'DIRIGENTE') || isFuncaoDirigente(funcoes)
       const isEscotista =
         nomeContem(catNome, 'ESCOTISTA') ||
-        nomeContem(funcNome, 'ESCOTISTA') ||
-        nomeContem(funcNome, 'CHEFE') ||
-        nomeContem(funcNome, 'ASSISTENTE')
+        algumaFuncaoContem(funcoes, 'ESCOTISTA') ||
+        algumaFuncaoContem(funcoes, 'CHEFE') ||
+        algumaFuncaoContem(funcoes, 'ASSISTENTE')
 
       if (!isDirigente && !isEscotista) continue
 
@@ -176,7 +184,7 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
           row.secao != null
             ? (secaoMap.get(row.secao) ?? `Seção ${row.secao}`)
             : null,
-        funcaoNome: funcNome,
+        funcoes,
         foto_url: row.foto_url ?? null,
       }
 
@@ -313,9 +321,9 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
                           <RegistroProvisorioBadge />
                         ) : null}
                       </div>
-                      {pessoa.funcaoNome ? (
+                      {pessoa.funcoes.length > 0 ? (
                         <span className="conquistas-lista-secao">
-                          {pessoa.funcaoNome}
+                          {pessoa.funcoes.join(' · ')}
                         </span>
                       ) : null}
                       {pessoa.secaoNome ? (
