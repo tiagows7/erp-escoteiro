@@ -55,6 +55,11 @@ function categoriaEhBeneficiario(nome: string | null | undefined): boolean {
   return (nome ?? '').toUpperCase().includes('BENEFICI')
 }
 
+/** Valor padrão do Paxtu quando o campo não se aplica. */
+function isNaoSeAplica(value: Cell): boolean {
+  return normKey(value) === 'NAO SE APLICA'
+}
+
 function parseRegistro(raw: string): { registro: number; identificador: number | null } | null {
   const text = raw.trim()
   if (!text) return null
@@ -331,6 +336,7 @@ export async function importAssociadosFromPaxtuExcel(
   }
 
   async function resolveCategoria(raw: Cell): Promise<number | null> {
+    if (isNaoSeAplica(raw)) return null
     return ensureByNome(catCache, raw, 50, async (nome) => {
       const { data, error } = await client
         .from('categoria')
@@ -345,6 +351,7 @@ export async function importAssociadosFromPaxtuExcel(
   }
 
   async function resolveFuncao(raw: Cell): Promise<number | null> {
+    if (isNaoSeAplica(raw)) return null
     return ensureByNome(funcaoCache, raw, 30, async (nome) => {
       const { data, error } = await client
         .from('funcao')
@@ -357,6 +364,7 @@ export async function importAssociadosFromPaxtuExcel(
   }
 
   async function resolveRamo(raw: Cell): Promise<number | null> {
+    if (isNaoSeAplica(raw)) return null
     const nome = displayName(raw, 50)
     if (!nome) return null
     const key = normKey(nome)
@@ -523,8 +531,9 @@ export async function importAssociadosFromPaxtuExcel(
 
       const categoria = await resolveCategoria(row[3])
       const categoria2 = await resolveCategoria(row[4])
-      // Coluna F (índice 5) costuma vir entre categorias e ramo no Paxtu
-      const funcao = await resolveFuncao(row[5])
+      // Paxtu: I/J/K = Função 1º / 2º / 3º (índices 9–11); G = Ramo 1º (índice 6)
+      const funcao = await resolveFuncao(row[9])
+      const funcao2 = await resolveFuncao(row[10])
       const ramo = await resolveRamo(row[6])
       const secao = await resolveSecao(row[12], ramo)
       const patrulha_matilha = await resolvePatrulha(row[13], ramo, secao)
@@ -552,11 +561,8 @@ export async function importAssociadosFromPaxtuExcel(
         endereco_cep: endereco.endereco_cep,
         categoria,
         categoria2,
-        funcao: categoriaEhBeneficiario(
-          categoria != null ? catNomeById.get(categoria) : null,
-        )
-          ? null
-          : funcao,
+        funcao: ehBeneficiario ? null : funcao,
+        funcao2: ehBeneficiario ? null : funcao2,
         ramo,
         secao,
         patrulha_matilha,

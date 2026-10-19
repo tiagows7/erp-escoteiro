@@ -118,6 +118,7 @@ const emptyForm = {
   secao: '',
   patrulha_matilha: '',
   funcao: '',
+  funcao2: '',
   responsavel_nome: '',
   responsavel_foneresi: '',
   responsavel_fonecelular: '',
@@ -330,6 +331,7 @@ export function AssociadoFormPage() {
         secao: data.secao?.toString() ?? '',
         patrulha_matilha: data.patrulha_matilha?.toString() ?? '',
         funcao: data.funcao?.toString() ?? '',
+        funcao2: data.funcao2?.toString() ?? '',
         responsavel_nome: data.responsavel_nome ?? '',
         responsavel_foneresi: data.responsavel_foneresi ?? '',
         responsavel_fonecelular: data.responsavel_fonecelular ?? '',
@@ -396,6 +398,7 @@ export function AssociadoFormPage() {
           : null
         if (categoriaEhBeneficiario(nome)) {
           next.funcao = ''
+          next.funcao2 = ''
         }
       }
       return next
@@ -477,6 +480,7 @@ export function AssociadoFormPage() {
       secao: numOrNull(form.secao),
       patrulha_matilha: numOrNull(form.patrulha_matilha),
       funcao: isBeneficiario ? null : numOrNull(form.funcao),
+      funcao2: isBeneficiario ? null : numOrNull(form.funcao2),
       responsavel_nome: strOrNull(form.responsavel_nome)?.toUpperCase() ?? null,
       responsavel_foneresi: strOrNull(form.responsavel_foneresi),
       responsavel_fonecelular: strOrNull(form.responsavel_fonecelular),
@@ -1246,6 +1250,25 @@ export function AssociadoFormPage() {
                   Beneficiários não possuem função cadastrada.
                 </p>
               ) : null}
+            </div>
+            <div className="field">
+              <label htmlFor="funcao2">Função 2</label>
+              <select
+                id="funcao2"
+                className="select"
+                value={isBeneficiario ? '' : form.funcao2}
+                onChange={(e) => update('funcao2', e.target.value)}
+                disabled={disabled || isBeneficiario}
+              >
+                <option value="">
+                  {isBeneficiario ? 'Não se aplica' : 'Selecione…'}
+                </option>
+                {funcoes.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.nome}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="field">
               <label htmlFor="ramo">Ramo</label>

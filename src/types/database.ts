@@ -18,6 +18,8 @@ export type Associado = {
   ramo: number | null
   secao: number | null
   funcao: number | null
+  /** Segunda função (Paxtu: Função - 2º Função). */
+  funcao2?: number | null
   patrulha_matilha: number | null
   fone_residencial: string | null
   celular: string | null
