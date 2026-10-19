@@ -188,19 +188,21 @@ export function VoluntariosPanel({ empresaId }: { empresaId: number }) {
         foto_url: row.foto_url ?? null,
       }
 
+      // Pode aparecer nas duas colunas: dirigente e escotista (ex.: Função 2 = Assistente).
       if (isDirigente) {
         dirigentes.push(pessoa)
-        continue
       }
 
-      if (row.ramo != null) {
-        const list = porRamo.get(row.ramo) ?? []
-        list.push(pessoa)
-        porRamo.set(row.ramo, list)
-      } else {
-        const list = porRamo.get(0) ?? []
-        list.push(pessoa)
-        porRamo.set(0, list)
+      if (isEscotista) {
+        if (row.ramo != null) {
+          const list = porRamo.get(row.ramo) ?? []
+          list.push(pessoa)
+          porRamo.set(row.ramo, list)
+        } else {
+          const list = porRamo.get(0) ?? []
+          list.push(pessoa)
+          porRamo.set(0, list)
+        }
       }
     }
 
