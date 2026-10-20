@@ -25,6 +25,7 @@ const emptyForm = {
   grupo: '',
   controla_estoque: true,
   venda: true,
+  imobilizado: false,
   valor: '0,00',
   ativo: true,
 }
@@ -72,7 +73,7 @@ export function ProdutoFormPage() {
       const { data, error: loadError } = await supabase
         .from('produto')
         .select(
-          'produto_id, nome, grupo, venda, controla_estoque, valor_venda, estoque_atual, ativo, imagem_url',
+          'produto_id, nome, grupo, venda, controla_estoque, imobilizado, valor_venda, estoque_atual, ativo, imagem_url',
         )
         .eq('produto_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -90,6 +91,7 @@ export function ProdutoFormPage() {
         grupo: data.grupo != null ? String(data.grupo) : '',
         controla_estoque: data.controla_estoque !== false,
         venda: data.venda !== false,
+        imobilizado: data.imobilizado === true,
         valor:
           data.valor_venda != null && Number(data.valor_venda) !== 0
             ? formatMoneyInput(Number(data.valor_venda))
@@ -146,6 +148,7 @@ export function ProdutoFormPage() {
       grupo: Number(form.grupo),
       controla_estoque: form.controla_estoque,
       venda: form.venda,
+      imobilizado: form.imobilizado === true,
       valor_venda: parseMoneyInput(form.valor),
       ativo: form.ativo,
     }
@@ -475,6 +478,20 @@ export function ProdutoFormPage() {
                 disabled={disabled}
               />
               Para venda
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={form.imobilizado}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    imobilizado: e.target.checked,
+                  }))
+                }
+                disabled={disabled}
+              />
+              Imobilizado (uso do grupo)
             </label>
             <label>
               <input

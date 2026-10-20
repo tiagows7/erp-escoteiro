@@ -15,6 +15,7 @@ type ProdutoRow = {
   grupo: number | null
   venda: boolean | null
   controla_estoque: boolean | null
+  imobilizado: boolean | null
   valor_venda: number | null
   estoque_atual: number | null
   ativo: boolean | null
@@ -54,7 +55,7 @@ export function ProdutoPage() {
         supabase
           .from('produto')
           .select(
-            'produto_id, empresa_id, nome, grupo, venda, controla_estoque, valor_venda, estoque_atual, ativo',
+            'produto_id, empresa_id, nome, grupo, venda, controla_estoque, imobilizado, valor_venda, estoque_atual, ativo',
           )
           .eq('empresa_id', empresaId)
           .order('nome'),
@@ -163,6 +164,7 @@ export function ProdutoPage() {
                   <th>Estoque atual</th>
                   <th>Ctrl. estoque</th>
                   <th>Venda</th>
+                  <th>Imobilizado</th>
                   <th>Valor</th>
                 </tr>
               </thead>
@@ -198,6 +200,7 @@ export function ProdutoPage() {
                     </td>
                     <td>{row.controla_estoque === false ? 'Não' : 'Sim'}</td>
                     <td>{row.venda === false ? 'Não' : 'Sim'}</td>
+                    <td>{row.imobilizado === true ? 'Sim' : 'Não'}</td>
                     <td>{formatMoney(row.valor_venda)}</td>
                   </tr>
                 ))}
