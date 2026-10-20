@@ -8,6 +8,7 @@ import { useFlashSuccess } from '@/hooks/useFlashSuccess'
 import {
   ESTOQUE_OPERACAO_ACERTO,
   formatQty,
+  labelEstoqueSecao,
   operacaoAcertoLabel,
 } from '@/lib/estoque'
 
@@ -19,10 +20,12 @@ type MovimentoRow = {
   movimentoest_sinal: string | null
   movimentoest_produto: number | null
   movimentoest_quantidade: number | null
+  movimentoest_secao: number | null
   produto?: { nome: string | null; grupo: number | null } | null
 }
 
 type GrupoOpt = { grupoproduto_id: number; nome: string }
+type SecaoOpt = { secao_id: number; nome: string }
 type ProdutoOpt = {
   produto_id: number
   nome: string
@@ -44,16 +47,20 @@ export function AcertoEstoquePage() {
 
   const [rows, setRows] = useState<MovimentoRow[]>([])
   const [grupos, setGrupos] = useState<GrupoOpt[]>([])
+  const [secoes, setSecoes] = useState<SecaoOpt[]>([])
   const [produtos, setProdutos] = useState<ProdutoOpt[]>([])
   const [filtroOperacao, setFiltroOperacao] = useState('')
   const [filtroGrupo, setFiltroGrupo] = useState('')
   const [filtroProduto, setFiltroProduto] = useState('')
+  /** '' = todos; 'grupo' = só estoque do grupo; número = seção */
+  const [filtroSecao, setFiltroSecao] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!empresaId) {
       setGrupos([])
+      setSecoes([])
       setProdutos([])
       return
     }
@@ -70,9 +77,15 @@ export function AcertoEstoquePage() {
         .eq('controla_estoque', true)
         .eq('ativo', true)
         .order('nome'),
-    ]).then(([g, p]) => {
+      supabase
+        .from('secao')
+        .select('secao_id, nome')
+        .eq('empresa_id', empresaId)
+        .order('nome'),
+    ]).then(([g, p, s]) => {
       setGrupos((g.data as GrupoOpt[]) ?? [])
       setProdutos((p.data as ProdutoOpt[]) ?? [])
+      setSecoes((s.data as SecaoOpt[]) ?? [])
     })
   }, [empresaId])
 
@@ -89,7 +102,7 @@ export function AcertoEstoquePage() {
       let qy = supabase
         .from('movimento_estoque')
         .select(
-          'movimentoest_id, movimentoest_numero, movimentoest_operacao, movimentoest_emissao, movimentoest_sinal, movimentoest_produto, movimentoest_quantidade, produto:movimentoest_produto(nome, grupo)',
+          'movimentoest_id, movimentoest_numero, movimentoest_operacao, movimentoest_emissao, movimentoest_sinal, movimentoest_produto, movimentoest_quantidade, movimentoest_secao, produto:movimentoest_produto(nome, grupo)',
         )
         .eq('empresa_id', empresaId)
         .eq('movimentoest_origem', 'acerto')
@@ -102,6 +115,11 @@ export function AcertoEstoquePage() {
       }
       if (filtroProduto) {
         qy = qy.eq('movimentoest_produto', Number(filtroProduto))
+      }
+      if (filtroSecao === 'grupo') {
+        qy = qy.is('movimentoest_secao', null)
+      } else if (filtroSecao) {
+        qy = qy.eq('movimentoest_secao', Number(filtroSecao))
       }
 
       const { data, error: loadError } = await qy
@@ -124,13 +142,26 @@ export function AcertoEstoquePage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, flashTick, filtroOperacao, filtroProduto, filtroGrupo])
+  }, [
+    empresaId,
+    flashTick,
+    filtroOperacao,
+    filtroProduto,
+    filtroGrupo,
+    filtroSecao,
+  ])
 
   const produtosDoFiltro = useMemo(() => {
     if (!filtroGrupo) return produtos
     const gid = Number(filtroGrupo)
     return produtos.filter((p) => p.grupo === gid)
   }, [produtos, filtroGrupo])
+
+  const secaoNome = useMemo(() => {
+    const map = new Map(secoes.map((s) => [s.secao_id, s.nome]))
+    return (id: number | null | undefined) =>
+      id != null ? (map.get(id) ?? `Seção ${id}`) : null
+  }, [secoes])
 
   if (!empresaId) {
     return (
@@ -204,6 +235,19 @@ export function AcertoEstoquePage() {
               </option>
             ))}
           </select>
+          <select
+            className="select"
+            value={filtroSecao}
+            onChange={(e) => setFiltroSecao(e.target.value)}
+          >
+            <option value="">Todas as seções / grupo</option>
+            <option value="grupo">Estoque do grupo</option>
+            {secoes.map((s) => (
+              <option key={s.secao_id} value={s.secao_id}>
+                {s.nome}
+              </option>
+            ))}
+          </select>
         </div>
 
         {error ? (
@@ -231,6 +275,7 @@ export function AcertoEstoquePage() {
                   <th>Data</th>
                   <th>Operação</th>
                   <th>Produto</th>
+                  <th>Estoque</th>
                   <th>Sinal</th>
                   <th>Qtde</th>
                 </tr>
@@ -242,6 +287,7 @@ export function AcertoEstoquePage() {
                     <td>{formatDate(row.movimentoest_emissao)}</td>
                     <td>{operacaoAcertoLabel(row.movimentoest_operacao)}</td>
                     <td>{row.produto?.nome ?? '—'}</td>
+                    <td>{labelEstoqueSecao(secaoNome(row.movimentoest_secao))}</td>
                     <td>{row.movimentoest_sinal ?? '—'}</td>
                     <td>{formatQty(row.movimentoest_quantidade)}</td>
                   </tr>

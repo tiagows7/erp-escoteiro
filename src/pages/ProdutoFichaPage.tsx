@@ -6,6 +6,7 @@ import { AlertMessage } from '@/components/AlertMessage'
 import { formatMoney } from '@/lib/despesas'
 import {
   formatQty,
+  labelEstoqueSecao,
   operacaoEstoqueLabel,
 } from '@/lib/estoque'
 
@@ -29,6 +30,7 @@ type MovimentoRow = {
   movimentoest_total: number | null
   movimentoest_origem: string | null
   movimentoest_obs: string | null
+  movimentoest_secao: number | null
 }
 
 type LinhaFicha = MovimentoRow & {
@@ -60,6 +62,9 @@ export function ProdutoFichaPage() {
 
   const [produto, setProduto] = useState<ProdutoInfo | null>(null)
   const [grupos, setGrupos] = useState<GrupoOpt[]>([])
+  const [secoes, setSecoes] = useState<{ secao_id: number; nome: string }[]>(
+    [],
+  )
   const [movimentos, setMovimentos] = useState<MovimentoRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -74,7 +79,7 @@ export function ProdutoFichaPage() {
     let mounted = true
     void (async () => {
       setLoading(true)
-      const [prodRes, movRes, grupoRes] = await Promise.all([
+      const [prodRes, movRes, grupoRes, secaoRes] = await Promise.all([
         supabase
           .from('produto')
           .select(
@@ -86,7 +91,7 @@ export function ProdutoFichaPage() {
         supabase
           .from('movimento_estoque')
           .select(
-            'movimentoest_id, movimentoest_numero, movimentoest_operacao, movimentoest_emissao, movimentoest_sinal, movimentoest_quantidade, movimentoest_unitario, movimentoest_total, movimentoest_origem, movimentoest_obs',
+            'movimentoest_id, movimentoest_numero, movimentoest_operacao, movimentoest_emissao, movimentoest_sinal, movimentoest_quantidade, movimentoest_unitario, movimentoest_total, movimentoest_origem, movimentoest_obs, movimentoest_secao',
           )
           .eq('empresa_id', empresaId)
           .eq('movimentoest_produto', produtoId)
@@ -96,6 +101,11 @@ export function ProdutoFichaPage() {
         supabase
           .from('grupo_produto')
           .select('grupoproduto_id, nome')
+          .eq('empresa_id', empresaId)
+          .order('nome'),
+        supabase
+          .from('secao')
+          .select('secao_id, nome')
           .eq('empresa_id', empresaId)
           .order('nome'),
       ])
@@ -118,6 +128,9 @@ export function ProdutoFichaPage() {
         )
       }
       setGrupos((grupoRes.data as GrupoOpt[]) ?? [])
+      setSecoes(
+        (secaoRes.data as { secao_id: number; nome: string }[]) ?? [],
+      )
       setLoading(false)
     })()
 
@@ -236,6 +249,7 @@ export function ProdutoFichaPage() {
                       <th>Data</th>
                       <th>Nº</th>
                       <th>Operação</th>
+                      <th>Estoque</th>
                       <th>Origem</th>
                       <th>Entrada</th>
                       <th>Saída</th>
@@ -250,6 +264,15 @@ export function ProdutoFichaPage() {
                         <td>{row.movimentoest_numero ?? '—'}</td>
                         <td>
                           {operacaoEstoqueLabel(row.movimentoest_operacao)}
+                        </td>
+                        <td>
+                          {labelEstoqueSecao(
+                            row.movimentoest_secao != null
+                              ? (secoes.find(
+                                  (s) => s.secao_id === row.movimentoest_secao,
+                                )?.nome ?? `Seção ${row.movimentoest_secao}`)
+                              : null,
+                          )}
                         </td>
                         <td>{origemLabel(row.movimentoest_origem)}</td>
                         <td>

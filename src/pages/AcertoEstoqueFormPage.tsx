@@ -13,12 +13,12 @@ import {
 } from '@/lib/estoque'
 
 type GrupoOpt = { grupoproduto_id: number; nome: string }
+type SecaoOpt = { secao_id: number; nome: string; ramo: number | null }
 type ProdutoOpt = {
   produto_id: number
   nome: string
   grupo: number | null
   valor_venda: number | null
-  estoque_atual: number | null
 }
 
 type LinhaAcerto = {
@@ -44,10 +44,14 @@ export function AcertoEstoqueFormPage() {
   const empresaId = empresa?.id
 
   const [grupos, setGrupos] = useState<GrupoOpt[]>([])
+  const [secoes, setSecoes] = useState<SecaoOpt[]>([])
+  const [ramos, setRamos] = useState<{ ramo_id: number; nome: string }[]>([])
   const [produtos, setProdutos] = useState<ProdutoOpt[]>([])
 
   const [dataAcerto, setDataAcerto] = useState(todayKey())
   const [operacao, setOperacao] = useState(String(ESTOQUE_OPERACAO_ACERTO[0].id))
+  /** Vazio = estoque do grupo. */
+  const [secaoId, setSecaoId] = useState('')
   const [filtroGrupo, setFiltroGrupo] = useState('')
   const [produtoId, setProdutoId] = useState('')
   const [linhas, setLinhas] = useState<LinhaAcerto[]>([])
@@ -64,7 +68,7 @@ export function AcertoEstoqueFormPage() {
     }
     let mounted = true
     void (async () => {
-      const [g, p] = await Promise.all([
+      const [g, p, s, r] = await Promise.all([
         supabase
           .from('grupo_produto')
           .select('grupoproduto_id, nome')
@@ -72,15 +76,23 @@ export function AcertoEstoqueFormPage() {
           .order('nome'),
         supabase
           .from('produto')
-          .select('produto_id, nome, grupo, valor_venda, estoque_atual')
+          .select('produto_id, nome, grupo, valor_venda')
           .eq('empresa_id', empresaId)
           .eq('controla_estoque', true)
           .eq('ativo', true)
           .order('nome'),
+        supabase
+          .from('secao')
+          .select('secao_id, nome, ramo')
+          .eq('empresa_id', empresaId)
+          .order('nome'),
+        supabase.from('ramos').select('ramo_id, nome').order('ramo_id'),
       ])
       if (!mounted) return
       setGrupos((g.data as GrupoOpt[]) ?? [])
       setProdutos((p.data as ProdutoOpt[]) ?? [])
+      setSecoes((s.data as SecaoOpt[]) ?? [])
+      setRamos((r.data as { ramo_id: number; nome: string }[]) ?? [])
       setLoading(false)
     })()
     return () => {
@@ -100,7 +112,19 @@ export function AcertoEstoqueFormPage() {
       grupoId != null ? map.get(grupoId) ?? '—' : '—'
   }, [grupos])
 
-  function onConsultar() {
+  const secaoLabel = useMemo(() => {
+    if (!secaoId) return 'Grupo'
+    const secao = secoes.find((s) => String(s.secao_id) === secaoId)
+    if (!secao) return 'Grupo'
+    const ramoNome =
+      secao.ramo != null
+        ? (ramos.find((r) => r.ramo_id === secao.ramo)?.nome ?? null)
+        : null
+    return ramoNome ? `${secao.nome} (${ramoNome})` : secao.nome
+  }, [secaoId, secoes, ramos])
+
+  async function onConsultar() {
+    if (!empresaId) return
     setError(null)
     let selecionados = produtosFiltrados
     if (produtoId) {
@@ -115,6 +139,24 @@ export function AcertoEstoqueFormPage() {
       return
     }
 
+    const secaoNum = secaoId ? Number(secaoId) : null
+    const { data: saldosData, error: saldosError } = await supabase.rpc(
+      'produto_saldos_por_secao',
+      {
+        p_empresa_id: empresaId,
+        p_secao_id: secaoNum,
+      },
+    )
+    if (saldosError) {
+      setError(saldosError.message)
+      return
+    }
+    const saldoMap = new Map(
+      ((saldosData ?? []) as { produto_id: number; saldo: number }[]).map(
+        (row) => [row.produto_id, Number(row.saldo ?? 0)],
+      ),
+    )
+
     setLinhas((prev) => {
       const prevMap = new Map(prev.map((l) => [l.produto_id, l]))
       return selecionados.map((p) => {
@@ -124,7 +166,7 @@ export function AcertoEstoqueFormPage() {
           nome: p.nome,
           grupo: p.grupo,
           valor_venda: p.valor_venda,
-          saldo: Number(p.estoque_atual ?? 0),
+          saldo: saldoMap.get(p.produto_id) ?? 0,
           quantidade: existing?.quantidade ?? '',
           obs: existing?.obs ?? '',
         }
@@ -208,6 +250,10 @@ export function AcertoEstoqueFormPage() {
       .maybeSingle()
 
     let proximoNumero = Number(maxRow?.movimentoest_numero ?? 0) + 1
+    const secaoNum = secaoId ? Number(secaoId) : null
+    const secaoInfo = secaoNum
+      ? secoes.find((s) => s.secao_id === secaoNum)
+      : null
     const payload = paraLancar.map(({ linha, qtd }) => {
       const unitario = Number(linha.valor_venda ?? 0)
       const row = {
@@ -222,6 +268,8 @@ export function AcertoEstoqueFormPage() {
         movimentoest_total: Number((qtd * unitario).toFixed(2)),
         movimentoest_origem: ESTOQUE_ORIGEM.ACERTO,
         movimentoest_obs: linha.obs.trim() || null,
+        movimentoest_secao: secaoNum,
+        movimentoest_ramo: secaoInfo?.ramo ?? null,
       }
       proximoNumero += 1
       return row
@@ -275,7 +323,8 @@ export function AcertoEstoqueFormPage() {
         <div>
           <h2>Novo acerto de estoque</h2>
           <p>
-            Grupo <strong>{empresa?.nome}</strong>
+            Grupo <strong>{empresa?.nome}</strong> · estoque:{' '}
+            <strong>{secaoLabel}</strong>
           </p>
         </div>
         <Link className="btn btn-soft" to="/estoque/acerto">
@@ -323,7 +372,38 @@ export function AcertoEstoqueFormPage() {
           </div>
 
           <div className="field">
-            <label htmlFor="filtro_grupo">Grupo</label>
+            <label htmlFor="secao_estoque">Seção</label>
+            <select
+              id="secao_estoque"
+              className="select"
+              value={secaoId}
+              onChange={(e) => {
+                setSecaoId(e.target.value)
+                setLinhas([])
+                setConsultou(false)
+              }}
+              disabled={disabled}
+            >
+              <option value="">Estoque do grupo</option>
+              {secoes.map((s) => {
+                const ramoNome =
+                  s.ramo != null
+                    ? (ramos.find((r) => r.ramo_id === s.ramo)?.nome ?? null)
+                    : null
+                return (
+                  <option key={s.secao_id} value={s.secao_id}>
+                    {ramoNome ? `${s.nome} (${ramoNome})` : s.nome}
+                  </option>
+                )
+              })}
+            </select>
+            <span className="field-hint">
+              Em branco, o movimento entra no estoque do grupo.
+            </span>
+          </div>
+
+          <div className="field">
+            <label htmlFor="filtro_grupo">Grupo de produto</label>
             <select
               id="filtro_grupo"
               className="select"
@@ -366,7 +446,7 @@ export function AcertoEstoqueFormPage() {
           <button
             type="button"
             className="btn btn-soft"
-            onClick={onConsultar}
+            onClick={() => void onConsultar()}
             disabled={disabled || produtos.length === 0}
           >
             Consultar
@@ -383,7 +463,7 @@ export function AcertoEstoqueFormPage() {
                   <tr>
                     <th>Produto</th>
                     <th>Grupo</th>
-                    <th>Saldo</th>
+                    <th>Saldo ({secaoLabel})</th>
                     <th style={{ minWidth: 110 }}>Quantidade</th>
                     <th style={{ minWidth: 180 }}>Observação</th>
                     <th></th>

@@ -69,3 +69,9 @@ export function parseQtyInput(value: string): number {
   const n = Number(cleaned)
   return Number.isFinite(n) ? n : 0
 }
+
+/** null / vazio = estoque do grupo (sem seção). */
+export function labelEstoqueSecao(nome: string | null | undefined): string {
+  const text = (nome ?? '').trim()
+  return text || 'Grupo'
+}
