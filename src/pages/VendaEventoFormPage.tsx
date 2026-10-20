@@ -154,6 +154,8 @@ export function VendaEventoFormPage() {
     base: number
   } | null>(null)
   const [repasseDespesaId, setRepasseDespesaId] = useState<number | null>(null)
+  /** Tipo fixo nos parâmetros do grupo. */
+  const [tipoReceitaParam, setTipoReceitaParam] = useState('')
   const imagemInputRef = useRef<HTMLInputElement>(null)
 
   const ramoId = form.ramo ? Number(form.ramo) : null
@@ -194,10 +196,27 @@ export function VendaEventoFormPage() {
         .select('secaonome_id, nome, ramo, secao')
         .eq('empresa_id', empresaId)
         .order('nome'),
-    ]).then(([r, s, p]) => {
+      supabase
+        .from('empresa')
+        .select('evento_receita_tipo_id')
+        .eq('id', empresaId)
+        .maybeSingle(),
+    ]).then(([r, s, p, emp]) => {
       setRamos((r.data as Ramo[]) ?? [])
       setSecoes((s.data as Secao[]) ?? [])
       setPatrulhas((p.data as Patrulha[]) ?? [])
+      const tipoParam =
+        emp.data?.evento_receita_tipo_id != null
+          ? String(emp.data.evento_receita_tipo_id)
+          : ''
+      setTipoReceitaParam(tipoParam)
+      if (tipoParam) {
+        setForm((prev) =>
+          prev.receita_tipo_id
+            ? prev
+            : { ...prev, receita_tipo_id: tipoParam },
+        )
+      }
     })
   }, [empresaId])
 
@@ -492,8 +511,11 @@ export function VendaEventoFormPage() {
         setError('Grupo escoteiro não carregado.')
         return
       }
-      if (!form.receita_tipo_id) {
-        setError('Tipo de receita não informado.')
+      const tipoReceita = form.receita_tipo_id || tipoReceitaParam
+      if (!tipoReceita) {
+        setError(
+          'Tipo de receita do evento não informado. Configure em Cadastros → Grupos → Parâmetros.',
+        )
         return
       }
       setSaving(true)
@@ -501,9 +523,7 @@ export function VendaEventoFormPage() {
       const { error: saveError } = await supabase
         .from('venda_eventos')
         .update({
-          receita_tipo_id: form.receita_tipo_id
-            ? Number(form.receita_tipo_id)
-            : null,
+          receita_tipo_id: Number(tipoReceita),
         })
         .eq('evento_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -557,8 +577,11 @@ export function VendaEventoFormPage() {
       setError('Não use o mesmo nome em mais de um tipo de convite.')
       return
     }
-    if (!form.receita_tipo_id) {
-      setError('Tipo de receita não informado.')
+    const tipoReceita = form.receita_tipo_id || tipoReceitaParam
+    if (!tipoReceita) {
+      setError(
+        'Tipo de receita do evento não informado. Configure em Cadastros → Grupos → Parâmetros.',
+      )
       return
     }
 
@@ -588,9 +611,7 @@ export function VendaEventoFormPage() {
       data_evento: form.data_evento || null,
       valor_grupo: parseMoneyInput(form.valor_grupo),
       valor_grupo_tipo: form.valor_grupo_tipo,
-      receita_tipo_id: form.receita_tipo_id
-        ? Number(form.receita_tipo_id)
-        : null,
+      receita_tipo_id: Number(tipoReceita),
     }
 
     const result = isNew
@@ -885,10 +906,17 @@ export function VendaEventoFormPage() {
           </div>
 
           <TipoReceitaField
+            id="evento_receita_tipo_id"
+            label="Tipo de receita"
             empresaId={empresaId}
-            value={form.receita_tipo_id}
+            value={form.receita_tipo_id || tipoReceitaParam}
             onChange={(value) => update('receita_tipo_id', value)}
-            disabled={saving || !canWrite}
+            disabled
+            hint={
+              tipoReceitaParam
+                ? 'Fixo nos parâmetros do grupo (Cadastros → Grupos → Parâmetros).'
+                : 'Configure o tipo em Cadastros → Grupos → Parâmetros antes de criar o evento.'
+            }
           />
 
           <div className="field">

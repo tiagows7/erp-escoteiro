@@ -113,6 +113,8 @@ export type Empresa = {
   atividade_receita_tipo_id?: number | null
   /** Tipo de receita padrão da ação entre amigos. */
   acao_receita_tipo_id?: number | null
+  /** Tipo de receita padrão dos eventos. */
+  evento_receita_tipo_id?: number | null
   /** Ref do PDF do regimento (empresa-regimento:…). */
   regimento_interno?: string | null
   /** Ref do PDF do estatuto (empresa-regimento:…). */
