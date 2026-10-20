@@ -108,6 +108,7 @@ const emptyForm = {
   envia_email_vencimento: false,
   loja_receita_tipo_id: '',
   atividade_receita_tipo_id: '',
+  acao_receita_tipo_id: '',
   logo_url: '' as string | null,
   adminNome: '',
   adminEmail: '',
@@ -218,7 +219,7 @@ export function GrupoFormPage() {
         supabase
           .from('empresa')
           .select(
-            'id, nome, cnpj, email, slug, telefone, estado, cidade, logo_url, ativo, portal_transparencia, plataforma_plano_id, plataforma_isento, plataforma_dia_vencimento, dia_vencimento_mensalidade, envia_email_vencimento, loja_receita_tipo_id, atividade_receita_tipo_id',
+            'id, nome, cnpj, email, slug, telefone, estado, cidade, logo_url, ativo, portal_transparencia, plataforma_plano_id, plataforma_isento, plataforma_dia_vencimento, dia_vencimento_mensalidade, envia_email_vencimento, loja_receita_tipo_id, atividade_receita_tipo_id, acao_receita_tipo_id',
           )
           .eq('id', Number(id))
           .maybeSingle(),
@@ -281,6 +282,7 @@ export function GrupoFormPage() {
         loja_receita_tipo_id: data.loja_receita_tipo_id?.toString() ?? '',
         atividade_receita_tipo_id:
           data.atividade_receita_tipo_id?.toString() ?? '',
+        acao_receita_tipo_id: data.acao_receita_tipo_id?.toString() ?? '',
         logo_url: data.logo_url,
       })
       setLogoPreview(data.logo_url)
@@ -445,6 +447,9 @@ export function GrupoFormPage() {
             atividade_receita_tipo_id: form.atividade_receita_tipo_id
               ? Number(form.atividade_receita_tipo_id)
               : null,
+            acao_receita_tipo_id: form.acao_receita_tipo_id
+              ? Number(form.acao_receita_tipo_id)
+              : null,
           })
           .eq('id', result.empresa.id)
 
@@ -500,6 +505,9 @@ export function GrupoFormPage() {
             : null,
           atividade_receita_tipo_id: form.atividade_receita_tipo_id
             ? Number(form.atividade_receita_tipo_id)
+            : null,
+          acao_receita_tipo_id: form.acao_receita_tipo_id
+            ? Number(form.acao_receita_tipo_id)
             : null,
           ...(isSuperAdmin
             ? {
@@ -1297,6 +1305,24 @@ export function GrupoFormPage() {
                   isNew
                     ? 'Salve o grupo para escolher o tipo. As novas atividades usam este tipo automaticamente.'
                     : 'Fica fixo nos parâmetros. Toda nova atividade sai com este tipo de receita.'
+                }
+              />
+              <TipoReceitaField
+                id="acao_receita_tipo_id"
+                label="Tipo de receita — Ação entre amigos"
+                empresaId={isNew ? undefined : Number(id)}
+                value={form.acao_receita_tipo_id}
+                onChange={(value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    acao_receita_tipo_id: value,
+                  }))
+                }
+                disabled={disabled || isNew}
+                hint={
+                  isNew
+                    ? 'Salve o grupo para escolher o tipo. As novas ações usam este tipo automaticamente.'
+                    : 'Fica fixo nos parâmetros. Toda nova ação entre amigos sai com este tipo de receita.'
                 }
               />
             </div>

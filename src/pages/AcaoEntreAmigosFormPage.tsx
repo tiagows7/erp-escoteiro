@@ -165,6 +165,8 @@ export function AcaoEntreAmigosFormPage() {
   const [ganhadores, setGanhadores] = useState<
     { premio: number; numero: number; nome: string; telefone: string }[]
   >([])
+  /** Tipo fixo nos parâmetros do grupo. */
+  const [tipoReceitaParam, setTipoReceitaParam] = useState('')
   const imagemInputRef = useRef<HTMLInputElement>(null)
 
   const ramoId = form.ramo ? Number(form.ramo) : null
@@ -252,11 +254,28 @@ export function AcaoEntreAmigosFormPage() {
         .eq('empresa_id', empresaId)
         .eq('ativo', true)
         .order('nome'),
-    ]).then(([r, s, p, a]) => {
+      supabase
+        .from('empresa')
+        .select('acao_receita_tipo_id')
+        .eq('id', empresaId)
+        .maybeSingle(),
+    ]).then(([r, s, p, a, emp]) => {
       setRamos((r.data as Ramo[]) ?? [])
       setSecoes((s.data as Secao[]) ?? [])
       setPatrulhas((p.data as Patrulha[]) ?? [])
       setAssociados((a.data as AssociadoOpt[]) ?? [])
+      const tipoParam =
+        emp.data?.acao_receita_tipo_id != null
+          ? String(emp.data.acao_receita_tipo_id)
+          : ''
+      setTipoReceitaParam(tipoParam)
+      if (tipoParam) {
+        setForm((prev) =>
+          prev.receita_tipo_id
+            ? prev
+            : { ...prev, receita_tipo_id: tipoParam },
+        )
+      }
     })
   }, [empresaId])
 
@@ -553,8 +572,11 @@ export function AcaoEntreAmigosFormPage() {
         setError('Grupo escoteiro não carregado.')
         return
       }
-      if (!form.receita_tipo_id) {
-        setError('Tipo de receita não informado.')
+      const tipoReceita = form.receita_tipo_id || tipoReceitaParam
+      if (!tipoReceita) {
+        setError(
+          'Tipo de receita da ação entre amigos não informado. Configure em Cadastros → Grupos → Parâmetros.',
+        )
         return
       }
       setSaving(true)
@@ -562,9 +584,7 @@ export function AcaoEntreAmigosFormPage() {
       const { error: saveError } = await supabase
         .from('acao_entre_amigos')
         .update({
-          receita_tipo_id: form.receita_tipo_id
-            ? Number(form.receita_tipo_id)
-            : null,
+          receita_tipo_id: Number(tipoReceita),
         })
         .eq('acao_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -615,8 +635,11 @@ export function AcaoEntreAmigosFormPage() {
       setError('A quantidade de prêmios deve ser no máximo 100.')
       return
     }
-    if (!form.receita_tipo_id) {
-      setError('Tipo de receita não informado.')
+    const tipoReceita = form.receita_tipo_id || tipoReceitaParam
+    if (!tipoReceita) {
+      setError(
+        'Tipo de receita da ação entre amigos não informado. Configure em Cadastros → Grupos → Parâmetros.',
+      )
       return
     }
 
@@ -644,9 +667,7 @@ export function AcaoEntreAmigosFormPage() {
       data_sorteio: form.data_sorteio || null,
       data_limite_venda: form.data_limite_venda || null,
       quantidade_premios: qtdPremios,
-      receita_tipo_id: form.receita_tipo_id
-        ? Number(form.receita_tipo_id)
-        : null,
+      receita_tipo_id: Number(tipoReceita),
     }
 
     const result = isNew
@@ -1114,10 +1135,17 @@ export function AcaoEntreAmigosFormPage() {
           </div>
 
           <TipoReceitaField
+            id="acao_receita_tipo_id"
+            label="Tipo de receita"
             empresaId={empresaId}
-            value={form.receita_tipo_id}
+            value={form.receita_tipo_id || tipoReceitaParam}
             onChange={(value) => update('receita_tipo_id', value)}
-            disabled={saving || !canWrite}
+            disabled
+            hint={
+              tipoReceitaParam
+                ? 'Fixo nos parâmetros do grupo (Cadastros → Grupos → Parâmetros).'
+                : 'Configure o tipo em Cadastros → Grupos → Parâmetros antes de criar a ação.'
+            }
           />
 
           <div className="field">
