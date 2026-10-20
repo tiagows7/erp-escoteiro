@@ -107,6 +107,10 @@ export type Empresa = {
   dia_vencimento_mensalidade?: number | null
   /** Aviso automático por e-mail quando a mensalidade vence. */
   envia_email_vencimento?: boolean | null
+  /** Tipo de receita padrão da loja. */
+  loja_receita_tipo_id?: number | null
+  /** Tipo de receita padrão das atividades. */
+  atividade_receita_tipo_id?: number | null
   /** Ref do PDF do regimento (empresa-regimento:…). */
   regimento_interno?: string | null
   /** Ref do PDF do estatuto (empresa-regimento:…). */

@@ -108,6 +108,8 @@ export function AtividadeFormPage() {
   const [repasseDespesaId, setRepasseDespesaId] = useState<number | null>(null)
   const [jovensLive, setJovensLive] = useState(0)
   const [baseLive, setBaseLive] = useState(0)
+  /** Tipo fixo nos parâmetros do grupo. */
+  const [tipoReceitaParam, setTipoReceitaParam] = useState('')
 
   const ramoId = form.ramo ? Number(form.ramo) : null
   const secaoId = form.secao ? Number(form.secao) : null
@@ -174,10 +176,27 @@ export function AtividadeFormPage() {
         .select('secaonome_id, nome, ramo, secao')
         .eq('empresa_id', empresaId)
         .order('nome'),
-    ]).then(([r, s, p]) => {
+      supabase
+        .from('empresa')
+        .select('atividade_receita_tipo_id')
+        .eq('id', empresaId)
+        .maybeSingle(),
+    ]).then(([r, s, p, emp]) => {
       setRamos((r.data as Ramo[]) ?? [])
       setSecoes((s.data as Secao[]) ?? [])
       setPatrulhas((p.data as Patrulha[]) ?? [])
+      const tipoParam =
+        emp.data?.atividade_receita_tipo_id != null
+          ? String(emp.data.atividade_receita_tipo_id)
+          : ''
+      setTipoReceitaParam(tipoParam)
+      if (tipoParam) {
+        setForm((prev) =>
+          prev.receita_tipo_id
+            ? prev
+            : { ...prev, receita_tipo_id: tipoParam },
+        )
+      }
     })
   }, [empresaId])
 
@@ -355,8 +374,11 @@ export function AtividadeFormPage() {
         setError('Grupo escoteiro não carregado.')
         return
       }
-      if (!form.receita_tipo_id) {
-        setError('Tipo de receita não informado.')
+      const tipoReceita = form.receita_tipo_id || tipoReceitaParam
+      if (!tipoReceita) {
+        setError(
+          'Tipo de receita da atividade não informado. Configure em Cadastros → Grupos → Parâmetros.',
+        )
         return
       }
       setSaving(true)
@@ -364,9 +386,7 @@ export function AtividadeFormPage() {
       const { error: saveError } = await supabase
         .from('atividades')
         .update({
-          receita_tipo_id: form.receita_tipo_id
-            ? Number(form.receita_tipo_id)
-            : null,
+          receita_tipo_id: Number(tipoReceita),
         })
         .eq('atividade_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -393,8 +413,12 @@ export function AtividadeFormPage() {
       setError('Informe a descrição da atividade.')
       return
     }
-    if (!form.receita_tipo_id) {
-      setError('Tipo de receita não informado.')
+    const tipoReceita =
+      form.receita_tipo_id || tipoReceitaParam
+    if (!tipoReceita) {
+      setError(
+        'Tipo de receita da atividade não informado. Configure em Cadastros → Grupos → Parâmetros.',
+      )
       return
     }
 
@@ -421,9 +445,7 @@ export function AtividadeFormPage() {
       valor: parseMoneyInput(form.valor),
       valor_grupo: parseMoneyInput(form.valor_grupo),
       valor_grupo_tipo: form.valor_grupo_tipo,
-      receita_tipo_id: form.receita_tipo_id
-        ? Number(form.receita_tipo_id)
-        : null,
+      receita_tipo_id: Number(tipoReceita),
     }
 
     const result = isNew
@@ -687,10 +709,17 @@ export function AtividadeFormPage() {
             </div>
 
             <TipoReceitaField
+              id="atividade_receita_tipo_id"
+              label="Tipo de receita"
               empresaId={empresaId}
-              value={form.receita_tipo_id}
+              value={form.receita_tipo_id || tipoReceitaParam}
               onChange={(value) => update('receita_tipo_id', value)}
-              disabled={saving || !canWrite}
+              disabled
+              hint={
+                tipoReceitaParam
+                  ? 'Fixo nos parâmetros do grupo (Cadastros → Grupos → Parâmetros).'
+                  : 'Configure o tipo em Cadastros → Grupos → Parâmetros antes de criar a atividade.'
+              }
             />
 
             <div className="field">

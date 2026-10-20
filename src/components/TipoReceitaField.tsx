@@ -13,12 +13,16 @@ export function TipoReceitaField({
   onChange,
   disabled,
   hint,
+  label = 'Tipo de receita',
+  id = 'receita_tipo_id',
 }: {
   empresaId: number | undefined
   value: string
   onChange: (value: string) => void
   disabled?: boolean
   hint?: string
+  label?: string
+  id?: string
 }) {
   const [tipos, setTipos] = useState<TipoOpcao[]>([])
 
@@ -43,9 +47,9 @@ export function TipoReceitaField({
 
   return (
     <div className="field field-span-2">
-      <label htmlFor="receita_tipo_id">Tipo de receita</label>
+      <label htmlFor={id}>{label}</label>
       <select
-        id="receita_tipo_id"
+        id={id}
         className="select"
         value={value}
         onChange={(e) => onChange(e.target.value)}
