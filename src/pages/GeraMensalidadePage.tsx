@@ -372,12 +372,13 @@ export function GeraMensalidadePage() {
 
     const chunkSize = 100
     let inserted = 0
+    const receitaPorAssociado = new Map<number, number>()
     for (let i = 0; i < payload.length; i += chunkSize) {
       const chunk = payload.slice(i, i + chunkSize)
       const { error: insertError, data } = await supabase
         .from('receitas')
         .insert(chunk)
-        .select('receita_id')
+        .select('receita_id, associado_id')
 
       if (insertError) {
         setGenerating(false)
@@ -387,6 +388,13 @@ export function GeraMensalidadePage() {
         )
         void carregarPreview()
         return
+      }
+      for (const row of data ?? []) {
+        const assocId = Number(row.associado_id)
+        const receitaId = Number(row.receita_id)
+        if (Number.isFinite(assocId) && Number.isFinite(receitaId) && receitaId > 0) {
+          receitaPorAssociado.set(assocId, receitaId)
+        }
       }
       inserted += data?.length ?? chunk.length
       setProgressDetail(`${inserted} de ${payload.length}`)
@@ -399,7 +407,7 @@ export function GeraMensalidadePage() {
       `${inserted} receita(s) criada(s) com sucesso.`,
     )
 
-    await oferecerEmail(aGerar, vencimento)
+    await oferecerEmail(aGerar, vencimento, receitaPorAssociado)
 
     const comWhats = aGerar.filter((row) =>
       normalizeWhatsAppPhone(row.responsavel_fonecelular || row.celular),
@@ -428,7 +436,11 @@ export function GeraMensalidadePage() {
     return null
   }
 
-  async function oferecerEmail(rows: PreviewRow[], vencimento: string) {
+  async function oferecerEmail(
+    rows: PreviewRow[],
+    vencimento: string,
+    receitaPorAssociado?: Map<number, number>,
+  ) {
     if (!empresaId) return
     const comEmail = rows.filter((row) => emailDestino(row))
     const semEmail = rows.length - comEmail.length
@@ -467,6 +479,7 @@ export function GeraMensalidadePage() {
           valor: row.valor,
           competencia: compLabel,
           vencimento: vencLabel,
+          receita_id: receitaPorAssociado?.get(row.associado_id) ?? null,
         })),
         onProgress: (feitos, total) => setProgressDetail(`${feitos} de ${total}`),
       })

@@ -17,6 +17,14 @@ type Item = {
   valor: number
   competencia: string
   vencimento: string
+  /** Título gerado — usado para montar o PIX. */
+  receita_id?: number | null
+}
+
+type PixEmailInfo = {
+  pix_copia_e_cola: string
+  link: string
+  valor: number
 }
 
 type AssociadoMail = {
@@ -169,6 +177,16 @@ Deno.serve(async (req) => {
       })
       try {
         for (const row of prontos) {
+          const receitaId = Number(row.item.receita_id)
+          const pix =
+            Number.isFinite(receitaId) && receitaId > 0
+              ? await criarPixMensalidadeEmail({
+                  empresaId,
+                  associadoId: row.associado_id,
+                  receitaIds: [receitaId],
+                  descricao: `Mensalidade ${row.item.competencia} — ${empresa.nome}`,
+                })
+              : null
           const texto = montarTexto({
             grupo: empresa.nome as string,
             nome: row.nome,
@@ -177,6 +195,7 @@ Deno.serve(async (req) => {
             valor: Number(row.item.valor),
             competencia: String(row.item.competencia ?? '').trim(),
             vencimento: String(row.item.vencimento ?? '').trim(),
+            pix,
           })
           try {
             await smtp.send({
@@ -387,6 +406,7 @@ function montarTexto(opts: {
   valor: number
   competencia: string
   vencimento: string
+  pix?: PixEmailInfo | null
 }): string {
   const grupo = opts.grupo.trim() || 'Grupo Escoteiro'
   const reg =
@@ -407,22 +427,92 @@ function montarTexto(opts: {
   ]
   if (opts.tipo) linhas.push(`• ${opts.tipo}: ${valor}`)
   if (opts.vencimento) linhas.push(`• Vencimento ${opts.vencimento}`)
+  linhas.push(...blocoPix(opts.pix))
   linhas.push(
     '',
-    'Para efetuar o pagamento, acesse o aplicativo do grupo:',
+    'Você também pode pagar pelo aplicativo do grupo:',
     SITE,
-    '',
-    'No login, use o número de registro do associado e a senha cadastrada.',
   )
   if (opts.registro != null && String(opts.registro).trim()) {
-    linhas.push(`Registro para login: ${String(opts.registro).replace(/\D/g, '')}`)
+    linhas.push(
+      `Login: registro ${String(opts.registro).replace(/\D/g, '')} e a senha cadastrada.`,
+    )
   }
-  linhas.push(
-    'No painel inicial, abra Mensalidades em aberto e toque em Pagar.',
-    '',
-    'Qualquer dúvida, fale conosco. Obrigado!',
-  )
+  linhas.push('', 'Qualquer dúvida, fale conosco. Obrigado!')
   return linhas.join('\n')
+}
+
+function blocoPix(pix: PixEmailInfo | null | undefined): string[] {
+  if (!pix?.pix_copia_e_cola) {
+    return [
+      '',
+      'Para pagar, acesse o aplicativo do grupo, abra Mensalidades em aberto e toque em Pagar.',
+    ]
+  }
+  return [
+    '',
+    'Pague agora com PIX:',
+    pix.link,
+    '',
+    'Ou copie e cole no app do seu banco:',
+    pix.pix_copia_e_cola,
+    '',
+    'Após o pagamento, a baixa no sistema é automática.',
+  ]
+}
+
+async function criarPixMensalidadeEmail(opts: {
+  empresaId: number
+  associadoId: number
+  receitaIds: number[]
+  descricao: string
+}): Promise<PixEmailInfo | null> {
+  const ids = [
+    ...new Set(
+      opts.receitaIds.filter((n) => Number.isFinite(n) && n > 0),
+    ),
+  ]
+  if (ids.length === 0) return null
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/pix-sicredi`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'create_mensalidade_email',
+        empresa_id: opts.empresaId,
+        associado_id: opts.associadoId,
+        receita_ids: ids,
+        descricao: opts.descricao,
+      }),
+    })
+    const data = (await res.json().catch(() => null)) as {
+      ok?: boolean
+      configured?: boolean
+      cobranca?: {
+        pix_copia_e_cola?: string | null
+        link_token?: string | null
+        valor?: number
+      }
+      error?: string
+    } | null
+    const code = data?.cobranca?.pix_copia_e_cola?.trim()
+    const token = data?.cobranca?.link_token?.trim()
+    if (!data?.ok || !code || !token) return null
+    return {
+      pix_copia_e_cola: code,
+      link: `${SITE}/pagar-mensalidade/${token}`,
+      valor: Number(data.cobranca?.valor ?? 0),
+    }
+  } catch {
+    return null
+  }
 }
 
 function textoParaHtml(texto: string): string {
@@ -582,11 +672,22 @@ async function lembreteVencidas(req: Request, _body: unknown): Promise<Response>
         continue
       }
       const grupo = grupoNome.get(primeiro.empresa_id)?.trim() || 'Grupo Escoteiro'
+      const receitaIds = lista.map((row) => Number(row.receita_id))
+      const pix = await criarPixMensalidadeEmail({
+        empresaId: primeiro.empresa_id,
+        associadoId: primeiro.associado_id,
+        receitaIds,
+        descricao:
+          lista.length === 1
+            ? `Mensalidade vencida — ${grupo}`
+            : `Mensalidades vencidas (${lista.length}) — ${grupo}`,
+      })
       const texto = montarTextoVencido({
         grupo,
         nome,
         registro: pessoa?.registro ?? null,
         titulos: lista,
+        pix,
       })
       try {
         await smtp.send({
@@ -630,6 +731,7 @@ function montarTextoVencido(opts: {
   nome: string
   registro: number | null
   titulos: ReceitaVencida[]
+  pix?: PixEmailInfo | null
 }): string {
   const reg =
     opts.registro != null && String(opts.registro).trim()
@@ -656,20 +758,19 @@ function montarTextoVencido(opts: {
   linhas.push(
     '',
     `Total em aberto: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.`,
+  )
+  linhas.push(...blocoPix(opts.pix))
+  linhas.push(
     '',
-    'Para efetuar o pagamento, acesse o aplicativo do grupo:',
+    'Você também pode pagar pelo aplicativo do grupo:',
     SITE,
-    '',
-    'No login, use o número de registro do associado e a senha cadastrada.',
   )
   if (opts.registro != null && String(opts.registro).trim()) {
-    linhas.push(`Registro para login: ${String(opts.registro).replace(/\D/g, '')}`)
+    linhas.push(
+      `Login: registro ${String(opts.registro).replace(/\D/g, '')} e a senha cadastrada.`,
+    )
   }
-  linhas.push(
-    'No painel inicial, abra Mensalidades em aberto e toque em Pagar.',
-    '',
-    'Qualquer dúvida, fale conosco. Obrigado!',
-  )
+  linhas.push('', 'Qualquer dúvida, fale conosco. Obrigado!')
   return linhas.join('\n')
 }
 

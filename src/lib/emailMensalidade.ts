@@ -6,6 +6,8 @@ export type EmailMensalidadeItem = {
   valor: number
   competencia: string
   vencimento: string
+  /** Título gerado — usado para montar o PIX no e-mail. */
+  receita_id?: number | null
 }
 
 export type EmailMensalidadeResultado = {

@@ -946,6 +946,8 @@ async function createCob(
     valor: number
     descricao: string
     txid: string
+    /** Segundos até expirar (padrão 1h; e-mail usa 48h). */
+    expiracao?: number
   },
 ) {
   // Garante escuta do Sicredi (não bloqueia a cobrança se falhar).
@@ -954,8 +956,12 @@ async function createCob(
   const token = await getAccessToken(cfg)
   const client = createMtlsClient(cfg)
   try {
+    const expiracao =
+      Number.isFinite(input.expiracao) && (input.expiracao as number) > 0
+        ? Math.min(Math.floor(input.expiracao as number), 86400 * 3)
+        : 3600
     const payload = {
-      calendario: { expiracao: 3600 },
+      calendario: { expiracao },
       valor: {
         original: money2(input.valor),
         // 0 = valor fixo (pagador não altera no app do banco)
@@ -2024,6 +2030,264 @@ Deno.serve(async (req) => {
             500,
           )
         }
+      }
+
+      // PIX para e-mail de mensalidade (service role / lembrete).
+      if (peek?.action === 'create_mensalidade_email') {
+        const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim() ||
+          ''
+        const lembreteSecret =
+          Deno.env.get('MENSALIDADE_LEMBRETE_SECRET')?.trim() || ''
+        const authBearer = (req.headers.get('Authorization') ?? '')
+          .replace(/^Bearer\s+/i, '')
+          .trim()
+        const gotLembrete = req.headers.get('x-lembrete-secret')?.trim() || ''
+        const authorized =
+          (serviceKey && authBearer && authBearer === serviceKey) ||
+          (lembreteSecret && gotLembrete && gotLembrete === lembreteSecret)
+        if (!authorized) {
+          return json({ error: 'Não autorizado.' }, 401)
+        }
+
+        const empresaId = Number(
+          (peek as { empresa_id?: unknown }).empresa_id,
+        )
+        const associadoId = Number(
+          (peek as { associado_id?: unknown }).associado_id,
+        )
+        const receitaIds = Array.isArray(
+          (peek as { receita_ids?: unknown }).receita_ids,
+        )
+          ? ((peek as { receita_ids: unknown[] }).receita_ids)
+              .map(Number)
+              .filter((n) => Number.isFinite(n) && n > 0)
+          : []
+        const descricao = String(
+          (peek as { descricao?: unknown }).descricao ??
+            'Pagamento de mensalidade',
+        ).trim()
+
+        if (!Number.isFinite(empresaId) || empresaId <= 0) {
+          return json({ error: 'Grupo inválido.' }, 400)
+        }
+        if (!Number.isFinite(associadoId) || associadoId <= 0) {
+          return json({ error: 'Associado inválido.' }, 400)
+        }
+        if (receitaIds.length === 0) {
+          return json({ error: 'Informe as mensalidades.' }, 400)
+        }
+
+        const idsSorted = [...receitaIds].sort((a, b) => a - b)
+
+        // Reaproveita cobrança aberta com o mesmo conjunto de títulos.
+        const { data: existentes } = await admin
+          .from('pix_cobrancas')
+          .select(
+            'id, txid, status, valor, pix_copia_e_cola, link_token, receita_ids, created_at, baixado_em',
+          )
+          .eq('empresa_id', empresaId)
+          .eq('associado_id', associadoId)
+          .in('tipo', ['mensalidade', 'mensalidade_lote'])
+          .is('baixado_em', null)
+          .not('pix_copia_e_cola', 'is', null)
+          .gte(
+            'created_at',
+            new Date(Date.now() - 47 * 60 * 60 * 1000).toISOString(),
+          )
+          .order('created_at', { ascending: false })
+          .limit(20)
+
+        const reuse = (existentes ?? []).find((row) => {
+          const ids = ((row.receita_ids as number[]) ?? [])
+            .map(Number)
+            .filter((n) => n > 0)
+            .sort((a, b) => a - b)
+          if (ids.length !== idsSorted.length) return false
+          return ids.every((id, i) => id === idsSorted[i])
+        })
+        if (reuse?.pix_copia_e_cola) {
+          let token = reuse.link_token as string | null
+          if (!token) {
+            token = crypto.randomUUID()
+            await admin
+              .from('pix_cobrancas')
+              .update({ link_token: token })
+              .eq('id', reuse.id)
+          }
+          return json({
+            ok: true,
+            configured: true,
+            reused: true,
+            cobranca: {
+              id: reuse.id,
+              valor: reuse.valor,
+              pix_copia_e_cola: reuse.pix_copia_e_cola,
+              link_token: token,
+              descricao,
+            },
+          })
+        }
+
+        const { data: receitas, error: recErr } = await admin
+          .from('receitas')
+          .select('receita_id, receita_saldo, empresa_id, associado_id')
+          .eq('empresa_id', empresaId)
+          .in('receita_id', idsSorted)
+        if (recErr || (receitas ?? []).length !== idsSorted.length) {
+          return json({ error: 'Mensalidades inválidas.' }, 400)
+        }
+        const valor = Number(
+          (receitas ?? [])
+            .reduce(
+              (acc, row) => acc + Math.max(0, Number(row.receita_saldo ?? 0)),
+              0,
+            )
+            .toFixed(2),
+        )
+        if (!(valor > 0)) {
+          return json({ error: 'Mensalidades sem saldo em aberto.' }, 400)
+        }
+
+        const resolved = await resolveSicrediConfig(admin, {
+          empresaId,
+          tipo: 'mensalidade',
+        })
+        if (!resolved.cfg) {
+          return json(
+            {
+              ok: false,
+              configured: false,
+              error:
+                resolved.hint ||
+                'PIX não configurado para o grupo (conta bancária do grupo).',
+            },
+            200,
+          )
+        }
+
+        const cfg = resolved.cfg
+        const txid = generateTxid()
+        try {
+          const cobRes = await createCob(cfg, {
+            valor,
+            descricao: truncate(descricao, 140),
+            txid,
+            expiracao: 86400 * 2,
+          })
+          const linkToken = crypto.randomUUID()
+          const { data: row, error: insertError } = await admin
+            .from('pix_cobrancas')
+            .insert({
+              empresa_id: empresaId,
+              associado_id: associadoId,
+              created_by: null,
+              tipo: idsSorted.length > 1 ? 'mensalidade_lote' : 'mensalidade',
+              receita_ids: idsSorted,
+              valor,
+              txid: cobRes.txid ?? txid,
+              status: String(cobRes.status ?? 'ATIVA'),
+              pix_copia_e_cola: cobRes.pixCopiaECola ?? null,
+              location: cobRes.location ?? null,
+              descricao: truncate(descricao, 200),
+              raw_create: cobRes,
+              link_token: linkToken,
+            })
+            .select(
+              'id, valor, pix_copia_e_cola, link_token, descricao, txid, status',
+            )
+            .single()
+
+          if (insertError || !row) {
+            return json(
+              {
+                error: insertError?.message ?? 'Falha ao salvar cobrança PIX.',
+              },
+              400,
+            )
+          }
+          if (!row.pix_copia_e_cola) {
+            return json(
+              { error: 'Cobrança PIX criada sem código copia e cola.' },
+              502,
+            )
+          }
+          return json({
+            ok: true,
+            configured: true,
+            reused: false,
+            cobranca: row,
+          })
+        } catch (e) {
+          console.error('create_mensalidade_email', e)
+          return json(
+            {
+              ok: false,
+              configured: true,
+              error:
+                e instanceof Error
+                  ? e.message
+                  : 'Falha ao criar cobrança PIX.',
+            },
+            200,
+          )
+        }
+      }
+
+      if (peek?.action === 'get_mensalidade_pix') {
+        const token = String(
+          (peek as { link_token?: unknown }).link_token ?? '',
+        ).trim()
+        if (!token) return json({ error: 'Link inválido.' }, 400)
+
+        const { data: cob, error: cobError } = await admin
+          .from('pix_cobrancas')
+          .select(
+            'id, empresa_id, valor, pix_copia_e_cola, descricao, status, baixado_em, paid_at, link_token, tipo',
+          )
+          .eq('link_token', token)
+          .in('tipo', ['mensalidade', 'mensalidade_lote'])
+          .maybeSingle()
+
+        if (cobError || !cob) {
+          return json({ error: 'Cobrança não encontrada.' }, 404)
+        }
+
+        let paid = !!(cob.baixado_em || cob.status === 'CONCLUIDA')
+        if (!paid) {
+          try {
+            const full = await admin
+              .from('pix_cobrancas')
+              .select('*')
+              .eq('id', cob.id)
+              .maybeSingle()
+            if (full.data) {
+              await reconfirmAndBaixarCobranca(admin, full.data)
+            }
+          } catch {
+            /* ignore — página só exibe */
+          }
+          const { data: again } = await admin
+            .from('pix_cobrancas')
+            .select(
+              'id, valor, pix_copia_e_cola, descricao, status, baixado_em, paid_at',
+            )
+            .eq('id', cob.id)
+            .maybeSingle()
+          if (again) {
+            paid = !!(again.baixado_em || again.status === 'CONCLUIDA')
+            return json({
+              ok: true,
+              paid,
+              cobranca: again,
+            })
+          }
+        }
+
+        return json({
+          ok: true,
+          paid,
+          cobranca: cob,
+        })
       }
 
       if (peek?.action === 'create_public') {
