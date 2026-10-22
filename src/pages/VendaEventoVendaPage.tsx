@@ -13,6 +13,7 @@ import { QuantidadeStepper } from '@/components/QuantidadeStepper'
 import { formatMoney } from '@/lib/despesas'
 import {
   checkInfinitePayPedidoStatus,
+  createInfinitePayEventoCheckout,
 } from '@/lib/infinitePayCheckout'
 import type { PixPublicEventoInput } from '@/lib/pixSicrediPublic'
 import {
@@ -207,7 +208,7 @@ export function VendaEventoVendaPage() {
       supabase
         .from('venda_eventos')
         .select(
-          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, link_token, encerrado_em, created_at',
+          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, link_token, encerrado_em, created_at, aceita_cartao, cartao_max_parcelas',
         )
         .eq('evento_id', eventoId)
         .eq('empresa_id', empresaId)
@@ -566,7 +567,7 @@ export function VendaEventoVendaPage() {
     }
     if (!formaPagamento) {
       setError(
-        'Selecione a forma de pagamento: Dinheiro, PIX, PIX direto ou Em aberto.',
+        'Selecione a forma de pagamento: Dinheiro, PIX, cartão, PIX direto ou Em aberto.',
       )
       return
     }
@@ -580,13 +581,14 @@ export function VendaEventoVendaPage() {
       temRestricao,
       restricoesTexto,
     )
+    const linkPagamento = meuLinkToken || evento.link_token
 
-    if (formaPagamento === 'pix') {
+    if (formaPagamento === 'pix' || formaPagamento === 'infinitepay') {
       if (!telefone.trim()) {
         setError('Informe o telefone para pagar online.')
         return
       }
-      if (!evento.link_token) {
+      if (!linkPagamento) {
         setError('Link de pagamento deste evento ainda não está disponível.')
         return
       }
@@ -603,10 +605,31 @@ export function VendaEventoVendaPage() {
       setUltimaNumeracao(null)
       setConvitesPagos([])
 
-      // PIX Sicredi online (ramo/seção/grupo). InfinitePay desligado por enquanto.
+      if (formaPagamento === 'infinitepay') {
+        setSaving(true)
+        const created = await createInfinitePayEventoCheckout({
+          linkToken: linkPagamento,
+          nomes: nomesLimpos,
+          tipoIds: tipoIdsEnvio,
+          restricoes: restricoesEnvio,
+          compradorTelefone: fone,
+          valor,
+          descricao,
+          redirectUrl:
+            typeof window !== 'undefined' ? window.location.href : undefined,
+        })
+        setSaving(false)
+        if (created.ok) {
+          window.location.href = created.url
+          return
+        }
+        setError(created.error)
+        return
+      }
+
       setPixInput({
         kind: 'evento',
-        linkToken: evento.link_token,
+        linkToken: linkPagamento,
         nomes: nomesLimpos,
         tipoIds: tipoIdsEnvio,
         restricoes: restricoesEnvio,
@@ -962,7 +985,10 @@ export function VendaEventoVendaPage() {
               <div className="field">
                 <label htmlFor="telefone">
                   Telefone
-                  {formaPagamento === 'pix' ? '' : ' (opcional)'}
+                  {formaPagamento === 'pix' ||
+                  formaPagamento === 'infinitepay'
+                    ? ''
+                    : ' (opcional)'}
                 </label>
                 <input
                   id="telefone"
@@ -972,7 +998,10 @@ export function VendaEventoVendaPage() {
                   disabled={saving || pixOpen}
                   inputMode="tel"
                   placeholder="(00) 00000-0000"
-                  required={formaPagamento === 'pix'}
+                  required={
+                    formaPagamento === 'pix' ||
+                    formaPagamento === 'infinitepay'
+                  }
                 />
               </div>
 
@@ -1008,6 +1037,23 @@ export function VendaEventoVendaPage() {
                   >
                     PIX online
                   </button>
+                  {evento.aceita_cartao ? (
+                    <button
+                      type="button"
+                      className={`btn ${
+                        formaPagamento === 'infinitepay'
+                          ? 'btn-primary'
+                          : 'btn-soft'
+                      }`}
+                      disabled={saving || pixOpen}
+                      onClick={() => setFormaPagamento('infinitepay')}
+                      title="Checkout InfinitePay (cartão)"
+                    >
+                      {Number(evento.cartao_max_parcelas ?? 1) > 1
+                        ? `Cartão (até ${Number(evento.cartao_max_parcelas)}x)`
+                        : 'Cartão'}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className={`btn ${
@@ -1040,6 +1086,14 @@ export function VendaEventoVendaPage() {
                     do grupo, se o evento for geral). Informe o telefone antes
                     de continuar.
                   </p>
+                ) : formaPagamento === 'infinitepay' ? (
+                  <p className="field-hint" style={{ marginBottom: 0 }}>
+                    Abre o checkout InfinitePay para pagamento com cartão
+                    {Number(evento.cartao_max_parcelas ?? 1) > 1
+                      ? ` em até ${Number(evento.cartao_max_parcelas)}x sem juros`
+                      : ''}
+                    . Cadastre a InfiniteTag na conta bancária do ramo/grupo.
+                  </p>
                 ) : formaPagamento === 'em_aberto' ? (
                   <p className="field-hint" style={{ marginBottom: 0 }}>
                     Confirma o(s) convite(s) agora e lança a receita em aberto
@@ -1060,9 +1114,15 @@ export function VendaEventoVendaPage() {
                   }
                 >
                   {saving
-                    ? 'Salvando…'
+                    ? formaPagamento === 'infinitepay'
+                      ? 'Redirecionando…'
+                      : 'Salvando…'
                     : formaPagamento === 'pix'
                       ? 'Pagar com PIX'
+                      : formaPagamento === 'infinitepay'
+                        ? Number(evento.cartao_max_parcelas ?? 1) > 1
+                          ? `Pagar com cartão (até ${Number(evento.cartao_max_parcelas)}x)`
+                          : 'Pagar com cartão'
                       : associadoLogin
                         ? quantidade === 1
                           ? 'Comprar 1 convite'

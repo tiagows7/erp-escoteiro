@@ -4,6 +4,10 @@ export type EventoPagamentoConfig = {
   encerrado: boolean
   infinitepay: boolean
   pix_sicredi: boolean
+  /** Evento marcado para aceitar cartão e InfiniteTag disponível. */
+  aceita_cartao: boolean
+  /** Parcelas sem juros no checkout (1–12). */
+  cartao_max_parcelas: number
   prefer: 'infinitepay' | 'pix_sicredi' | 'nenhum'
 }
 
@@ -38,12 +42,18 @@ export async function fetchEventoPagamentoConfig(
   }
   if (data?.error) return { ok: false, error: String(data.error) }
 
+  const parcelas = Math.floor(Number(data?.cartao_max_parcelas ?? 1))
   return {
     ok: true,
     config: {
       encerrado: !!data?.encerrado,
       infinitepay: !!data?.infinitepay,
       pix_sicredi: !!data?.pix_sicredi,
+      aceita_cartao: !!data?.aceita_cartao || !!data?.infinitepay,
+      cartao_max_parcelas:
+        Number.isFinite(parcelas) && parcelas >= 1
+          ? Math.min(12, parcelas)
+          : 1,
       prefer:
         data?.prefer === 'infinitepay' || data?.prefer === 'pix_sicredi'
           ? data.prefer

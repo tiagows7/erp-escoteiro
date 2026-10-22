@@ -11,8 +11,12 @@ const INFINITEPAY_LINKS_URL = 'https://api.checkout.infinitepay.io/links'
 const INFINITEPAY_CHECK_URL =
   'https://api.checkout.infinitepay.io/payment_check'
 
-/** Eventos: por enquanto só PIX Sicredi (ramo/grupo). InfinitePay fica desligado. */
-const EVENTOS_INFINITEPAY_ENABLED = false
+function clampParcelas(value: unknown): number {
+  const n = Math.floor(Number(value))
+  if (!Number.isFinite(n) || n < 1) return 1
+  if (n > 12) return 12
+  return n
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -541,6 +545,8 @@ Deno.serve(async (req) => {
         secao: number | null
         encerrado_em: string | null
         valor_convite: number
+        aceita_cartao: boolean | null
+        cartao_max_parcelas: number | null
       } | null = null
 
       const { data: vendedorRow } = await admin
@@ -553,7 +559,7 @@ Deno.serve(async (req) => {
         const { data: eventoRow, error: eventoError } = await admin
           .from('venda_eventos')
           .select(
-            'evento_id, empresa_id, ramo, secao, encerrado_em, valor_convite',
+            'evento_id, empresa_id, ramo, secao, encerrado_em, valor_convite, aceita_cartao, cartao_max_parcelas',
           )
           .eq('evento_id', vendedorRow.evento_id)
           .maybeSingle()
@@ -565,7 +571,7 @@ Deno.serve(async (req) => {
         const { data: eventoRow, error: eventoError } = await admin
           .from('venda_eventos')
           .select(
-            'evento_id, empresa_id, ramo, secao, encerrado_em, valor_convite',
+            'evento_id, empresa_id, ramo, secao, encerrado_em, valor_convite, aceita_cartao, cartao_max_parcelas',
           )
           .eq('link_token', token)
           .maybeSingle()
@@ -585,6 +591,8 @@ Deno.serve(async (req) => {
           encerrado: true,
           infinitepay: false,
           pix_sicredi: false,
+          aceita_cartao: false,
+          cartao_max_parcelas: 1,
         })
       }
 
@@ -594,7 +602,9 @@ Deno.serve(async (req) => {
         ramo: (evento.ramo as number | null) ?? null,
         secao: secaoId,
       })
-      const handle = EVENTOS_INFINITEPAY_ENABLED
+      const aceitaCartao = evento.aceita_cartao === true
+      const maxParcelas = clampParcelas(evento.cartao_max_parcelas)
+      const handle = aceitaCartao
         ? await resolveInfinitePayHandle(
             admin,
             evento.empresa_id as number,
@@ -652,6 +662,8 @@ Deno.serve(async (req) => {
         encerrado: false,
         infinitepay: !!handle,
         pix_sicredi: pixSicredi,
+        aceita_cartao: aceitaCartao && !!handle,
+        cartao_max_parcelas: maxParcelas,
         prefer: pixSicredi
           ? 'pix_sicredi'
           : handle
@@ -703,6 +715,8 @@ Deno.serve(async (req) => {
         ramo: number | null
         secao: number | null
         encerrado_em: string | null
+        aceita_cartao: boolean | null
+        cartao_max_parcelas: number | null
       } | null = null
 
       const { data: vendedorRow } = await admin
@@ -716,7 +730,7 @@ Deno.serve(async (req) => {
         const { data: eventoRow, error: eventoError } = await admin
           .from('venda_eventos')
           .select(
-            'evento_id, empresa_id, nome, valor_convite, numero_inicial, numero_final, link_token, ramo, secao, encerrado_em',
+            'evento_id, empresa_id, nome, valor_convite, numero_inicial, numero_final, link_token, ramo, secao, encerrado_em, aceita_cartao, cartao_max_parcelas',
           )
           .eq('evento_id', vendedorRow.evento_id)
           .maybeSingle()
@@ -728,7 +742,7 @@ Deno.serve(async (req) => {
         const { data: eventoRow, error: eventoError } = await admin
           .from('venda_eventos')
           .select(
-            'evento_id, empresa_id, nome, valor_convite, numero_inicial, numero_final, link_token, ramo, secao, encerrado_em',
+            'evento_id, empresa_id, nome, valor_convite, numero_inicial, numero_final, link_token, ramo, secao, encerrado_em, aceita_cartao, cartao_max_parcelas',
           )
           .eq('link_token', token)
           .maybeSingle()
@@ -743,6 +757,17 @@ Deno.serve(async (req) => {
       }
       if (evento.encerrado_em) {
         return json({ error: 'Este evento está encerrado.' }, 409)
+      }
+      if (evento.aceita_cartao !== true) {
+        return json(
+          {
+            error:
+              'Este evento não aceita pagamento com cartão. Use PIX Sicredi.',
+            use_pix: true,
+            infinitepay: false,
+          },
+          503,
+        )
       }
 
       const total =
@@ -786,20 +811,18 @@ Deno.serve(async (req) => {
         ramo: (evento.ramo as number | null) ?? null,
         secao: (evento.secao as number | null) ?? null,
       })
-      const handle = EVENTOS_INFINITEPAY_ENABLED
-        ? await resolveInfinitePayHandle(
-            admin,
-            evento.empresa_id as number,
-            ramoId,
-          )
-        : null
+      const maxParcelas = clampParcelas(evento.cartao_max_parcelas)
+      const handle = await resolveInfinitePayHandle(
+        admin,
+        evento.empresa_id as number,
+        ramoId,
+      )
 
       if (!handle) {
         return json(
           {
-            error: EVENTOS_INFINITEPAY_ENABLED
-              ? 'InfinitePay não configurado para este evento.'
-              : 'Pagamento InfinitePay temporariamente desligado. Use PIX Sicredi.',
+            error:
+              'InfinitePay não configurado. Cadastre a InfiniteTag na conta bancária do ramo/grupo.',
             use_pix: true,
             infinitepay: false,
           },
@@ -874,6 +897,12 @@ Deno.serve(async (req) => {
         customer: {
           name: (nomesOrdered[0] ?? 'Comprador').slice(0, 120),
           ...(phoneE164 ? { phone_number: phoneE164 } : {}),
+        },
+        options: {
+          // Parcelas sem juros absorvidas pelo recebedor (0–12 na API).
+          assured_installments: maxParcelas,
+          payment_methods_enabled: ['credit_card'],
+          single_payment: true,
         },
       }
       if (finalRedirect) payload.redirect_url = finalRedirect

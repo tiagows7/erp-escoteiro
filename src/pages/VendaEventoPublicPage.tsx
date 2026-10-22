@@ -51,6 +51,7 @@ export function VendaEventoPublicPage() {
   const [pixOpen, setPixOpen] = useState(false)
   const [pixInput, setPixInput] = useState<PixPublicEventoInput | null>(null)
   const [convitesPagos, setConvitesPagos] = useState<ConviteImpressoItem[]>([])
+  const [payMethod, setPayMethod] = useState<'pix' | 'cartao'>('pix')
 
   const tipos = info?.tipos ?? []
   const tipoPadraoId = tipos[0]?.tipo_id ?? 0
@@ -80,7 +81,13 @@ export function VendaEventoPublicPage() {
       return
     }
     setInfo(res.data)
-    setPayConfig(cfg.ok ? cfg.config : null)
+    const config = cfg.ok ? cfg.config : null
+    setPayConfig(config)
+    if (config?.aceita_cartao && !config.pix_sicredi) {
+      setPayMethod('cartao')
+    } else {
+      setPayMethod('pix')
+    }
     setError(null)
     setLoading(false)
   }
@@ -238,31 +245,26 @@ export function VendaEventoPublicPage() {
     setSuccess(null)
     setConvitesPagos([])
 
-    const prefer = payConfig?.prefer ?? 'nenhum'
-    const hasInfinite = payConfig?.infinitepay === true
+    const hasCartao = payConfig?.aceita_cartao === true
     const hasPix = payConfig?.pix_sicredi === true
 
-    if (!hasInfinite && !hasPix) {
+    if (!hasCartao && !hasPix) {
       setError(
-        'Nenhuma forma de pagamento online configurada para este evento. Cadastre o PIX Sicredi na conta bancária do grupo/ramo.',
+        'Nenhuma forma de pagamento online configurada para este evento. Cadastre o PIX Sicredi e/ou a InfiniteTag na conta bancária do grupo/ramo.',
       )
       return
     }
 
-    // Por enquanto: PIX Sicredi (ramo/grupo). InfinitePay só se for a única opção.
-    if (hasPix && (prefer === 'pix_sicredi' || !hasInfinite)) {
-      openPixSicredi(
-        nomesLimpos,
-        tipoIdsEnvio,
-        restricoesEnvio,
-        fone,
-        valor,
-        descricao,
-      )
-      return
-    }
+    const usarCartao =
+      payMethod === 'cartao' && hasCartao
+        ? true
+        : payMethod === 'pix' && hasPix
+          ? false
+          : hasPix
+            ? false
+            : hasCartao
 
-    if (hasInfinite) {
+    if (usarCartao) {
       setPaying(true)
       const created = await createInfinitePayEventoCheckout({
         linkToken: token,
@@ -329,11 +331,15 @@ export function VendaEventoPublicPage() {
 
   const total = totalSelecionado
   const dataLabel = formatDateBr(info.data_evento)
-  const payLabel = payConfig?.pix_sicredi
-    ? 'Pagar com PIX'
-    : payConfig?.prefer === 'infinitepay'
-      ? 'Pagar com InfinitePay'
-      : 'Pagar'
+  const hasCartao = payConfig?.aceita_cartao === true
+  const hasPix = payConfig?.pix_sicredi === true
+  const maxParcelas = payConfig?.cartao_max_parcelas ?? 1
+  const payLabel =
+    payMethod === 'cartao' && hasCartao
+      ? maxParcelas > 1
+        ? `Pagar com cartão (até ${maxParcelas}x)`
+        : 'Pagar com cartão'
+      : 'Pagar com PIX'
 
   return (
     <div className="public-rifa-page">
@@ -415,10 +421,10 @@ export function VendaEventoPublicPage() {
             <p className="muted" style={{ marginTop: 0 }}>
               {info.disponiveis} de {info.total} convite(s) disponível(is).
               {!info.encerrado
-                ? payConfig?.pix_sicredi
-                  ? ' Informe a quantidade, os nomes e pague via PIX para confirmar.'
-                  : payConfig?.prefer === 'infinitepay'
-                    ? ' Informe a quantidade, os nomes e pague no checkout InfinitePay (Pix ou cartão).'
+                ? hasPix && hasCartao
+                  ? ' Informe a quantidade, os nomes e escolha PIX ou cartão.'
+                  : hasCartao
+                    ? ' Informe a quantidade, os nomes e pague com cartão.'
                     : ' Informe a quantidade, os nomes e pague via PIX para confirmar.'
                 : ''}
             </p>
@@ -563,6 +569,58 @@ export function VendaEventoPublicPage() {
                     placeholder="(00) 00000-0000"
                   />
                 </div>
+
+                {hasPix || hasCartao ? (
+                  <div className="field field-span-2">
+                    <label>Forma de pagamento</label>
+                    <div
+                      className="pagamento-opcoes"
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '0.9rem',
+                        marginTop: '0.35rem',
+                      }}
+                    >
+                      {hasPix ? (
+                        <button
+                          type="button"
+                          className={`btn ${
+                            payMethod === 'pix' ? 'btn-primary' : 'btn-soft'
+                          }`}
+                          disabled={pixOpen || paying}
+                          onClick={() => setPayMethod('pix')}
+                        >
+                          PIX
+                        </button>
+                      ) : null}
+                      {hasCartao ? (
+                        <button
+                          type="button"
+                          className={`btn ${
+                            payMethod === 'cartao' ? 'btn-primary' : 'btn-soft'
+                          }`}
+                          disabled={pixOpen || paying}
+                          onClick={() => setPayMethod('cartao')}
+                        >
+                          {maxParcelas > 1
+                            ? `Cartão (até ${maxParcelas}x)`
+                            : 'Cartão'}
+                        </button>
+                      ) : null}
+                    </div>
+                    {payMethod === 'cartao' && hasCartao ? (
+                      <p className="field-hint" style={{ marginBottom: 0 }}>
+                        Você será redirecionado ao checkout InfinitePay para
+                        pagar com cartão
+                        {maxParcelas > 1
+                          ? ` em até ${maxParcelas}x sem juros`
+                          : ''}
+                        .
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <div className="form-actions field-span-2">
                   <button

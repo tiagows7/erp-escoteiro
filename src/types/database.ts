@@ -412,6 +412,10 @@ export type VendaEvento = {
   imagem_url: string | null
   link_token: string
   encerrado_em: string | null
+  /** Cartão via InfinitePay no link público / venda. */
+  aceita_cartao?: boolean | null
+  /** Parcelas sem juros (1–12) no checkout InfinitePay. */
+  cartao_max_parcelas?: number | null
   valor_grupo?: number | null
   valor_grupo_tipo?: 'percentual' | 'por_jovem' | null
   repasse_grupo?: number | null

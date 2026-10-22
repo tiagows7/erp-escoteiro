@@ -92,6 +92,8 @@ const emptyForm = {
   valor_grupo: '0,00',
   valor_grupo_tipo: 'por_jovem' as ValorGrupoTipo,
   receita_tipo_id: '',
+  aceita_cartao: false,
+  cartao_max_parcelas: '1',
 }
 
 type TipoFormRow = {
@@ -227,7 +229,7 @@ export function VendaEventoFormPage() {
       const { data, error: loadError } = await supabase
         .from('venda_eventos')
         .select(
-          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, receita_tipo_id',
+          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, receita_tipo_id, aceita_cartao, cartao_max_parcelas',
         )
         .eq('evento_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -248,6 +250,7 @@ export function VendaEventoFormPage() {
         return
       }
 
+      const parcelas = Math.floor(Number(data.cartao_max_parcelas ?? 1))
       hydrateFromServer({
         ramo: data.ramo?.toString() ?? '',
         secao: data.secao?.toString() ?? '',
@@ -263,6 +266,12 @@ export function VendaEventoFormPage() {
           ? data.valor_grupo_tipo
           : 'por_jovem',
         receita_tipo_id: data.receita_tipo_id?.toString() ?? '',
+        aceita_cartao: data.aceita_cartao === true,
+        cartao_max_parcelas: String(
+          Number.isFinite(parcelas) && parcelas >= 1
+            ? Math.min(12, parcelas)
+            : 1,
+        ),
       })
       setImagemUrl(data.imagem_url ?? null)
       setImagemPreview(data.imagem_url ?? null)
@@ -429,15 +438,21 @@ export function VendaEventoFormPage() {
     return <Navigate to="/vendas/eventos" replace />
   }
 
-  function update(field: keyof typeof emptyForm, value: string) {
+  function update(
+    field: keyof typeof emptyForm,
+    value: string | boolean,
+  ) {
     setForm((prev) => {
-      const next = { ...prev, [field]: value }
+      const next = { ...prev, [field]: value } as typeof prev
       if (field === 'ramo') {
         next.secao = ''
         next.patrulha_matilha = ''
       }
       if (field === 'secao') {
         next.patrulha_matilha = ''
+      }
+      if (field === 'aceita_cartao' && value === false) {
+        next.cartao_max_parcelas = '1'
       }
       return next
     })
@@ -596,6 +611,13 @@ export function VendaEventoFormPage() {
           : null
 
     const valorPadrao = tiposLimpos[0]?.valor ?? 0
+    const aceitaCartao = form.aceita_cartao === true
+    let maxParcelas = Math.floor(
+      Number(String(form.cartao_max_parcelas).replace(/\D/g, '')),
+    )
+    if (!Number.isFinite(maxParcelas) || maxParcelas < 1) maxParcelas = 1
+    if (maxParcelas > 12) maxParcelas = 12
+    if (!aceitaCartao) maxParcelas = 1
 
     const payload = {
       empresa_id: empresaId,
@@ -612,6 +634,8 @@ export function VendaEventoFormPage() {
       valor_grupo: parseMoneyInput(form.valor_grupo),
       valor_grupo_tipo: form.valor_grupo_tipo,
       receita_tipo_id: Number(tipoReceita),
+      aceita_cartao: aceitaCartao,
+      cartao_max_parcelas: maxParcelas,
     }
 
     const result = isNew
@@ -999,6 +1023,51 @@ export function VendaEventoFormPage() {
               onChange={(e) => update('data_evento', e.target.value)}
               disabled={disabled}
             />
+          </div>
+
+          <div className="field field-span-2">
+            <label>Pagamento com cartão</label>
+            <label
+              className="checkbox-label"
+              htmlFor="aceita_cartao"
+              style={{ marginTop: '0.35rem' }}
+            >
+              <input
+                id="aceita_cartao"
+                type="checkbox"
+                checked={form.aceita_cartao === true}
+                onChange={(e) => update('aceita_cartao', e.target.checked)}
+                disabled={disabled}
+              />
+              Aceitar pagamento com cartão (InfinitePay)
+            </label>
+            <p className="field-hint" style={{ marginTop: '0.35rem' }}>
+              Requer a InfiniteTag cadastrada na conta bancária do ramo (ou do
+              grupo, se o evento for geral). No pagamento, o comprador poderá
+              escolher PIX Sicredi e/ou cartão.
+            </p>
+            {form.aceita_cartao ? (
+              <div className="field" style={{ marginTop: '0.75rem', maxWidth: 220 }}>
+                <label htmlFor="cartao_max_parcelas">
+                  Parcelas sem juros (até)
+                </label>
+                <select
+                  id="cartao_max_parcelas"
+                  className="select"
+                  value={form.cartao_max_parcelas}
+                  onChange={(e) =>
+                    update('cartao_max_parcelas', e.target.value)
+                  }
+                  disabled={disabled}
+                >
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={String(n)}>
+                      {n === 1 ? '1x (à vista)' : `${n}x`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
           </div>
 
           <div className="field field-span-2">
