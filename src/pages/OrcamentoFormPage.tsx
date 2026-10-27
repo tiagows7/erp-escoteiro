@@ -81,9 +81,12 @@ export function OrcamentoFormPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [qtdAssociados, setQtdAssociados] = useState<number | null>(null)
+  const [qtdPessoas, setQtdPessoas] = useState('')
 
   const ramoId = ramo ? Number(ramo) : null
   const secaoId = secao ? Number(secao) : null
+  const patrulhaId = patrulha ? Number(patrulha) : null
 
   const secoesDoRamo = useMemo(() => {
     if (ramoId == null) return []
@@ -203,10 +206,48 @@ export function OrcamentoFormPage() {
     }
   }, [empresaId, routeId, ramoScope])
 
+  useEffect(() => {
+    if (!empresaId) {
+      setQtdAssociados(null)
+      return
+    }
+    let mounted = true
+    void (async () => {
+      let query = supabase
+        .from('associados')
+        .select('associado_id', { count: 'exact', head: true })
+        .eq('empresa_id', empresaId)
+        .eq('ativo', true)
+      if (ramoId != null) query = query.eq('ramo', ramoId)
+      if (secaoId != null) query = query.eq('secao', secaoId)
+      if (patrulhaId != null) query = query.eq('patrulha_matilha', patrulhaId)
+
+      const { count, error: countError } = await query
+      if (!mounted) return
+      if (countError) {
+        setQtdAssociados(null)
+        return
+      }
+      const n = count ?? 0
+      setQtdAssociados(n)
+      // Escopo mudou: sugere a quantidade de associados ativos.
+      setQtdPessoas(n > 0 ? String(n) : '')
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [empresaId, ramoId, secaoId, patrulhaId])
+
   const total = itens.reduce((sum, item) => {
     const qtd = parseQuantidade(item.quantidade)
     return sum + (qtd > 0 ? qtd : 0) * parseMoneyInput(item.valor)
   }, 0)
+
+  const pessoasInformadas = Math.max(0, Math.floor(parseQuantidade(qtdPessoas)))
+  const porAssociado =
+    qtdAssociados != null && qtdAssociados > 0 ? total / qtdAssociados : null
+  const porPessoa =
+    pessoasInformadas > 0 ? total / pessoasInformadas : null
 
   function atualizarItem(key: string, patch: Partial<ItemForm>) {
     setItens((prev) =>
@@ -588,6 +629,50 @@ export function OrcamentoFormPage() {
           ) : null}
           <strong>Total estimado {formatMoney(total)}</strong>
         </div>
+
+        <section className="orcamento-resumo" aria-label="Resumo do orçamento">
+          <div className="orcamento-resumo-grid">
+            <div>
+              <span className="muted">Total do orçamento</span>
+              <strong>{formatMoney(total)}</strong>
+            </div>
+            <div>
+              <span className="muted">Associados no escopo</span>
+              <strong>
+                {qtdAssociados == null ? '…' : qtdAssociados}
+              </strong>
+              <p className="field-hint" style={{ margin: '0.2rem 0 0' }}>
+                Ativos
+                {ramoId != null ? ' do ramo/seção/unidade selecionados' : ' do grupo'}
+                .
+              </p>
+            </div>
+            <div>
+              <span className="muted">Por associado</span>
+              <strong>
+                {porAssociado != null ? formatMoney(porAssociado) : '—'}
+              </strong>
+            </div>
+            <div className="orcamento-resumo-pessoas">
+              <label htmlFor="qtd_pessoas">Quantidade de pessoas</label>
+              <input
+                id="qtd_pessoas"
+                className="input"
+                inputMode="numeric"
+                value={qtdPessoas}
+                disabled={disabled}
+                placeholder="Ex.: 40"
+                onChange={(e) => setQtdPessoas(e.target.value.replace(/\D/g, ''))}
+              />
+              <p className="field-hint" style={{ margin: '0.35rem 0 0' }}>
+                Por pessoa informada:{' '}
+                <strong>
+                  {porPessoa != null ? formatMoney(porPessoa) : '—'}
+                </strong>
+              </p>
+            </div>
+          </div>
+        </section>
 
         <div className="form-actions">
           {canWrite ? (

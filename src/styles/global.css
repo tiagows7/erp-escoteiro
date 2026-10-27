@@ -6559,6 +6559,50 @@ form.panel .muted,
   margin-top: 0.75rem;
 }
 
+.orcamento-resumo {
+  margin-top: 1.25rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--accent-soft, #d7e5f8);
+}
+
+.orcamento-resumo-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.orcamento-resumo-grid > div > span {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 0.2rem;
+}
+
+.orcamento-resumo-grid > div > strong {
+  font-size: 1.15rem;
+}
+
+.orcamento-resumo-pessoas label {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
+  color: var(--muted, #5b6b7c);
+}
+
+@media (max-width: 900px) {
+  .orcamento-resumo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .orcamento-resumo-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .assiduidade-grafico-dialog {
   width: min(760px, 100%);
   max-height: min(88vh, 820px);

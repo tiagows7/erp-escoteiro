@@ -522,26 +522,68 @@ export function AcaoEntreAmigosFormPage() {
     const ok = await toast.confirm({
       title: 'Encerrar vendas?',
       message:
-        'Depois de encerrada, não será possível vender números nem alterar o cadastro — só visualizar e sortear.',
+        'Depois de encerrada, não será possível vender números nem alterar o cadastro — só visualizar e sortear. Será gerada uma receita única com o total dos números vendidos.',
       confirmLabel: 'Encerrar vendas',
       danger: true,
     })
     if (!ok) return
 
-    const { error: upError, data } = await supabase
-      .from('acao_entre_amigos')
-      .update({ encerrado_em: new Date().toISOString() })
-      .eq('acao_id', Number(id))
-      .eq('empresa_id', empresaId)
-      .select('encerrado_em')
-      .single()
+    setError(null)
+    const { data, error: rpcError } = await supabase.rpc('acao_amigos_encerrar', {
+      p_acao_id: Number(id),
+    })
 
-    if (upError || !data) {
-      setError(upError?.message ?? 'Não foi possível encerrar a ação.')
+    if (rpcError) {
+      setError(rpcError.message)
       return
     }
-    setEncerradoEm((data.encerrado_em as string | null) ?? null)
-    toast.success('Vendas encerradas', 'Agora é possível realizar o sorteio.')
+
+    const result = (data ?? {}) as {
+      ok?: boolean
+      encerrado_em?: string | null
+      receita_id?: number | null
+      qtd_vendidos?: number | null
+      valor?: number | null
+      reused?: boolean
+    }
+
+    setEncerradoEm(
+      result.encerrado_em
+        ? String(result.encerrado_em)
+        : new Date().toISOString(),
+    )
+
+    const valor = Number(result.valor ?? 0)
+    const qtd = Number(result.qtd_vendidos ?? 0)
+    if (result.receita_id && valor > 0) {
+      toast.success(
+        'Vendas encerradas',
+        `Receita de ${formatMoney(valor)} gerada (${qtd} número(s) vendido(s)). Já consta como recebida.`,
+      )
+    } else if (result.receita_id) {
+      toast.success(
+        'Vendas encerradas',
+        'Receita do encerramento já estava lançada. Agora é possível sortear.',
+      )
+    } else {
+      toast.success(
+        'Vendas encerradas',
+        qtd > 0
+          ? 'Nenhum valor a lançar. Agora é possível realizar o sorteio.'
+          : 'Nenhum número vendido. Agora é possível realizar o sorteio.',
+      )
+    }
+
+    // Atualiza a lista de receitas da ação
+    const { data: receitasData } = await supabase
+      .from('receitas')
+      .select(
+        'receita_id, receita_descricao, receita_emissao, receita_vencimento, receita_valor, receita_saldo, receita_situacao, receita_documento, associados(nome, registro_provisorio)',
+      )
+      .eq('empresa_id', empresaId)
+      .eq('acao_id', Number(id))
+      .order('receita_vencimento', { ascending: true })
+    setReceitas((receitasData as unknown as ReceitaRow[]) ?? [])
   }
 
   async function onSortear() {
