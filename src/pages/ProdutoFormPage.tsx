@@ -399,8 +399,7 @@ export function ProdutoFormPage() {
                   }
                 />
                 <span className="field-hint">
-                  PNG, JPG, WEBP ou GIF · máx. 2 MB. Aparece na loja local e
-                  online.
+                  PNG, JPG, WEBP ou GIF · máx. 2 MB. Aparece na loja online.
                 </span>
                 {imagemFile ? (
                   <button

@@ -349,12 +349,6 @@ export const NAV_ITEMS: NavItem[] = [
       },
       {
         type: 'link',
-        to: '/vendas/loja',
-        label: 'Loja local',
-        permission: 'vendas.view',
-      },
-      {
-        type: 'link',
         to: '/vendas/loja-online',
         label: 'Loja online',
         permission: 'vendas.view',

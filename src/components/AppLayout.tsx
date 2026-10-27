@@ -317,17 +317,8 @@ export function AppLayout() {
     setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
-  // PDV local fullscreen — não incluir /vendas/loja-online
-  const hideNav =
-    location.pathname === '/vendas/loja' ||
-    location.pathname.startsWith('/vendas/loja/')
-
   return (
-    <div
-      className={`app-shell${menuOpen ? ' menu-open' : ''}${hideNav ? ' app-shell--hide-nav' : ''}`}
-    >
-      {!hideNav ? (
-        <>
+    <div className={`app-shell${menuOpen ? ' menu-open' : ''}`}>
           <header className="mobile-topbar">
             <button
               type="button"
@@ -579,8 +570,6 @@ export function AppLayout() {
               </button>
             </div>
           </aside>
-        </>
-      ) : null}
 
       <main className="main">
         <PlataformaAcessoBanner />

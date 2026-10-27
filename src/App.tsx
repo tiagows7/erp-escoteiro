@@ -41,12 +41,10 @@ import { VendaEventosPage } from '@/pages/VendaEventosPage'
 import { VendaEventoFormPage } from '@/pages/VendaEventoFormPage'
 import { VendaEventoVendaPage } from '@/pages/VendaEventoVendaPage'
 import { VendaEventoPublicPage } from '@/pages/VendaEventoPublicPage'
-import { LojaPage } from '@/pages/LojaPage'
 import { LojaOnlinePage } from '@/pages/LojaOnlinePage'
 import { LojaOnlinePublicPage } from '@/pages/LojaOnlinePublicPage'
 import { MensalidadePixPublicPage } from '@/pages/MensalidadePixPublicPage'
 import { LojaOnlineVendasPage } from '@/pages/LojaOnlineVendasPage'
-import { LojaCaixaPage } from '@/pages/LojaCaixaPage'
 import { UsuariosPage } from '@/pages/UsuariosPage'
 import { UsuarioFormPage } from '@/pages/UsuarioFormPage'
 import { FornecedoresPage } from '@/pages/FornecedoresPage'
@@ -637,14 +635,6 @@ export default function App() {
               }
             />
             <Route
-              path="vendas/loja"
-              element={
-                <RequirePermission permission="vendas.write">
-                  <LojaPage />
-                </RequirePermission>
-              }
-            />
-            <Route
               path="vendas/loja-online"
               element={
                 <RequirePermission permission="vendas.view">
@@ -657,14 +647,6 @@ export default function App() {
               element={
                 <RequirePermission permission="vendas.view">
                   <LojaOnlineVendasPage />
-                </RequirePermission>
-              }
-            />
-            <Route
-              path="vendas/loja/caixa"
-              element={
-                <RequirePermission permission="vendas.view">
-                  <LojaCaixaPage />
                 </RequirePermission>
               }
             />
