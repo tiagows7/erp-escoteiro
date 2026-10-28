@@ -247,7 +247,14 @@ export function PortalPlanoContasPainel({
                 </tr>
               </thead>
               <tbody>
-                {receitasPorConta.map((grupo) => (
+                {receitasPorConta.map((grupo) => {
+                  // Mensalidade: só o total no portal — sem abrir títulos individuais.
+                  const isMensalidade = grupo.rows.some(
+                    (row) =>
+                      (row.fornecedor_nome || '').trim().toLowerCase() ===
+                      'mensalidade',
+                  )
+                  return (
                   <Fragment key={grupo.key}>
                     {grupo.rows.map((row, index) => (
                       <tr key={`${grupo.key}|${row.fornecedor_nome}|${index}`}>
@@ -256,7 +263,7 @@ export function PortalPlanoContasPainel({
                         <td>{row.qtd}</td>
                         <td>{formatMoney(row.total)}</td>
                         <td>
-                          {index === 0
+                          {index === 0 && !isMensalidade
                             ? botaoAbrir('receita', grupo.planoContaId)
                             : null}
                         </td>
@@ -279,9 +286,12 @@ export function PortalPlanoContasPainel({
                       </td>
                       <td />
                     </tr>
-                    {detalhe('receita', grupo.planoContaId)}
+                    {!isMensalidade
+                      ? detalhe('receita', grupo.planoContaId)
+                      : null}
                   </Fragment>
-                ))}
+                  )
+                })}
               </tbody>
               <tfoot>
                 <tr>
