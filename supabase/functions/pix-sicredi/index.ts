@@ -79,6 +79,8 @@ type StatusPublicBody = {
 
 type PollPendingBody = {
   action: 'poll_pending'
+  poll_secret?: string
+  poll_ticket?: string
 }
 
 type ConciliarBody = {
@@ -836,16 +838,12 @@ async function resolveConfigForCobranca(
   admin: ReturnType<typeof createClient>,
   cob: Record<string, unknown>,
 ): Promise<{ cfg: SicrediConfig | null; hint: string | null }> {
-  let resolved = await resolveSicrediConfig(admin, {
-    empresaId: cob.empresa_id as number,
-    tipo: String(cob.tipo),
-    atividadeId: (cob.atividade_id as number | null) ?? null,
-    ramoId: (cob.ramo_id as number | null) ?? null,
-    secaoId: null,
-  })
-  if (resolved.cfg) return resolved
-
   const tipo = String(cob.tipo)
+  let ramoId = (cob.ramo_id as number | null) ?? null
+  let secaoId: number | null = null
+
+  // Cobranças de ação/evento nascem na conta da seção; resolver seção antes
+  // de cair no PIX do grupo (mesmo client_id, chaves diferentes).
   if (tipo === 'venda_evento' && cob.evento_id) {
     const { data: ev } = await admin
       .from('venda_eventos')
@@ -853,12 +851,8 @@ async function resolveConfigForCobranca(
       .eq('evento_id', cob.evento_id)
       .maybeSingle()
     if (ev) {
-      resolved = await resolveSicrediConfig(admin, {
-        empresaId: cob.empresa_id as number,
-        tipo: 'venda_evento',
-        ramoId: (ev.ramo as number | null) ?? null,
-        secaoId: (ev.secao as number | null) ?? null,
-      })
+      ramoId = (ev.ramo as number | null) ?? ramoId
+      secaoId = (ev.secao as number | null) ?? null
     }
   } else if (tipo === 'acao_entre_amigos' && cob.acao_id) {
     const { data: acao } = await admin
@@ -867,15 +861,18 @@ async function resolveConfigForCobranca(
       .eq('acao_id', cob.acao_id)
       .maybeSingle()
     if (acao) {
-      resolved = await resolveSicrediConfig(admin, {
-        empresaId: cob.empresa_id as number,
-        tipo: 'acao_entre_amigos',
-        ramoId: (acao.ramo as number | null) ?? null,
-        secaoId: (acao.secao as number | null) ?? null,
-      })
+      ramoId = (acao.ramo as number | null) ?? ramoId
+      secaoId = (acao.secao as number | null) ?? null
     }
   }
-  return resolved
+
+  return resolveSicrediConfig(admin, {
+    empresaId: cob.empresa_id as number,
+    tipo,
+    atividadeId: (cob.atividade_id as number | null) ?? null,
+    ramoId,
+    secaoId,
+  })
 }
 
 async function reconfirmAndBaixarCobranca(
@@ -912,32 +909,71 @@ async function pollPendingCobrancas(
   admin: ReturnType<typeof createClient>,
 ): Promise<{ checked: number; paid: number; errors: number }> {
   const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
-  const { data: pending, error } = await admin
+
+  // Prioriza CONCLUIDA sem baixa (travadas) e depois as mais recentes.
+  const { data: stuck, error: stuckError } = await admin
+    .from('pix_cobrancas')
+    .select('*')
+    .is('baixado_em', null)
+    .eq('status', 'CONCLUIDA')
+    .gte('created_at', since)
+    .order('updated_at', { ascending: true })
+    .limit(20)
+  if (stuckError) throw new Error(stuckError.message)
+
+  const { data: open, error: openError } = await admin
     .from('pix_cobrancas')
     .select('*')
     .is('baixado_em', null)
     .neq('status', 'REMOVIDA')
+    .neq('status', 'CONCLUIDA')
     .gte('created_at', since)
-    .order('created_at', { ascending: true })
-    .limit(40)
+    .order('created_at', { ascending: false })
+    .limit(30)
+  if (openError) throw new Error(openError.message)
 
-  if (error) throw new Error(error.message)
+  const seen = new Set<number>()
+  const pending: Record<string, unknown>[] = []
+  for (const cob of [...(stuck ?? []), ...(open ?? [])]) {
+    const id = Number(cob.id)
+    if (!Number.isFinite(id) || seen.has(id)) continue
+    seen.add(id)
+    pending.push(cob as Record<string, unknown>)
+  }
 
   let paid = 0
   let errors = 0
-  for (const cob of pending ?? []) {
+  for (const cob of pending) {
     try {
-      const result = await reconfirmAndBaixarCobranca(
-        admin,
-        cob as Record<string, unknown>,
-      )
+      const result = await reconfirmAndBaixarCobranca(admin, cob)
       if (result.paid) paid += 1
     } catch (e) {
       errors += 1
       console.error('poll_pending baixa', cob.id, cob.txid, e)
     }
   }
-  return { checked: (pending ?? []).length, paid, errors }
+  return { checked: pending.length, paid, errors }
+}
+
+async function consumePollTicket(
+  admin: ReturnType<typeof createClient>,
+  tokenRaw: unknown,
+): Promise<boolean> {
+  const token = String(tokenRaw ?? '').trim()
+  if (!token) return false
+  const minCreated = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+  const { data, error } = await admin
+    .from('pix_poll_ticket')
+    .delete()
+    .eq('token', token)
+    .gte('created_at', minCreated)
+    .select('token')
+    .maybeSingle()
+  if (error) {
+    console.error('consumePollTicket', error.message)
+    return false
+  }
+  return !!data?.token
 }
 
 async function createCob(
@@ -1575,6 +1611,7 @@ async function concluirEBaixar(
   const tipo = String(cob.tipo)
   const receitaIds = (cob.receita_ids as number[]) ?? []
 
+  let warning: string | null = null
   try {
     if (tipo === 'mensalidade' || tipo === 'mensalidade_lote') {
       await baixarMensalidades(admin, {
@@ -1597,7 +1634,8 @@ async function concluirEBaixar(
         descricao: (cob.descricao as string | null) ?? null,
       })
     } else if (tipo === 'acao_entre_amigos') {
-      await baixarAcaoEntreAmigos(admin, cob)
+      const result = await baixarAcaoEntreAmigos(admin, cob)
+      warning = result.warning
     } else if (tipo === 'venda_evento') {
       await baixarVendaEvento(admin, cob)
     } else if (tipo === 'loja') {
@@ -1643,6 +1681,16 @@ async function concluirEBaixar(
       })
       .eq('id', cob.id)
     throw e
+  }
+
+  if (warning) {
+    await admin
+      .from('pix_cobrancas')
+      .update({
+        last_error: warning.slice(0, 500),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', cob.id)
   }
 
   return { paid: true, baixado: true }
@@ -1879,7 +1927,7 @@ async function baixarVendaEvento(
 async function baixarAcaoEntreAmigos(
   admin: ReturnType<typeof createClient>,
   cob: Record<string, unknown>,
-) {
+): Promise<{ warning: string | null }> {
   const empresaId = cob.empresa_id as number
   const acaoId = cob.acao_id as number
   const associadoId = cob.associado_id as number | null
@@ -1895,35 +1943,81 @@ async function baixarAcaoEntreAmigos(
     throw new Error('Cobrança de ação entre amigos incompleta.')
   }
 
+  const { data: existentes, error: existentesError } = await admin
+    .from('acao_entre_amigos_venda')
+    .select('numero, pix_cobranca_id, comprador_nome, forma_pagamento')
+    .eq('acao_id', acaoId)
+    .in('numero', numeros)
+  if (existentesError) throw new Error(existentesError.message)
+
+  const byNumero = new Map(
+    (existentes ?? []).map((row) => [Number(row.numero), row]),
+  )
+  const livres = numeros.filter((n) => !byNumero.has(n))
+  const destaCob = numeros.filter(
+    (n) => Number(byNumero.get(n)?.pix_cobranca_id) === cobrancaId,
+  )
+  const conflitos = numeros
+    .filter((n) => byNumero.has(n) && Number(byNumero.get(n)?.pix_cobranca_id) !== cobrancaId)
+    .map((n) => {
+      const row = byNumero.get(n)!
+      return `${n}(${row.comprador_nome}/${row.forma_pagamento}/cob${row.pix_cobranca_id ?? '-'})`
+    })
+
   const valorUnitario = Math.round((valorTotal / numeros.length) * 100) / 100
 
-  const rows = numeros.map((numero) => ({
-    empresa_id: empresaId,
-    acao_id: acaoId,
-    numero,
-    comprador_nome: compradorNome.slice(0, 200),
-    comprador_telefone: compradorTelefone.slice(0, 40),
-    valor: valorUnitario,
-    forma_pagamento: 'pix',
-    associado_vendedor_id: associadoId,
-    vendido_por: null,
-    pix_cobranca_id: cobrancaId,
-  }))
+  if (livres.length > 0) {
+    const rows = livres.map((numero) => ({
+      empresa_id: empresaId,
+      acao_id: acaoId,
+      numero,
+      comprador_nome: compradorNome.slice(0, 200),
+      comprador_telefone: compradorTelefone.slice(0, 40),
+      valor: valorUnitario,
+      forma_pagamento: 'pix',
+      associado_vendedor_id: associadoId,
+      vendido_por: null,
+      pix_cobranca_id: cobrancaId,
+    }))
 
-  const { error } = await admin.from('acao_entre_amigos_venda').insert(rows)
-  if (error) {
-    if (
-      error.message.includes('duplicate') ||
-      error.message.includes('unique')
-    ) {
-      // Idempotência: se já gravou as vendas desta cobrança, segue.
-      const { count } = await admin
-        .from('acao_entre_amigos_venda')
-        .select('venda_id', { count: 'exact', head: true })
-        .eq('pix_cobranca_id', cobrancaId)
-      if ((count ?? 0) > 0) return
+    const { error } = await admin.from('acao_entre_amigos_venda').insert(rows)
+    if (error) {
+      if (
+        error.message.includes('duplicate') ||
+        error.message.includes('unique')
+      ) {
+        const { count } = await admin
+          .from('acao_entre_amigos_venda')
+          .select('venda_id', { count: 'exact', head: true })
+          .eq('pix_cobranca_id', cobrancaId)
+        if ((count ?? 0) === 0 && conflitos.length === numeros.length) {
+          // Todos já vendidos por outro caminho — conclui com aviso.
+          return {
+            warning: `Baixa parcial: números já vendidos por outro caminho: ${conflitos.join(', ')}`,
+          }
+        }
+        if ((count ?? 0) > 0) {
+          return {
+            warning:
+              conflitos.length > 0
+                ? `Baixa parcial: números já vendidos por outro caminho: ${conflitos.join(', ')}`
+                : null,
+          }
+        }
+      }
+      throw new Error(error.message)
     }
-    throw new Error(error.message)
+  } else if (destaCob.length === 0 && conflitos.length === numeros.length) {
+    return {
+      warning: `Baixa parcial: números já vendidos por outro caminho: ${conflitos.join(', ')}`,
+    }
+  }
+
+  return {
+    warning:
+      conflitos.length > 0
+        ? `Baixa parcial: números já vendidos por outro caminho: ${conflitos.join(', ')}`
+        : null,
   }
 }
 
@@ -2009,7 +2103,12 @@ Deno.serve(async (req) => {
           .trim()
         const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim() ||
           ''
+        const ticketOk = await consumePollTicket(
+          admin,
+          (peek as { poll_ticket?: unknown }).poll_ticket,
+        )
         const authorized =
+          ticketOk ||
           (pollSecret && gotSecret && gotSecret === pollSecret) ||
           (serviceKey && authBearer && authBearer === serviceKey)
         if (!authorized) {
@@ -2375,6 +2474,40 @@ Deno.serve(async (req) => {
             .join(', ')
           return json(
             { error: `Número(s) já vendido(s): ${list}` },
+            409,
+          )
+        }
+
+        // Reserva temporária: números em QR ATIVA recente não podem ser
+        // revendidos (evita dois PIX pagos para o mesmo número).
+        const reservaDesde = new Date(
+          Date.now() - 2 * 60 * 60 * 1000,
+        ).toISOString()
+        const { data: reservadas } = await admin
+          .from('pix_cobrancas')
+          .select('numeros')
+          .eq('acao_id', faixa.acao_id)
+          .eq('tipo', 'acao_entre_amigos')
+          .is('baixado_em', null)
+          .in('status', ['ATIVA', 'CRIADA', 'CONCLUIDA'])
+          .gte('created_at', reservaDesde)
+
+        const reservados = new Set<number>()
+        for (const cobReserva of reservadas ?? []) {
+          const nums = Array.isArray(cobReserva.numeros)
+            ? cobReserva.numeros
+            : []
+          for (const n of nums) {
+            const num = Number(n)
+            if (Number.isFinite(num)) reservados.add(num)
+          }
+        }
+        const emReserva = numeros.filter((n) => reservados.has(n))
+        if (emReserva.length > 0) {
+          return json(
+            {
+              error: `Número(s) reservados em pagamento PIX em andamento: ${emReserva.join(', ')}. Aguarde alguns minutos ou escolha outros.`,
+            },
             409,
           )
         }
@@ -2873,7 +3006,7 @@ Deno.serve(async (req) => {
           )
         }
 
-        if (cob.baixado_em || cob.status === 'CONCLUIDA') {
+        if (cob.baixado_em) {
           const convites = await fetchConvitesVendaEventoByCobranca(
             admin,
             Number(cob.id),
@@ -2888,6 +3021,32 @@ Deno.serve(async (req) => {
               id: cob.id,
               txid: cob.txid,
               status: cob.status,
+              valor: cob.valor,
+              pix_copia_e_cola: cob.pix_copia_e_cola,
+            },
+          })
+        }
+
+        // CONCLUIDA sem baixado_em = baixa falhou antes; tenta de novo.
+        if (cob.status === 'CONCLUIDA') {
+          const result = await concluirEBaixar(
+            admin,
+            cob as Record<string, unknown>,
+            (cob.raw_status as Record<string, unknown> | null) ?? null,
+          )
+          const convites = await fetchConvitesVendaEventoByCobranca(
+            admin,
+            Number(cob.id),
+            String(cob.tipo),
+          )
+          return json({
+            ok: true,
+            ...result,
+            convites,
+            cobranca: {
+              id: cob.id,
+              txid: cob.txid,
+              status: 'CONCLUIDA',
               valor: cob.valor,
               pix_copia_e_cola: cob.pix_copia_e_cola,
             },
@@ -3485,7 +3644,7 @@ Deno.serve(async (req) => {
         return json({ error: 'Sem permissão nesta cobrança.' }, 403)
       }
 
-      if (cob.baixado_em || cob.status === 'CONCLUIDA') {
+      if (cob.baixado_em) {
         return json({
           ok: true,
           paid: true,
@@ -3494,6 +3653,25 @@ Deno.serve(async (req) => {
             id: cob.id,
             txid: cob.txid,
             status: cob.status,
+            valor: cob.valor,
+            pix_copia_e_cola: cob.pix_copia_e_cola,
+          },
+        })
+      }
+
+      if (cob.status === 'CONCLUIDA') {
+        const result = await concluirEBaixar(
+          admin,
+          cob as Record<string, unknown>,
+          (cob.raw_status as Record<string, unknown> | null) ?? null,
+        )
+        return json({
+          ok: true,
+          ...result,
+          cobranca: {
+            id: cob.id,
+            txid: cob.txid,
+            status: 'CONCLUIDA',
             valor: cob.valor,
             pix_copia_e_cola: cob.pix_copia_e_cola,
           },
