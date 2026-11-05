@@ -192,14 +192,16 @@ export function PortalTransparenciaPage() {
       : (secoes.find((s) => s.secao_id === secaoId)?.secao_nome ?? 'Seção')
 
   const movimentoLocais = useMemo(() => {
+    // O saldo anterior já traz o saldo final dos locais. No mês, o
+    // demonstrativo acompanha a variação desse saldo (não o efeito inverso no caixa).
     let receita = 0
     let despesa = 0
     for (const linha of saldoMovimentos) {
       if (linha.movimento_id == null) continue
       receita +=
-        Number(linha.valor_resgatado ?? 0) + Number(linha.valor_creditos ?? 0)
+        Number(linha.valor_aplicado ?? 0) + Number(linha.valor_creditos ?? 0)
       despesa +=
-        Number(linha.valor_aplicado ?? 0) + Number(linha.valor_debitos ?? 0)
+        Number(linha.valor_resgatado ?? 0) + Number(linha.valor_debitos ?? 0)
     }
     return {
       receita: Math.round(receita * 100) / 100,
@@ -387,7 +389,7 @@ export function PortalTransparenciaPage() {
                     {formatMoney(resumo.saldo_anterior ?? 0)}
                   </strong>
                   <em className="stat-card-hint">
-                    Caixa antes de {periodoLabel.toLowerCase()}
+                    Caixa e locais antes de {periodoLabel.toLowerCase()}
                   </em>
                 </article>
                 <article className="stat-card">
@@ -395,7 +397,7 @@ export function PortalTransparenciaPage() {
                   <strong>{formatMoney(receitasCard)}</strong>
                   <em className="stat-card-hint">
                     {movimentoLocais.receita !== 0
-                      ? 'Recebidos, resgates e créditos'
+                      ? 'Recebidos, aplicados e créditos'
                       : 'Somente valores recebidos'}
                   </em>
                 </article>
@@ -404,7 +406,7 @@ export function PortalTransparenciaPage() {
                   <strong>{formatMoney(despesasCard)}</strong>
                   <em className="stat-card-hint">
                     {movimentoLocais.despesa !== 0
-                      ? 'Pagos, aplicados e débitos'
+                      ? 'Pagos, resgates e débitos'
                       : 'Somente valores pagos'}
                   </em>
                 </article>
