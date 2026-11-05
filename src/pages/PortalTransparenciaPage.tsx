@@ -209,6 +209,21 @@ export function PortalTransparenciaPage() {
     }
   }, [saldoMovimentos])
 
+  const saldoLocais = useMemo(() => {
+    const porLocal = new Map<number, number>()
+    for (const linha of saldoMovimentos) {
+      if (!porLocal.has(linha.local_id)) {
+        porLocal.set(linha.local_id, Number(linha.local_valor ?? 0))
+      }
+      if (linha.movimento_id != null) {
+        porLocal.set(linha.local_id, Number(linha.saldo_final ?? 0))
+      }
+    }
+    let total = 0
+    for (const valor of porLocal.values()) total += valor
+    return Math.round(total * 100) / 100
+  }, [saldoMovimentos])
+
   const receitasCard = resumo
     ? Math.round(
         (Number(resumo.receitas_recebidas ?? resumo.total_receitas ?? 0) +
@@ -225,7 +240,10 @@ export function PortalTransparenciaPage() {
     : 0
   const saldoFinalCard = resumo
     ? Math.round(
-        (Number(resumo.saldo_anterior ?? 0) + receitasCard - despesasCard) *
+        (Number(resumo.saldo_anterior ?? 0) +
+          receitasCard -
+          despesasCard +
+          saldoLocais) *
           100,
       ) / 100
     : 0
@@ -416,7 +434,9 @@ export function PortalTransparenciaPage() {
                     {formatMoney(saldoFinalCard)}
                   </strong>
                   <em className="stat-card-hint">
-                    Anterior + recebido − pago
+                    {saldoLocais !== 0
+                      ? 'Anterior + recebido − pago + saldo dos locais'
+                      : 'Anterior + recebido − pago'}
                   </em>
                 </article>
                 <article className="stat-card">
