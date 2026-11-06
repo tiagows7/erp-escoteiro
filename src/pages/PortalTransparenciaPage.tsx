@@ -196,8 +196,8 @@ export function PortalTransparenciaPage() {
     let despesa = 0
     for (const linha of saldoMovimentos) {
       if (linha.movimento_id == null) continue
-      receita += Number(linha.valor_aplicado ?? 0)
-      despesa += Number(linha.valor_resgatado ?? 0)
+      receita += Number(linha.valor_resgatado ?? 0)
+      despesa += Number(linha.valor_aplicado ?? 0)
     }
     return {
       receita: Math.round(receita * 100) / 100,
@@ -393,7 +393,7 @@ export function PortalTransparenciaPage() {
                   <strong>{formatMoney(receitasCard)}</strong>
                   <em className="stat-card-hint">
                     {movimentoLocais.receita !== 0
-                      ? 'Recebidos e aplicados'
+                      ? 'Recebidos e resgates'
                       : 'Somente valores recebidos'}
                   </em>
                 </article>
@@ -402,7 +402,7 @@ export function PortalTransparenciaPage() {
                   <strong>{formatMoney(despesasCard)}</strong>
                   <em className="stat-card-hint">
                     {movimentoLocais.despesa !== 0
-                      ? 'Pagos e resgates'
+                      ? 'Pagos e aplicações'
                       : 'Somente valores pagos'}
                   </em>
                 </article>
