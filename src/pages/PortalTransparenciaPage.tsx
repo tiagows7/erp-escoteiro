@@ -192,36 +192,17 @@ export function PortalTransparenciaPage() {
       : (secoes.find((s) => s.secao_id === secaoId)?.secao_nome ?? 'Seção')
 
   const movimentoLocais = useMemo(() => {
-    // O saldo anterior já traz o saldo final dos locais. No mês, o
-    // demonstrativo acompanha a variação desse saldo (não o efeito inverso no caixa).
     let receita = 0
     let despesa = 0
     for (const linha of saldoMovimentos) {
       if (linha.movimento_id == null) continue
-      receita +=
-        Number(linha.valor_aplicado ?? 0) + Number(linha.valor_creditos ?? 0)
-      despesa +=
-        Number(linha.valor_resgatado ?? 0) + Number(linha.valor_debitos ?? 0)
+      receita += Number(linha.valor_aplicado ?? 0)
+      despesa += Number(linha.valor_resgatado ?? 0)
     }
     return {
       receita: Math.round(receita * 100) / 100,
       despesa: Math.round(despesa * 100) / 100,
     }
-  }, [saldoMovimentos])
-
-  const saldoLocais = useMemo(() => {
-    const porLocal = new Map<number, number>()
-    for (const linha of saldoMovimentos) {
-      if (!porLocal.has(linha.local_id)) {
-        porLocal.set(linha.local_id, Number(linha.local_valor ?? 0))
-      }
-      if (linha.movimento_id != null) {
-        porLocal.set(linha.local_id, Number(linha.saldo_final ?? 0))
-      }
-    }
-    let total = 0
-    for (const valor of porLocal.values()) total += valor
-    return Math.round(total * 100) / 100
   }, [saldoMovimentos])
 
   const receitasCard = resumo
@@ -240,10 +221,7 @@ export function PortalTransparenciaPage() {
     : 0
   const saldoFinalCard = resumo
     ? Math.round(
-        (Number(resumo.saldo_anterior ?? 0) +
-          receitasCard -
-          despesasCard +
-          saldoLocais) *
+        (Number(resumo.saldo_anterior ?? 0) + receitasCard - despesasCard) *
           100,
       ) / 100
     : 0
@@ -407,7 +385,7 @@ export function PortalTransparenciaPage() {
                     {formatMoney(resumo.saldo_anterior ?? 0)}
                   </strong>
                   <em className="stat-card-hint">
-                    Caixa e locais antes de {periodoLabel.toLowerCase()}
+                    Caixa antes de {periodoLabel.toLowerCase()}
                   </em>
                 </article>
                 <article className="stat-card">
@@ -415,7 +393,7 @@ export function PortalTransparenciaPage() {
                   <strong>{formatMoney(receitasCard)}</strong>
                   <em className="stat-card-hint">
                     {movimentoLocais.receita !== 0
-                      ? 'Recebidos, aplicados e créditos'
+                      ? 'Recebidos e aplicados'
                       : 'Somente valores recebidos'}
                   </em>
                 </article>
@@ -424,7 +402,7 @@ export function PortalTransparenciaPage() {
                   <strong>{formatMoney(despesasCard)}</strong>
                   <em className="stat-card-hint">
                     {movimentoLocais.despesa !== 0
-                      ? 'Pagos, resgates e débitos'
+                      ? 'Pagos e resgates'
                       : 'Somente valores pagos'}
                   </em>
                 </article>
@@ -434,9 +412,7 @@ export function PortalTransparenciaPage() {
                     {formatMoney(saldoFinalCard)}
                   </strong>
                   <em className="stat-card-hint">
-                    {saldoLocais !== 0
-                      ? 'Anterior + recebido − pago + saldo dos locais'
-                      : 'Anterior + recebido − pago'}
+                    Anterior + recebido − pago
                   </em>
                 </article>
                 <article className="stat-card">

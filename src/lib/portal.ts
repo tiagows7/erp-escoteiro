@@ -17,9 +17,9 @@ export type PortalResumo = {
   receitas_recebidas: number
   saldo_lancado: number
   saldo_realizado: number
-  /** Recebido − pago antes do período, mais o saldo dos locais nessa data. */
+  /** Recebido − pago antes do início do período (regime de caixa). */
   saldo_anterior: number
-  /** saldo_anterior + (recebido − pago) do período, sem os locais do mês. */
+  /** saldo_anterior + (recebido − pago) do período. */
   saldo_final: number
   /** Saldo em aberto de mensalidades vencidas (snapshot atual). */
   mensalidades_atraso: number
