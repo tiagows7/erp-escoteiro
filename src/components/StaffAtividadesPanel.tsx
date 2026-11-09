@@ -4,6 +4,11 @@ import { useToast } from '@/contexts/ToastContext'
 import { formatMoney } from '@/lib/despesas'
 import { registrarPagamentoAtividade } from '@/lib/atividadePagamento'
 import {
+  carregarListaTransporte,
+  formatCpfDisplay,
+  type ListaTransporteItem,
+} from '@/lib/atividadeConfirmacao'
+import {
   atividadeVisivelPara,
   atividadeVisivelParaStaff,
   filtroAtividadesRamoOuGrupo,
@@ -76,6 +81,14 @@ export function StaffAtividadesPanel({
   const [showLista, setShowLista] = useState(false)
   const [busca, setBusca] = useState('')
   const [busyId, setBusyId] = useState<number | null>(null)
+  const [transporteItem, setTransporteItem] = useState<AtividadeResumo | null>(
+    null,
+  )
+  const [transporteLista, setTransporteLista] = useState<ListaTransporteItem[]>(
+    [],
+  )
+  const [transporteLoading, setTransporteLoading] = useState(false)
+  const [transporteError, setTransporteError] = useState<string | null>(null)
   const didAutoOpen = useRef(false)
 
   const secaoFiltro =
@@ -94,7 +107,7 @@ export function StaffAtividadesPanel({
     let ativQuery = supabase
       .from('atividades')
       .select(
-        'atividade_id, empresa_id, ramo, secao, patrulha_matilha, descricao, local, valor, created_at',
+        'atividade_id, empresa_id, ramo, secao, patrulha_matilha, descricao, local, valor, tem_transporte, created_at',
       )
       .eq('empresa_id', empresaId)
       .order('created_at', { ascending: false })
@@ -321,6 +334,46 @@ export function StaffAtividadesPanel({
     setBusyId(null)
   }
 
+  async function abrirListaTransporte(item: AtividadeResumo) {
+    setTransporteItem(item)
+    setTransporteLista([])
+    setTransporteError(null)
+    setTransporteLoading(true)
+    try {
+      const rows = await carregarListaTransporte(item.atividade_id)
+      setTransporteLista(rows)
+    } catch (err) {
+      setTransporteError(
+        err instanceof Error ? err.message : 'Erro ao carregar a lista.',
+      )
+    } finally {
+      setTransporteLoading(false)
+    }
+  }
+
+  function fecharListaTransporte() {
+    setTransporteItem(null)
+    setTransporteLista([])
+    setTransporteError(null)
+    setTransporteLoading(false)
+  }
+
+  async function copiarListaTransporte() {
+    if (transporteLista.length === 0) return
+    const texto = transporteLista
+      .map((row) => {
+        const tipo = row.tipo === 'acompanhante' ? 'Familiar' : 'Jovem'
+        return `${tipo}\t${row.nome}\t${formatCpfDisplay(row.cpf)}`
+      })
+      .join('\n')
+    try {
+      await navigator.clipboard.writeText(`Tipo\tNome\tCPF\n${texto}`)
+      toast.success('Lista copiada')
+    } catch {
+      toast.error('Não foi possível copiar a lista')
+    }
+  }
+
   async function confirmarPresenca(pessoa: PopupPessoa) {
     if (!popupItem || pessoa.confirmado) return
     setBusyId(pessoa.associado_id)
@@ -466,6 +519,7 @@ export function StaffAtividadesPanel({
                     {item.local ? `Local: ${item.local}` : 'Local não informado'}
                     {' · '}
                     Valor unitário: {formatMoney(item.valor)}
+                    {item.tem_transporte ? ' · Com transporte' : ''}
                   </p>
                 </div>
                 <div className="staff-atividade-total">
@@ -490,9 +544,99 @@ export function StaffAtividadesPanel({
                 >
                   Associados
                 </button>
+                {item.tem_transporte ? (
+                  <button
+                    type="button"
+                    className="btn btn-soft"
+                    onClick={() => void abrirListaTransporte(item)}
+                  >
+                    Lista de transporte
+                  </button>
+                ) : null}
               </div>
             </article>
           ))}
+        </div>
+      ) : null}
+
+      {transporteItem ? (
+        <div
+          className="confirm-overlay"
+          role="presentation"
+          onClick={fecharListaTransporte}
+        >
+          <div
+            className="passagem-dialog staff-atividade-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="staff-transporte-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="passagem-dialog-header">
+              <div>
+                <h3 id="staff-transporte-title">Lista de transporte</h3>
+                <p className="muted">{transporteItem.descricao}</p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-soft"
+                onClick={fecharListaTransporte}
+              >
+                Fechar
+              </button>
+            </header>
+
+            {transporteLoading ? (
+              <div className="empty">Carregando lista…</div>
+            ) : transporteError ? (
+              <div className="empty">{transporteError}</div>
+            ) : transporteLista.length === 0 ? (
+              <div className="empty">
+                Nenhuma pessoa confirmada ainda para o transporte.
+              </div>
+            ) : (
+              <>
+                <div className="form-actions" style={{ marginBottom: '0.75rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-soft"
+                    onClick={() => void copiarListaTransporte()}
+                  >
+                    Copiar lista
+                  </button>
+                  <span className="muted">
+                    {transporteLista.length} pessoa(s)
+                  </span>
+                </div>
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Tipo</th>
+                        <th>Nome</th>
+                        <th>CPF</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transporteLista.map((row, index) => (
+                        <tr
+                          key={`${row.tipo}-${row.confirmacao_id}-${row.cpf}-${index}`}
+                        >
+                          <td>
+                            {row.tipo === 'acompanhante'
+                              ? 'Familiar'
+                              : 'Jovem'}
+                          </td>
+                          <td>{row.nome}</td>
+                          <td>{formatCpfDisplay(row.cpf)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       ) : null}
 

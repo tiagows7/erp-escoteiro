@@ -1821,6 +1821,38 @@ button {
   width: min(44rem, 96vw);
 }
 
+.atividade-transporte-dialog {
+  width: min(36rem, 96vw);
+}
+
+.atividade-acompanhantes-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.85rem 0 1rem;
+}
+
+.atividade-acompanhantes-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.atividade-acompanhante-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr auto;
+  gap: 0.55rem;
+  align-items: end;
+}
+
+@media (max-width: 640px) {
+  .atividade-acompanhante-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .staff-atividade-busca {
   display: block;
   margin-bottom: 0.75rem;

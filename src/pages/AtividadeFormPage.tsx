@@ -47,6 +47,7 @@ const emptyForm = {
   valor_grupo: '0,00',
   valor_grupo_tipo: 'por_jovem' as ValorGrupoTipo,
   receita_tipo_id: '',
+  tem_transporte: false,
 }
 
 function unidadeLabel(ramoId: number | null): string {
@@ -208,7 +209,7 @@ export function AtividadeFormPage() {
       const { data, error: loadError } = await supabase
         .from('atividades')
         .select(
-          'atividade_id, ramo, secao, patrulha_matilha, descricao, local, valor, data_atividade, valor_grupo, valor_grupo_tipo, encerrado_em, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, receita_tipo_id',
+          'atividade_id, ramo, secao, patrulha_matilha, descricao, local, valor, data_atividade, valor_grupo, valor_grupo_tipo, encerrado_em, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, receita_tipo_id, tem_transporte',
         )
         .eq('atividade_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -242,6 +243,7 @@ export function AtividadeFormPage() {
           ? data.valor_grupo_tipo
           : 'por_jovem',
         receita_tipo_id: data.receita_tipo_id?.toString() ?? '',
+        tem_transporte: !!data.tem_transporte,
       })
       setEncerradoEm((data.encerrado_em as string | null) ?? null)
       if (data.repasse_grupo != null) {
@@ -303,7 +305,10 @@ export function AtividadeFormPage() {
     }
   }, [id, isNew, empresaId])
 
-  function update(field: keyof typeof emptyForm, value: string) {
+  function update(
+    field: Exclude<keyof typeof emptyForm, 'tem_transporte'>,
+    value: string,
+  ) {
     setForm((prev) => {
       const next = { ...prev, [field]: value }
       if (field === 'ramo') {
@@ -446,6 +451,7 @@ export function AtividadeFormPage() {
       valor_grupo: parseMoneyInput(form.valor_grupo),
       valor_grupo_tipo: form.valor_grupo_tipo,
       receita_tipo_id: Number(tipoReceita),
+      tem_transporte: !!form.tem_transporte,
     }
 
     const result = isNew
@@ -747,6 +753,28 @@ export function AtividadeFormPage() {
                 disabled={!canWrite || encerrado}
                 maxLength={120}
               />
+            </div>
+
+            <div className="field field-checks field-span-2">
+              <label htmlFor="tem_transporte">
+                <input
+                  id="tem_transporte"
+                  type="checkbox"
+                  checked={!!form.tem_transporte}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      tem_transporte: e.target.checked,
+                    }))
+                  }
+                  disabled={!canWrite || encerrado}
+                />
+                Vai ter transporte
+              </label>
+              <span className="field-hint">
+                Gera lista com nome e CPF dos jovens (do cadastro) e de
+                familiares informados na confirmação.
+              </span>
             </div>
 
             <div className="field">

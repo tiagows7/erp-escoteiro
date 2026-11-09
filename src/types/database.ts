@@ -240,6 +240,18 @@ export type Atividade = {
   repasse_jovens?: number | null
   repasse_base?: number | null
   repasse_despesa_id?: number | null
+  tem_transporte?: boolean
+  created_at: string | null
+}
+
+export type AtividadeAcompanhante = {
+  acompanhante_id: number
+  empresa_id: number
+  confirmacao_id: number
+  atividade_id: number
+  associado_id: number
+  nome: string
+  cpf: string
   created_at: string | null
 }
 

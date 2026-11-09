@@ -5,7 +5,9 @@ import { useToast } from '@/contexts/ToastContext'
 import { formatMoney } from '@/lib/despesas'
 import {
   cancelarConfirmacaoAtividade,
+  carregarAcompanhantesAtividade,
   confirmarParticipacaoAtividade,
+  type AcompanhanteInput,
 } from '@/lib/atividadeConfirmacao'
 import {
   atividadeVisivelPara,
@@ -31,9 +33,18 @@ export type AtividadeCardItem = Atividade & {
   pagamento_id: number | null
 }
 
+type ConfirmModalState = {
+  item: AtividadeCardItem
+  mode: 'confirmar' | 'editar'
+}
+
 type Props = {
   empresaId: number
   registro: string
+}
+
+function emptyAcompanhante(): AcompanhanteInput {
+  return { nome: '', cpf: '' }
 }
 
 export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
@@ -49,6 +60,14 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
   const [pixTitle, setPixTitle] = useState('Pagar atividade com PIX Sicredi')
   const [showLista, setShowLista] = useState(false)
   const [podePagarPix, setPodePagarPix] = useState(false)
+  const [confirmModal, setConfirmModal] = useState<ConfirmModalState | null>(
+    null,
+  )
+  const [acompanhantes, setAcompanhantes] = useState<AcompanhanteInput[]>([
+    emptyAcompanhante(),
+  ])
+  const [modalBusy, setModalBusy] = useState(false)
+  const [modalError, setModalError] = useState<string | null>(null)
 
   const load = useCallback(async (opts?: { quiet?: boolean }) => {
     const quiet = opts?.quiet === true
@@ -98,7 +117,7 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
       supabase
         .from('atividades')
         .select(
-          'atividade_id, empresa_id, ramo, secao, patrulha_matilha, descricao, local, valor, created_at',
+          'atividade_id, empresa_id, ramo, secao, patrulha_matilha, descricao, local, valor, tem_transporte, created_at',
         )
         .eq('empresa_id', empresaId)
         .order('created_at', { ascending: false }),
@@ -150,14 +169,20 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
     )
 
     const confMap = new Map(
-      ((confRes.data ?? []) as { confirmacao_id: number; atividade_id: number }[]).map(
-        (c) => [c.atividade_id, c.confirmacao_id],
-      ),
+      (
+        (confRes.data ?? []) as {
+          confirmacao_id: number
+          atividade_id: number
+        }[]
+      ).map((c) => [c.atividade_id, c.confirmacao_id]),
     )
     const pagMap = new Map(
-      ((pagRes.data ?? []) as { pagamento_id: number; atividade_id: number }[]).map(
-        (p) => [p.atividade_id, p.pagamento_id],
-      ),
+      (
+        (pagRes.data ?? []) as {
+          pagamento_id: number
+          atividade_id: number
+        }[]
+      ).map((p) => [p.atividade_id, p.pagamento_id]),
     )
 
     const cards = ((ativRes.data as Atividade[]) ?? [])
@@ -185,7 +210,37 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
     setPixInput(pending.input)
   }, [empresaId])
 
-  async function confirmarParticipacao(item: AtividadeCardItem) {
+  function fecharConfirmModal() {
+    if (modalBusy) return
+    setConfirmModal(null)
+    setModalError(null)
+    setAcompanhantes([emptyAcompanhante()])
+  }
+
+  async function abrirConfirmModal(
+    item: AtividadeCardItem,
+    mode: 'confirmar' | 'editar',
+  ) {
+    setModalError(null)
+    setAcompanhantes([emptyAcompanhante()])
+    setConfirmModal({ item, mode })
+
+    if (mode === 'editar' && item.confirmacao_id != null) {
+      try {
+        const rows = await carregarAcompanhantesAtividade(
+          empresaId,
+          item.confirmacao_id,
+        )
+        setAcompanhantes(rows.length > 0 ? rows : [emptyAcompanhante()])
+      } catch (err) {
+        setModalError(
+          err instanceof Error ? err.message : 'Erro ao carregar familiares.',
+        )
+      }
+    }
+  }
+
+  async function confirmarParticipacaoSimples(item: AtividadeCardItem) {
     if (!associado || item.confirmado) return
     setBusyId(item.atividade_id)
     const result = await confirmarParticipacaoAtividade(item.atividade_id)
@@ -197,6 +252,40 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
     }
     toast.success('Participação confirmada')
     await load()
+  }
+
+  async function onClickConfirmar(item: AtividadeCardItem) {
+    if (!associado || item.confirmado) return
+    if (item.tem_transporte) {
+      await abrirConfirmModal(item, 'confirmar')
+      return
+    }
+    await confirmarParticipacaoSimples(item)
+  }
+
+  async function salvarConfirmacaoComTransporte() {
+    if (!associado || !confirmModal) return
+    const { item } = confirmModal
+    setModalBusy(true)
+    setModalError(null)
+
+    const result = await confirmarParticipacaoAtividade(item.atividade_id, {
+      acompanhantes,
+    })
+    setModalBusy(false)
+
+    if (!result.ok) {
+      setModalError(result.mensagem)
+      return
+    }
+
+    toast.success(
+      confirmModal.mode === 'editar'
+        ? 'Lista de transporte atualizada'
+        : 'Participação confirmada',
+    )
+    setConfirmModal(null)
+    await load({ quiet: true })
   }
 
   function confirmarPagamento(item: AtividadeCardItem) {
@@ -289,6 +378,7 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
             </p>
             <p className="associado-atividade-meta">
               {item.local ? `Local: ${item.local}` : 'Local não informado'}
+              {item.tem_transporte ? ' · Com transporte' : ''}
             </p>
             <p className="associado-atividade-valor">
               {formatMoney(item.valor)}
@@ -306,7 +396,7 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
                   type="button"
                   className="btn btn-primary"
                   disabled={busyId === item.atividade_id}
-                  onClick={() => void confirmarParticipacao(item)}
+                  onClick={() => void onClickConfirmar(item)}
                 >
                   {busyId === item.atividade_id
                     ? 'Confirmando…'
@@ -317,6 +407,15 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
                   <span className="associado-atividade-status is-ok">
                     Participação confirmada
                   </span>
+                  {item.tem_transporte ? (
+                    <button
+                      type="button"
+                      className="btn btn-soft"
+                      onClick={() => void abrirConfirmModal(item, 'editar')}
+                    >
+                      Familiares no transporte
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="btn btn-soft"
@@ -352,6 +451,149 @@ export function AssociadoAtividadesPanel({ empresaId, registro }: Props) {
       </div>
       ) : null}
     </section>
+    ) : null}
+
+    {confirmModal ? (
+      <div
+        className="confirm-overlay"
+        role="presentation"
+        onClick={fecharConfirmModal}
+      >
+        <div
+          className="passagem-dialog atividade-transporte-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="atividade-transporte-title"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <header className="passagem-dialog-header">
+            <div>
+              <h3 id="atividade-transporte-title">
+                {confirmModal.mode === 'editar'
+                  ? 'Familiares no transporte'
+                  : 'Confirmar participação'}
+              </h3>
+              <p className="muted">{confirmModal.item.descricao}</p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-soft"
+              onClick={fecharConfirmModal}
+              disabled={modalBusy}
+            >
+              Fechar
+            </button>
+          </header>
+
+          <p className="muted" style={{ marginTop: 0 }}>
+            O CPF do jovem sai do cadastro de associados. Se for o caso,
+            informe nome e CPF de outras pessoas da família que vão no
+            transporte.
+          </p>
+
+          <div className="atividade-acompanhantes-block">
+            <div className="atividade-acompanhantes-head">
+              <strong>Pessoas da família</strong>
+              <button
+                type="button"
+                className="btn btn-soft"
+                disabled={modalBusy}
+                onClick={() =>
+                  setAcompanhantes((prev) => [...prev, emptyAcompanhante()])
+                }
+              >
+                Adicionar pessoa
+              </button>
+            </div>
+
+            {acompanhantes.map((row, index) => (
+              <div key={index} className="atividade-acompanhante-row">
+                <div className="field">
+                  <label htmlFor={`acomp-nome-${index}`}>Nome</label>
+                  <input
+                    id={`acomp-nome-${index}`}
+                    className="input"
+                    value={row.nome}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setAcompanhantes((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, nome: value } : item,
+                        ),
+                      )
+                    }}
+                    maxLength={120}
+                    disabled={modalBusy}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor={`acomp-cpf-${index}`}>CPF</label>
+                  <input
+                    id={`acomp-cpf-${index}`}
+                    className="input"
+                    value={row.cpf}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setAcompanhantes((prev) =>
+                        prev.map((item, i) =>
+                          i === index ? { ...item, cpf: value } : item,
+                        ),
+                      )
+                    }}
+                    inputMode="numeric"
+                    maxLength={15}
+                    placeholder="000.000.000-00"
+                    disabled={modalBusy}
+                  />
+                </div>
+                {acompanhantes.length > 1 ? (
+                  <button
+                    type="button"
+                    className="btn btn-soft"
+                    disabled={modalBusy}
+                    onClick={() =>
+                      setAcompanhantes((prev) =>
+                        prev.filter((_, i) => i !== index),
+                      )
+                    }
+                  >
+                    Remover
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+
+          {modalError ? (
+            <p className="muted" style={{ color: 'var(--danger, #b42318)' }}>
+              {modalError}
+            </p>
+          ) : null}
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={modalBusy}
+              onClick={() => void salvarConfirmacaoComTransporte()}
+            >
+              {modalBusy
+                ? 'Salvando…'
+                : confirmModal.mode === 'editar'
+                  ? 'Salvar lista'
+                  : 'Confirmar participação'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-soft"
+              disabled={modalBusy}
+              onClick={fecharConfirmModal}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
     ) : null}
 
     <PixSicrediCheckoutModal
