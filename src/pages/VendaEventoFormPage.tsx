@@ -163,9 +163,6 @@ export function VendaEventoFormPage() {
   const [repasseDespesaId, setRepasseDespesaId] = useState<number | null>(null)
   /** Tipo fixo nos parâmetros do grupo. */
   const [tipoReceitaParam, setTipoReceitaParam] = useState('')
-  const [atividadeIdVinculada, setAtividadeIdVinculada] = useState<number | null>(
-    null,
-  )
   const imagemInputRef = useRef<HTMLInputElement>(null)
 
   const ramoId = form.ramo ? Number(form.ramo) : null
@@ -237,7 +234,7 @@ export function VendaEventoFormPage() {
       const { data, error: loadError } = await supabase
         .from('venda_eventos')
         .select(
-          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, local, endereco, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, receita_tipo_id, aceita_cartao, cartao_max_parcelas, pedir_participacao, pedir_ramo, pedir_info_extra, atividade_id',
+          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, local, endereco, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, receita_tipo_id, aceita_cartao, cartao_max_parcelas, pedir_participacao, pedir_ramo, pedir_info_extra',
         )
         .eq('evento_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -286,9 +283,6 @@ export function VendaEventoFormPage() {
         pedir_ramo: data.pedir_ramo === true,
         pedir_info_extra: data.pedir_info_extra === true,
       })
-      setAtividadeIdVinculada(
-        data.atividade_id != null ? Number(data.atividade_id) : null,
-      )
       setImagemUrl(data.imagem_url ?? null)
       setImagemPreview(data.imagem_url ?? null)
       setImagemFile(null)
@@ -685,68 +679,6 @@ export function VendaEventoFormPage() {
 
     const eventoIdSalvo = Number(result.data?.evento_id ?? id)
 
-    let atividadeIdAtual = atividadeIdVinculada
-    if (pedirParticipacao) {
-      const atividadePayload = {
-        empresa_id: empresaId,
-        ramo: ramoValue,
-        secao: form.secao ? Number(form.secao) : null,
-        patrulha_matilha: form.patrulha_matilha
-          ? Number(form.patrulha_matilha)
-          : null,
-        descricao: form.nome.trim().slice(0, 200),
-        local: form.local.trim().slice(0, 120) || null,
-        data_atividade: form.data_evento || null,
-        valor: 0,
-        receita_tipo_id: Number(tipoReceita),
-      }
-
-      if (atividadeIdAtual != null && atividadeIdAtual > 0) {
-        const { error: ativUpdError } = await supabase
-          .from('atividades')
-          .update(atividadePayload)
-          .eq('atividade_id', atividadeIdAtual)
-          .eq('empresa_id', empresaId)
-        if (ativUpdError) {
-          setSaving(false)
-          setError(
-            `Evento salvo, mas a atividade de participação falhou: ${ativUpdError.message}`,
-          )
-          return
-        }
-      } else {
-        const { data: ativNova, error: ativInsError } = await supabase
-          .from('atividades')
-          .insert(atividadePayload)
-          .select('atividade_id')
-          .single()
-        if (ativInsError || !ativNova) {
-          setSaving(false)
-          setError(
-            `Evento salvo, mas não foi possível criar a atividade de participação: ${ativInsError?.message ?? 'erro desconhecido'}`,
-          )
-          return
-        }
-        atividadeIdAtual = Number(ativNova.atividade_id)
-      }
-
-      if (atividadeIdAtual != atividadeIdVinculada) {
-        const { error: linkError } = await supabase
-          .from('venda_eventos')
-          .update({ atividade_id: atividadeIdAtual })
-          .eq('evento_id', eventoIdSalvo)
-          .eq('empresa_id', empresaId)
-        if (linkError) {
-          setSaving(false)
-          setError(
-            `Atividade criada, mas o vínculo com o evento falhou: ${linkError.message}`,
-          )
-          return
-        }
-        setAtividadeIdVinculada(atividadeIdAtual)
-      }
-    }
-
     // Sincroniza tipos: atualiza existentes, cria novos, desativa removidos
     const keepIds = tiposLimpos
       .map((t) => t.tipo_id)
@@ -1034,11 +966,11 @@ export function VendaEventoFormPage() {
                 }
                 disabled={disabled}
               />
-              Permitir confirmar participação nas atividades
+              Perguntar se quer participar das atividades
             </label>
             <span className="field-hint">
-              Cria uma atividade vinculada para os jovens confirmarem presença
-              no painel (e familiares, se houver transporte).
+              Na compra de cada convite, mostra a opção para informar se a
+              pessoa quer participar das atividades do evento.
             </span>
           </div>
 

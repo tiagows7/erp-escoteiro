@@ -430,13 +430,13 @@ export type VendaEvento = {
   aceita_cartao?: boolean | null
   /** Parcelas sem juros (1–12) no checkout InfinitePay. */
   cartao_max_parcelas?: number | null
-  /** Libera confirmação de participação via atividade vinculada. */
+  /** Na compra, pergunta se o convite participa das atividades do evento. */
   pedir_participacao?: boolean | null
   /** Na compra, pede ramo (1–4) ou participante/família por convite. */
   pedir_ramo?: boolean | null
   /** Na compra, permite informar texto livre adicional. */
   pedir_info_extra?: boolean | null
-  /** Atividade usada para os jovens confirmarem participação. */
+  /** Legado: atividade vinculada (não é mais criada automaticamente). */
   atividade_id?: number | null
   valor_grupo?: number | null
   valor_grupo_tipo?: 'percentual' | 'por_jovem' | null
