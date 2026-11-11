@@ -25,6 +25,62 @@ export function normalizeRestricoesAlimentares(
   )
 }
 
+/** Opções de ramo/staff pedidas na compra do convite. */
+export const RAMO_STAFF_OPCOES = [
+  { value: '1', label: 'Lobinho' },
+  { value: '2', label: 'Escoteiro' },
+  { value: '3', label: 'Sênior' },
+  { value: '4', label: 'Pioneiro' },
+  { value: 'staff', label: 'Staff' },
+] as const
+
+export type RamoStaffChoice = '' | '1' | '2' | '3' | '4' | 'staff'
+
+export function parseRamoStaffChoice(choice: string): {
+  ramo: number | null
+  staff: boolean
+} {
+  if (choice === 'staff') return { ramo: null, staff: true }
+  const n = Number(choice)
+  if (n === 1 || n === 2 || n === 3 || n === 4) {
+    return { ramo: n, staff: false }
+  }
+  return { ramo: null, staff: false }
+}
+
+export function normalizeRamoStaffEnvio(choices: string[]): {
+  ramos: (number | null)[]
+  staffs: boolean[]
+} {
+  const ramos: (number | null)[] = []
+  const staffs: boolean[] = []
+  for (const choice of choices) {
+    const parsed = parseRamoStaffChoice(choice)
+    ramos.push(parsed.staff ? null : parsed.ramo)
+    staffs.push(parsed.staff)
+  }
+  return { ramos, staffs }
+}
+
+export function labelRamoStaffConvite(c: {
+  convidado_ramo?: number | null
+  eh_staff?: boolean | null
+}): string {
+  if (c.eh_staff) return 'Staff'
+  switch (c.convidado_ramo) {
+    case 1:
+      return 'Lobinho'
+    case 2:
+      return 'Escoteiro'
+    case 3:
+      return 'Sênior'
+    case 4:
+      return 'Pioneiro'
+    default:
+      return '—'
+  }
+}
+
 export async function comprarConvitesEvento(input: {
   eventoId: number
   nomes: string[]
@@ -33,6 +89,8 @@ export async function comprarConvitesEvento(input: {
   tipoIds?: number[]
   restricoes?: string[]
   participa?: boolean[]
+  convidadoRamos?: (number | null)[]
+  ehStaff?: boolean[]
 }): Promise<{
   ok: boolean
   mensagem: string
@@ -47,6 +105,8 @@ export async function comprarConvitesEvento(input: {
     p_tipo_ids: input.tipoIds ?? null,
     p_restricoes: input.restricoes ?? null,
     p_participa: input.participa ?? null,
+    p_convidado_ramos: input.convidadoRamos ?? null,
+    p_eh_staff: input.ehStaff ?? null,
   })
 
   if (error) {

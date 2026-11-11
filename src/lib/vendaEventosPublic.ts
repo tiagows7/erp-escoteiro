@@ -25,6 +25,7 @@ export type EventoPublicInfo = {
   pedir_participacao: boolean
   local: string | null
   endereco: string | null
+  pedir_ramo: boolean
 }
 
 export function linkPublicoVendaEvento(token: string): string {
@@ -97,6 +98,7 @@ export async function fetchEventoPublicInfo(
       pedir_participacao: row.pedir_participacao === true,
       local: row.local ? String(row.local) : null,
       endereco: row.endereco ? String(row.endereco) : null,
+      pedir_ramo: row.pedir_ramo === true,
     },
     error: null,
   }

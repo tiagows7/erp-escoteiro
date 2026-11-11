@@ -15,7 +15,13 @@ import {
   type EventoPagamentoConfig,
 } from '@/lib/infinitePayCheckout'
 import type { PixPublicEventoInput } from '@/lib/pixSicrediPublic'
-import { normalizeRestricoesAlimentares } from '@/lib/vendaEventos'
+import {
+  normalizeRestricoesAlimentares,
+  normalizeRamoStaffEnvio,
+  parseRamoStaffChoice,
+  RAMO_STAFF_OPCOES,
+  type RamoStaffChoice,
+} from '@/lib/vendaEventos'
 import {
   fetchEventoPublicInfo,
   type EventoPublicInfo,
@@ -50,6 +56,7 @@ export function VendaEventoPublicPage() {
   const [participaAtividade, setParticipaAtividade] = useState<boolean[]>([
     false,
   ])
+  const [ramoStaff, setRamoStaff] = useState<RamoStaffChoice[]>([''])
   const [telefone, setTelefone] = useState('')
   const [pixOpen, setPixOpen] = useState(false)
   const [pixInput, setPixInput] = useState<PixPublicEventoInput | null>(null)
@@ -120,6 +127,12 @@ export function VendaEventoPublicPage() {
     setParticipaAtividade((prev) =>
       Array.from({ length: Math.max(1, quantidade) }, (_, i) => prev[i] ?? false),
     )
+    setRamoStaff((prev) =>
+      Array.from(
+        { length: Math.max(1, quantidade) },
+        (_, i) => prev[i] ?? '',
+      ),
+    )
   }, [quantidade, tipoPadraoId])
 
   // Retorno do checkout InfinitePay
@@ -178,6 +191,8 @@ export function VendaEventoPublicPage() {
     tipoIdsEnvio: number[] | undefined,
     restricoesEnvio: string[],
     participaEnvio: boolean[] | undefined,
+    ramosEnvio: (number | null)[] | undefined,
+    staffEnvio: boolean[] | undefined,
     fone: string,
     valor: number,
     descricao: string,
@@ -190,6 +205,8 @@ export function VendaEventoPublicPage() {
       tipoIds: tipoIdsEnvio,
       restricoes: restricoesEnvio,
       participa: participaEnvio,
+      convidadoRamos: ramosEnvio,
+      ehStaff: staffEnvio,
       compradorTelefone: fone,
       valor,
       descricao,
@@ -225,6 +242,17 @@ export function VendaEventoPublicPage() {
         return
       }
     }
+    if (info.pedir_ramo) {
+      for (let i = 0; i < quantidade; i += 1) {
+        const parsed = parseRamoStaffChoice(ramoStaff[i] ?? '')
+        if (!parsed.staff && parsed.ramo == null) {
+          setError(
+            `Informe o ramo ou staff do convite ${i + 1}.`,
+          )
+          return
+        }
+      }
+    }
     if (!telefone.trim()) {
       setError('Informe o seu telefone.')
       return
@@ -249,6 +277,13 @@ export function VendaEventoPublicPage() {
     const participaEnvio = info.pedir_participacao
       ? Array.from({ length: quantidade }, (_, i) => !!participaAtividade[i])
       : undefined
+    const ramoStaffEnvio = info.pedir_ramo
+      ? normalizeRamoStaffEnvio(
+          Array.from({ length: quantidade }, (_, i) => ramoStaff[i] ?? ''),
+        )
+      : null
+    const ramosEnvio = ramoStaffEnvio?.ramos
+    const staffEnvio = ramoStaffEnvio?.staffs
     const descricao = `${info.evento_nome} · ${quantidade} convite(s)`
     const fone = telefone.trim()
 
@@ -283,6 +318,8 @@ export function VendaEventoPublicPage() {
         tipoIds: tipoIdsEnvio,
         restricoes: restricoesEnvio,
         participa: participaEnvio,
+        convidadoRamos: ramosEnvio,
+        ehStaff: staffEnvio,
         compradorTelefone: fone,
         valor,
         descricao,
@@ -299,6 +336,8 @@ export function VendaEventoPublicPage() {
           tipoIdsEnvio,
           restricoesEnvio,
           participaEnvio,
+          ramosEnvio,
+          staffEnvio,
           fone,
           valor,
           descricao,
@@ -314,6 +353,8 @@ export function VendaEventoPublicPage() {
       tipoIdsEnvio,
       restricoesEnvio,
       participaEnvio,
+      ramosEnvio,
+      staffEnvio,
       fone,
       valor,
       descricao,
@@ -553,6 +594,35 @@ export function VendaEventoPublicPage() {
                           />
                           <span>Quer participar das atividades</span>
                         </label>
+                      </div>
+                    ) : null}
+                    {info.pedir_ramo ? (
+                      <div className="field" style={{ margin: 0 }}>
+                        <label htmlFor={`ramo_staff_${index}`}>
+                          Ramo ou staff
+                        </label>
+                        <select
+                          id={`ramo_staff_${index}`}
+                          className="select"
+                          value={ramoStaff[index] ?? ''}
+                          onChange={(e) => {
+                            const value = e.target.value as RamoStaffChoice
+                            setRamoStaff((prev) =>
+                              prev.map((v, i) =>
+                                i === index ? value : v,
+                              ),
+                            )
+                          }}
+                          disabled={pixOpen || paying}
+                          required
+                        >
+                          <option value="">Selecione…</option>
+                          {RAMO_STAFF_OPCOES.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     ) : null}
                     <div className="evento-convite-restricao">

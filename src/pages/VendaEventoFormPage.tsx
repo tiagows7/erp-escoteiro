@@ -97,6 +97,7 @@ const emptyForm = {
   aceita_cartao: false,
   cartao_max_parcelas: '1',
   pedir_participacao: false,
+  pedir_ramo: false,
 }
 
 type TipoFormRow = {
@@ -235,7 +236,7 @@ export function VendaEventoFormPage() {
       const { data, error: loadError } = await supabase
         .from('venda_eventos')
         .select(
-          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, local, endereco, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, receita_tipo_id, aceita_cartao, cartao_max_parcelas, pedir_participacao, atividade_id',
+          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, local, endereco, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, receita_tipo_id, aceita_cartao, cartao_max_parcelas, pedir_participacao, pedir_ramo, atividade_id',
         )
         .eq('evento_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -281,6 +282,7 @@ export function VendaEventoFormPage() {
             : 1,
         ),
         pedir_participacao: data.pedir_participacao === true,
+        pedir_ramo: data.pedir_ramo === true,
       })
       setAtividadeIdVinculada(
         data.atividade_id != null ? Number(data.atividade_id) : null,
@@ -632,6 +634,7 @@ export function VendaEventoFormPage() {
     if (!aceitaCartao) maxParcelas = 1
 
     const pedirParticipacao = form.pedir_participacao === true
+    const pedirRamo = form.pedir_ramo === true
 
     const payload = {
       empresa_id: empresaId,
@@ -653,6 +656,7 @@ export function VendaEventoFormPage() {
       aceita_cartao: aceitaCartao,
       cartao_max_parcelas: maxParcelas,
       pedir_participacao: pedirParticipacao,
+      pedir_ramo: pedirRamo,
     }
 
     const result = isNew
@@ -1031,6 +1035,23 @@ export function VendaEventoFormPage() {
             <span className="field-hint">
               Cria uma atividade vinculada para os jovens confirmarem presença
               no painel (e familiares, se houver transporte).
+            </span>
+          </div>
+
+          <div className="field field-checks field-span-2">
+            <label htmlFor="pedir_ramo">
+              <input
+                id="pedir_ramo"
+                type="checkbox"
+                checked={form.pedir_ramo === true}
+                onChange={(e) => update('pedir_ramo', e.target.checked)}
+                disabled={disabled}
+              />
+              Pedir ramo ou staff na compra
+            </label>
+            <span className="field-hint">
+              Na venda de cada convite, exige informar o ramo (Lobinho,
+              Escoteiro, Sênior ou Pioneiro) ou marcar Staff.
             </span>
           </div>
 

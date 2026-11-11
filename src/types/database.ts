@@ -432,6 +432,8 @@ export type VendaEvento = {
   cartao_max_parcelas?: number | null
   /** Libera confirmação de participação via atividade vinculada. */
   pedir_participacao?: boolean | null
+  /** Na compra, pede ramo (1–4) ou staff por convite. */
+  pedir_ramo?: boolean | null
   /** Atividade usada para os jovens confirmarem participação. */
   atividade_id?: number | null
   valor_grupo?: number | null
@@ -498,6 +500,8 @@ export type VendaEventoConvite = {
   tipo_label: string | null
   restricao_alimentar: string | null
   participa_atividade?: boolean | null
+  convidado_ramo?: number | null
+  eh_staff?: boolean | null
   ativo: boolean
   created_at: string | null
 }

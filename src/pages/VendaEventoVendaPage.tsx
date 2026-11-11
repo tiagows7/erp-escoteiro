@@ -19,8 +19,13 @@ import type { PixPublicEventoInput } from '@/lib/pixSicrediPublic'
 import {
   comprarConvitesEvento,
   ensureMeuLinkEvento,
+  labelRamoStaffConvite,
   normalizeRestricoesAlimentares,
+  normalizeRamoStaffEnvio,
+  parseRamoStaffChoice,
+  RAMO_STAFF_OPCOES,
   totalConvitesEvento,
+  type RamoStaffChoice,
 } from '@/lib/vendaEventos'
 import { isEncerrado } from '@/lib/encerrado'
 import { linkPublicoVendaEvento } from '@/lib/vendaEventosPublic'
@@ -70,6 +75,7 @@ export function VendaEventoVendaPage() {
   const [participaAtividade, setParticipaAtividade] = useState<boolean[]>([
     false,
   ])
+  const [ramoStaff, setRamoStaff] = useState<RamoStaffChoice[]>([''])
   const [telefone, setTelefone] = useState('')
   const [formaPagamento, setFormaPagamento] =
     useState<VendaEventoFormaPagamento | null>(null)
@@ -211,7 +217,7 @@ export function VendaEventoVendaPage() {
       supabase
         .from('venda_eventos')
         .select(
-          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, local, endereco, imagem_url, link_token, encerrado_em, created_at, aceita_cartao, cartao_max_parcelas, pedir_participacao',
+          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, local, endereco, imagem_url, link_token, encerrado_em, created_at, aceita_cartao, cartao_max_parcelas, pedir_participacao, pedir_ramo',
         )
         .eq('evento_id', eventoId)
         .eq('empresa_id', empresaId)
@@ -219,7 +225,7 @@ export function VendaEventoVendaPage() {
       supabase
         .from('venda_evento_convite')
         .select(
-          'convite_id, empresa_id, evento_id, compra_id, numero, nome, tipo_id, valor_unitario, tipo_label, restricao_alimentar, participa_atividade, ativo, created_at',
+          'convite_id, empresa_id, evento_id, compra_id, numero, nome, tipo_id, valor_unitario, tipo_label, restricao_alimentar, participa_atividade, convidado_ramo, eh_staff, ativo, created_at',
         )
         .eq('evento_id', eventoId)
         .eq('empresa_id', empresaId)
@@ -325,6 +331,7 @@ export function VendaEventoVendaPage() {
         setTemRestricao([false])
         setRestricoesTexto([''])
         setParticipaAtividade([false])
+        setRamoStaff([''])
         setTelefone('')
         setFormaPagamento(null)
         await reload()
@@ -370,6 +377,12 @@ export function VendaEventoVendaPage() {
     setParticipaAtividade((prev) =>
       Array.from({ length: Math.max(1, quantidade) }, (_, i) => prev[i] ?? false),
     )
+    setRamoStaff((prev) =>
+      Array.from(
+        { length: Math.max(1, quantidade) },
+        (_, i) => prev[i] ?? '',
+      ),
+    )
   }, [quantidade, tipoPadraoId])
 
   function limparCompra() {
@@ -379,6 +392,7 @@ export function VendaEventoVendaPage() {
     setTemRestricao([false])
     setRestricoesTexto([''])
     setParticipaAtividade([false])
+    setRamoStaff([''])
     setTelefone('')
     setFormaPagamento(null)
     setUltimaNumeracao(null)
@@ -573,6 +587,15 @@ export function VendaEventoVendaPage() {
         return
       }
     }
+    if (evento.pedir_ramo) {
+      for (let i = 0; i < quantidade; i += 1) {
+        const parsed = parseRamoStaffChoice(ramoStaff[i] ?? '')
+        if (!parsed.staff && parsed.ramo == null) {
+          setError(`Informe o ramo ou staff do convite ${i + 1}.`)
+          return
+        }
+      }
+    }
     if (!formaPagamento) {
       setError(
         'Selecione a forma de pagamento: Dinheiro, PIX, cartão, PIX direto ou Em aberto.',
@@ -592,6 +615,13 @@ export function VendaEventoVendaPage() {
     const participaEnvio = evento.pedir_participacao
       ? Array.from({ length: quantidade }, (_, i) => !!participaAtividade[i])
       : undefined
+    const ramoStaffEnvio = evento.pedir_ramo
+      ? normalizeRamoStaffEnvio(
+          Array.from({ length: quantidade }, (_, i) => ramoStaff[i] ?? ''),
+        )
+      : null
+    const ramosEnvio = ramoStaffEnvio?.ramos
+    const staffEnvio = ramoStaffEnvio?.staffs
     const linkPagamento = meuLinkToken || evento.link_token
 
     if (formaPagamento === 'pix' || formaPagamento === 'infinitepay') {
@@ -624,6 +654,8 @@ export function VendaEventoVendaPage() {
           tipoIds: tipoIdsEnvio,
           restricoes: restricoesEnvio,
           participa: participaEnvio,
+          convidadoRamos: ramosEnvio,
+          ehStaff: staffEnvio,
           compradorTelefone: fone,
           valor,
           descricao,
@@ -646,6 +678,8 @@ export function VendaEventoVendaPage() {
         tipoIds: tipoIdsEnvio,
         restricoes: restricoesEnvio,
         participa: participaEnvio,
+        convidadoRamos: ramosEnvio,
+        ehStaff: staffEnvio,
         compradorTelefone: fone,
         valor,
         descricao,
@@ -663,6 +697,8 @@ export function VendaEventoVendaPage() {
       tipoIds: tipoIdsEnvio,
       restricoes: restricoesEnvio,
       participa: participaEnvio,
+      convidadoRamos: ramosEnvio,
+      ehStaff: staffEnvio,
       compradorTelefone: telefone,
       formaPagamento,
     })
@@ -696,6 +732,7 @@ export function VendaEventoVendaPage() {
     setTemRestricao([false])
     setRestricoesTexto([''])
     setParticipaAtividade([false])
+    setRamoStaff([''])
     setTelefone('')
     setFormaPagamento(null)
     await reload()
@@ -975,6 +1012,35 @@ export function VendaEventoVendaPage() {
                           </label>
                         </div>
                       ) : null}
+                      {evento?.pedir_ramo ? (
+                        <div className="field" style={{ margin: 0 }}>
+                          <label htmlFor={`ramo_staff_${index}`}>
+                            Ramo ou staff
+                          </label>
+                          <select
+                            id={`ramo_staff_${index}`}
+                            className="select"
+                            value={ramoStaff[index] ?? ''}
+                            onChange={(e) => {
+                              const value = e.target.value as RamoStaffChoice
+                              setRamoStaff((prev) =>
+                                prev.map((v, i) =>
+                                  i === index ? value : v,
+                                ),
+                              )
+                            }}
+                            disabled={saving}
+                            required
+                          >
+                            <option value="">Selecione…</option>
+                            {RAMO_STAFF_OPCOES.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : null}
                       <div className="evento-convite-restricao">
                         <label
                           className="checkbox-label"
@@ -1209,6 +1275,7 @@ export function VendaEventoVendaPage() {
           setTemRestricao([false])
           setRestricoesTexto([''])
           setParticipaAtividade([false])
+          setRamoStaff([''])
           setTelefone('')
           setFormaPagamento(null)
           void (async () => {
@@ -1398,6 +1465,7 @@ export function VendaEventoVendaPage() {
                     {evento?.pedir_participacao ? (
                       <th>Atividades</th>
                     ) : null}
+                    {evento?.pedir_ramo ? <th>Ramo/Staff</th> : null}
                     <th>Situação</th>
                     {canStaffEdit ? (
                       <th className="no-print">Ações</th>
@@ -1472,6 +1540,9 @@ export function VendaEventoVendaPage() {
                           <td>
                             {c.participa_atividade ? 'Sim' : 'Não'}
                           </td>
+                        ) : null}
+                        {evento?.pedir_ramo ? (
+                          <td>{labelRamoStaffConvite(c)}</td>
                         ) : null}
                         <td>
                           {inativo ? (
