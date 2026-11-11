@@ -42,6 +42,44 @@ function truncate(text: string, max: number): string {
   return t.length <= max ? t : t.slice(0, max)
 }
 
+/** Texto seguro para solicitacaoPagador (Efí rejeita alguns unicode). */
+function sanitizeSolicitacaoPagador(text: string, max = 140): string {
+  const cleaned = String(text ?? '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[—–−]/g, '-')
+    .replace(/[^\x20-\x7E]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return truncate(cleaned || 'Mensalidade plataforma', max)
+}
+
+function efiErrorMessage(
+  data: Record<string, unknown>,
+  fallback: string,
+): string {
+  const violacoes = Array.isArray(data.violacoes) ? data.violacoes : []
+  const detalhes = violacoes
+    .map((v) => {
+      const row = v as Record<string, unknown>
+      const prop = String(row.propriedade ?? row.property ?? '').trim()
+      const razao = String(row.razao ?? row.reason ?? row.mensagem ?? '').trim()
+      if (prop && razao) return `${prop}: ${razao}`
+      return razao || prop
+    })
+    .filter(Boolean)
+  const base = String(
+    data.mensagem ||
+      data.message ||
+      data.detail ||
+      data.title ||
+      data.error_description ||
+      fallback,
+  )
+  if (detalhes.length === 0) return base
+  return `${base} (${detalhes.join('; ')})`
+}
+
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -196,10 +234,13 @@ async function loadEfiConfig(
     data.certificado_senha ?? null,
   )
 
+  const chave = data.pix_chave.trim()
   return {
     clientId: data.client_id.trim(),
     clientSecret: data.client_secret.trim(),
-    chave: data.pix_chave.trim(),
+    // Chave aleatória (EVP/UUID) deve ir em minúsculas na Efí.
+    chave:
+      /^[0-9a-fA-F-]{36}$/.test(chave) ? chave.toLowerCase() : chave,
     certPem,
     keyPem,
     sandbox: data.sandbox === true,
@@ -227,12 +268,7 @@ async function getAccessToken(cfg: EfiConfig): Promise<string> {
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>
     if (!res.ok || typeof data.access_token !== 'string') {
       throw new Error(
-        String(
-          data?.error_description ||
-            data?.message ||
-            data?.mensagem ||
-            `Falha OAuth Efí (${res.status}).`,
-        ),
+        efiErrorMessage(data, `Falha OAuth Efí (${res.status}).`),
       )
     }
     const expiresIn = Number(data.expires_in ?? 3600)
@@ -263,11 +299,9 @@ async function createCob(
       calendario: { expiracao: 3600 },
       valor: {
         original: money2(input.valor),
-        // 0 = valor fixo (pagador não altera no app do banco)
-        modalidadeAlteracao: 0,
       },
       chave: cfg.chave,
-      solicitacaoPagador: truncate(input.descricao, 140),
+      solicitacaoPagador: sanitizeSolicitacaoPagador(input.descricao),
     }
 
     const res = await fetch(`${cfg.baseUrl}/v2/cob/${input.txid}`, {
@@ -282,13 +316,11 @@ async function createCob(
 
     let data = (await res.json().catch(() => ({}))) as Record<string, unknown>
     if (!res.ok) {
+      console.error('pix-efi createCob fail', res.status, JSON.stringify(data))
       throw new Error(
-        String(
-          data?.detail ||
-            data?.mensagem ||
-            data?.title ||
-            data?.message ||
-            `Falha ao criar cobrança PIX Efí (${res.status}).`,
+        efiErrorMessage(
+          data,
+          `Falha ao criar cobrança PIX Efí (${res.status}).`,
         ),
       )
     }
@@ -324,12 +356,13 @@ async function getCob(cfg: EfiConfig, txid: string) {
       },
       client,
     })
-    const data = await res.json().catch(() => ({}))
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>
     if (!res.ok) {
       throw new Error(
-        (data as { detail?: string })?.detail ||
-          (data as { mensagem?: string })?.mensagem ||
+        efiErrorMessage(
+          data,
           `Falha ao consultar cobrança PIX Efí (${res.status}).`,
+        ),
       )
     }
     return data as Record<string, unknown>
@@ -569,10 +602,9 @@ Deno.serve(async (req) => {
       const empresaNome =
         (cobranca.empresa as { nome?: string } | null)?.nome ??
         `Grupo #${cobranca.empresa_id}`
-      const descricao = truncate(
+      const descricao = sanitizeSolicitacaoPagador(
         cobranca.descricao ||
-          `Mensalidade plataforma — ${empresaNome}`,
-        140,
+          `Mensalidade plataforma - ${empresaNome}`,
       )
       const txid = generateTxid()
       const cobRes = await createCob(cfg, {

@@ -11,6 +11,19 @@ export type PixEfiCobrancaResumo = {
   descricao?: string | null
 }
 
+async function readFunctionsError(error: unknown): Promise<string | null> {
+  const ctx = (error as { context?: Response })?.context
+  if (!ctx || typeof ctx.json !== 'function') return null
+  try {
+    const body = await ctx.json()
+    if (body?.error) return String(body.error)
+    if (body?.message) return String(body.message)
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
 export async function getPixEfiConfigured(): Promise<{
   configured: boolean
   message?: string
@@ -19,7 +32,8 @@ export async function getPixEfiConfigured(): Promise<{
     body: { action: 'config' },
   })
   if (error) {
-    return { configured: false, message: error.message }
+    const detailed = await readFunctionsError(error)
+    return { configured: false, message: detailed ?? error.message }
   }
   const row = data as { configured?: boolean; message?: string }
   return {
@@ -37,7 +51,8 @@ export async function createPixEfiCobranca(cobrancaId: number): Promise<{
     body: { action: 'create', cobranca_id: cobrancaId },
   })
   if (error) {
-    return { ok: false, error: error.message }
+    const detailed = await readFunctionsError(error)
+    return { ok: false, error: detailed ?? error.message }
   }
   const row = data as {
     cobranca?: PixEfiCobrancaResumo
@@ -59,7 +74,8 @@ export async function checkPixEfiStatus(pixId: number): Promise<{
     body: { action: 'status', pix_id: pixId },
   })
   if (error) {
-    return { ok: false, paid: false, error: error.message }
+    const detailed = await readFunctionsError(error)
+    return { ok: false, paid: false, error: detailed ?? error.message }
   }
   const row = data as {
     paid?: boolean
