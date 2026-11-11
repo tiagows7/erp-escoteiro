@@ -1047,11 +1047,11 @@ export function VendaEventoFormPage() {
                 onChange={(e) => update('pedir_ramo', e.target.checked)}
                 disabled={disabled}
               />
-              Pedir ramo ou staff na compra
+              Pedir ramo ou participante/família na compra
             </label>
             <span className="field-hint">
               Na venda de cada convite, exige informar o ramo (Lobinho,
-              Escoteiro, Sênior ou Pioneiro) ou marcar Staff.
+              Escoteiro, Sênior ou Pioneiro) ou Participante/Família.
             </span>
           </div>
 

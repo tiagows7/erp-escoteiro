@@ -432,7 +432,7 @@ export type VendaEvento = {
   cartao_max_parcelas?: number | null
   /** Libera confirmação de participação via atividade vinculada. */
   pedir_participacao?: boolean | null
-  /** Na compra, pede ramo (1–4) ou staff por convite. */
+  /** Na compra, pede ramo (1–4) ou participante/família por convite. */
   pedir_ramo?: boolean | null
   /** Atividade usada para os jovens confirmarem participação. */
   atividade_id?: number | null

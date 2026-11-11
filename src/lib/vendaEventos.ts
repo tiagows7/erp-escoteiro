@@ -31,7 +31,7 @@ export const RAMO_STAFF_OPCOES = [
   { value: '2', label: 'Escoteiro' },
   { value: '3', label: 'Sênior' },
   { value: '4', label: 'Pioneiro' },
-  { value: 'staff', label: 'Staff' },
+  { value: 'staff', label: 'Participante/Família' },
 ] as const
 
 export type RamoStaffChoice = '' | '1' | '2' | '3' | '4' | 'staff'
@@ -66,7 +66,7 @@ export function labelRamoStaffConvite(c: {
   convidado_ramo?: number | null
   eh_staff?: boolean | null
 }): string {
-  if (c.eh_staff) return 'Staff'
+  if (c.eh_staff) return 'Participante/Família'
   switch (c.convidado_ramo) {
     case 1:
       return 'Lobinho'

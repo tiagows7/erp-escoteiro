@@ -591,7 +591,9 @@ export function VendaEventoVendaPage() {
       for (let i = 0; i < quantidade; i += 1) {
         const parsed = parseRamoStaffChoice(ramoStaff[i] ?? '')
         if (!parsed.staff && parsed.ramo == null) {
-          setError(`Informe o ramo ou staff do convite ${i + 1}.`)
+          setError(
+            `Informe o ramo ou participante/família do convite ${i + 1}.`,
+          )
           return
         }
       }
@@ -1015,7 +1017,7 @@ export function VendaEventoVendaPage() {
                       {evento?.pedir_ramo ? (
                         <div className="field" style={{ margin: 0 }}>
                           <label htmlFor={`ramo_staff_${index}`}>
-                            Ramo ou staff
+                            Ramo ou participante/família
                           </label>
                           <select
                             id={`ramo_staff_${index}`}
@@ -1465,7 +1467,9 @@ export function VendaEventoVendaPage() {
                     {evento?.pedir_participacao ? (
                       <th>Atividades</th>
                     ) : null}
-                    {evento?.pedir_ramo ? <th>Ramo/Staff</th> : null}
+                    {evento?.pedir_ramo ? (
+                      <th>Ramo / Participante</th>
+                    ) : null}
                     <th>Situação</th>
                     {canStaffEdit ? (
                       <th className="no-print">Ações</th>
