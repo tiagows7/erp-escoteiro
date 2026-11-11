@@ -998,8 +998,28 @@ export function VendaEventoFormPage() {
               onChange={(e) => update('nome', e.target.value)}
               disabled={disabled}
               required
+              maxLength={200}
               placeholder="Ex.: Jantar beneficente 2026"
             />
+          </div>
+
+          <div className="field field-checks field-span-2">
+            <label htmlFor="pedir_participacao">
+              <input
+                id="pedir_participacao"
+                type="checkbox"
+                checked={form.pedir_participacao === true}
+                onChange={(e) =>
+                  update('pedir_participacao', e.target.checked)
+                }
+                disabled={disabled}
+              />
+              Permitir confirmar participação nas atividades
+            </label>
+            <span className="field-hint">
+              Cria uma atividade vinculada para os jovens confirmarem presença
+              no painel (e familiares, se houver transporte).
+            </span>
           </div>
 
           <TipoReceitaField
@@ -1096,31 +1116,6 @@ export function VendaEventoFormPage() {
               onChange={(e) => update('data_evento', e.target.value)}
               disabled={disabled}
             />
-          </div>
-
-          <div className="field field-span-2">
-            <label>Participação nas atividades</label>
-            <label
-              className="checkbox-label"
-              htmlFor="pedir_participacao"
-              style={{ marginTop: '0.35rem' }}
-            >
-              <input
-                id="pedir_participacao"
-                type="checkbox"
-                checked={form.pedir_participacao === true}
-                onChange={(e) =>
-                  update('pedir_participacao', e.target.checked)
-                }
-                disabled={disabled}
-              />
-              Permitir confirmar participação nas atividades
-            </label>
-            <p className="field-hint" style={{ marginTop: '0.35rem' }}>
-              Cria (ou atualiza) uma atividade vinculada a este evento para os
-              jovens confirmarem presença no painel, com opção de familiares
-              quando houver transporte.
-            </p>
           </div>
 
           <div className="field field-span-2">
