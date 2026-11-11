@@ -86,6 +86,72 @@ export async function carregarAcompanhantesAtividade(
   }))
 }
 
+function normalizarAcompanhantes(
+  acompanhantes: AcompanhanteInput[],
+): AcompanhanteInput[] {
+  return acompanhantes
+    .map((a) => ({
+      nome: a.nome.trim(),
+      cpf: digitsOnly(a.cpf),
+    }))
+    .filter((a) => a.nome || a.cpf)
+}
+
+export async function salvarAcompanhantesConfirmacao(params: {
+  empresaId: number
+  atividadeId: number
+  associadoId: number
+  confirmacaoId: number
+  acompanhantes: AcompanhanteInput[]
+}): Promise<{ ok: boolean; mensagem: string }> {
+  const rows = normalizarAcompanhantes(params.acompanhantes)
+
+  for (const row of rows) {
+    if (!row.nome) {
+      return { ok: false, mensagem: 'Informe o nome de cada pessoa da família.' }
+    }
+    if (row.cpf.length < 11) {
+      return {
+        ok: false,
+        mensagem: 'Informe o CPF (11 dígitos) de cada pessoa da família.',
+      }
+    }
+  }
+
+  const { error: delError } = await supabase
+    .from('atividade_acompanhante')
+    .delete()
+    .eq('empresa_id', params.empresaId)
+    .eq('confirmacao_id', params.confirmacaoId)
+
+  if (delError) {
+    return { ok: false, mensagem: delError.message }
+  }
+
+  if (rows.length === 0) {
+    return { ok: true, mensagem: 'Familiares atualizados.' }
+  }
+
+  const { error: insError } = await supabase
+    .from('atividade_acompanhante')
+    .insert(
+      rows.map((row) => ({
+        empresa_id: params.empresaId,
+        confirmacao_id: params.confirmacaoId,
+        atividade_id: params.atividadeId,
+        associado_id: params.associadoId,
+        nome: row.nome,
+        cpf: row.cpf.slice(0, 15),
+      })),
+    )
+
+  if (insError) {
+    return { ok: false, mensagem: insError.message }
+  }
+
+  return { ok: true, mensagem: 'Familiares atualizados.' }
+}
+
 export async function carregarListaTransporte(
   atividadeId: number,
 ): Promise<ListaTransporteItem[]> {

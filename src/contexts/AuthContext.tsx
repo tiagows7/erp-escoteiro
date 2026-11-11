@@ -40,6 +40,9 @@ const ACTING_EMPRESA_KEY = 'erp.actingEmpresaId'
 const EMPRESA_SELECT =
   'id, nome, cnpj, email, slug, telefone, logo_url, ativo, plataforma_plano_id, plataforma_isento, plataforma_dia_vencimento'
 
+const PROFILE_SELECT =
+  'id, empresa_id, nome, username, email, tipo, role, ativo, codigo_ramo, codigo_secao, codigo_secao_nome, registro, menu_keys'
+
 type EmpresaOpt = { id: number; nome: string }
 
 type AuthState = {
@@ -174,7 +177,7 @@ function writeStoredActingEmpresaId(id: number | null) {
 async function loadProfile(userId: string) {
   const { data: profileRow, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(PROFILE_SELECT)
     .eq('id', userId)
     .maybeSingle()
 
@@ -286,15 +289,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPlataformaAcesso(loaded.plataformaAcesso)
     }
 
-    void supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted) return
-      await applySession(data.session)
-      if (!mounted) return
-      setLoading(false)
-    })
-
+    // Uma única fonte de verdade: evita getSession + INITIAL_SESSION em dobro.
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
-      // Refresh de token não precisa bloquear a UI.
       if (event === 'TOKEN_REFRESHED') {
         setSession(next)
         setUser(next?.user ?? null)

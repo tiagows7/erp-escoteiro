@@ -109,7 +109,7 @@ export function AppLayout() {
   useEffect(() => {
     if (!isSuperAdmin) return
     void refreshEmpresasContexto()
-  }, [isSuperAdmin, location.pathname, refreshEmpresasContexto])
+  }, [isSuperAdmin, refreshEmpresasContexto])
 
   const grupoLabel = isSuperAdmin
     ? empresa?.nome

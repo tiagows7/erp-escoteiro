@@ -94,6 +94,7 @@ const emptyForm = {
   receita_tipo_id: '',
   aceita_cartao: false,
   cartao_max_parcelas: '1',
+  pedir_participacao: false,
 }
 
 type TipoFormRow = {
@@ -158,6 +159,9 @@ export function VendaEventoFormPage() {
   const [repasseDespesaId, setRepasseDespesaId] = useState<number | null>(null)
   /** Tipo fixo nos parâmetros do grupo. */
   const [tipoReceitaParam, setTipoReceitaParam] = useState('')
+  const [atividadeIdVinculada, setAtividadeIdVinculada] = useState<number | null>(
+    null,
+  )
   const imagemInputRef = useRef<HTMLInputElement>(null)
 
   const ramoId = form.ramo ? Number(form.ramo) : null
@@ -229,7 +233,7 @@ export function VendaEventoFormPage() {
       const { data, error: loadError } = await supabase
         .from('venda_eventos')
         .select(
-          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, receita_tipo_id, aceita_cartao, cartao_max_parcelas',
+          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, receita_tipo_id, aceita_cartao, cartao_max_parcelas, pedir_participacao, atividade_id',
         )
         .eq('evento_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -272,7 +276,11 @@ export function VendaEventoFormPage() {
             ? Math.min(12, parcelas)
             : 1,
         ),
+        pedir_participacao: data.pedir_participacao === true,
       })
+      setAtividadeIdVinculada(
+        data.atividade_id != null ? Number(data.atividade_id) : null,
+      )
       setImagemUrl(data.imagem_url ?? null)
       setImagemPreview(data.imagem_url ?? null)
       setImagemFile(null)
@@ -619,6 +627,8 @@ export function VendaEventoFormPage() {
     if (maxParcelas > 12) maxParcelas = 12
     if (!aceitaCartao) maxParcelas = 1
 
+    const pedirParticipacao = form.pedir_participacao === true
+
     const payload = {
       empresa_id: empresaId,
       ramo: ramoValue,
@@ -636,6 +646,7 @@ export function VendaEventoFormPage() {
       receita_tipo_id: Number(tipoReceita),
       aceita_cartao: aceitaCartao,
       cartao_max_parcelas: maxParcelas,
+      pedir_participacao: pedirParticipacao,
     }
 
     const result = isNew
@@ -659,6 +670,68 @@ export function VendaEventoFormPage() {
     }
 
     const eventoIdSalvo = Number(result.data?.evento_id ?? id)
+
+    let atividadeIdAtual = atividadeIdVinculada
+    if (pedirParticipacao) {
+      const atividadePayload = {
+        empresa_id: empresaId,
+        ramo: ramoValue,
+        secao: form.secao ? Number(form.secao) : null,
+        patrulha_matilha: form.patrulha_matilha
+          ? Number(form.patrulha_matilha)
+          : null,
+        descricao: form.nome.trim().slice(0, 200),
+        local: null as string | null,
+        data_atividade: form.data_evento || null,
+        valor: 0,
+        receita_tipo_id: Number(tipoReceita),
+      }
+
+      if (atividadeIdAtual != null && atividadeIdAtual > 0) {
+        const { error: ativUpdError } = await supabase
+          .from('atividades')
+          .update(atividadePayload)
+          .eq('atividade_id', atividadeIdAtual)
+          .eq('empresa_id', empresaId)
+        if (ativUpdError) {
+          setSaving(false)
+          setError(
+            `Evento salvo, mas a atividade de participação falhou: ${ativUpdError.message}`,
+          )
+          return
+        }
+      } else {
+        const { data: ativNova, error: ativInsError } = await supabase
+          .from('atividades')
+          .insert(atividadePayload)
+          .select('atividade_id')
+          .single()
+        if (ativInsError || !ativNova) {
+          setSaving(false)
+          setError(
+            `Evento salvo, mas não foi possível criar a atividade de participação: ${ativInsError?.message ?? 'erro desconhecido'}`,
+          )
+          return
+        }
+        atividadeIdAtual = Number(ativNova.atividade_id)
+      }
+
+      if (atividadeIdAtual != atividadeIdVinculada) {
+        const { error: linkError } = await supabase
+          .from('venda_eventos')
+          .update({ atividade_id: atividadeIdAtual })
+          .eq('evento_id', eventoIdSalvo)
+          .eq('empresa_id', empresaId)
+        if (linkError) {
+          setSaving(false)
+          setError(
+            `Atividade criada, mas o vínculo com o evento falhou: ${linkError.message}`,
+          )
+          return
+        }
+        setAtividadeIdVinculada(atividadeIdAtual)
+      }
+    }
 
     // Sincroniza tipos: atualiza existentes, cria novos, desativa removidos
     const keepIds = tiposLimpos
@@ -1023,6 +1096,31 @@ export function VendaEventoFormPage() {
               onChange={(e) => update('data_evento', e.target.value)}
               disabled={disabled}
             />
+          </div>
+
+          <div className="field field-span-2">
+            <label>Participação nas atividades</label>
+            <label
+              className="checkbox-label"
+              htmlFor="pedir_participacao"
+              style={{ marginTop: '0.35rem' }}
+            >
+              <input
+                id="pedir_participacao"
+                type="checkbox"
+                checked={form.pedir_participacao === true}
+                onChange={(e) =>
+                  update('pedir_participacao', e.target.checked)
+                }
+                disabled={disabled}
+              />
+              Permitir confirmar participação nas atividades
+            </label>
+            <p className="field-hint" style={{ marginTop: '0.35rem' }}>
+              Cria (ou atualiza) uma atividade vinculada a este evento para os
+              jovens confirmarem presença no painel, com opção de familiares
+              quando houver transporte.
+            </p>
           </div>
 
           <div className="field field-span-2">

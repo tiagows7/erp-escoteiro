@@ -4,8 +4,11 @@ import { useToast } from '@/contexts/ToastContext'
 import { formatMoney } from '@/lib/despesas'
 import { registrarPagamentoAtividade } from '@/lib/atividadePagamento'
 import {
+  carregarAcompanhantesAtividade,
   carregarListaTransporte,
   formatCpfDisplay,
+  salvarAcompanhantesConfirmacao,
+  type AcompanhanteInput,
   type ListaTransporteItem,
 } from '@/lib/atividadeConfirmacao'
 import {
@@ -29,6 +32,11 @@ type Pessoa = {
   associado_id: number
   nome: string
   registro_provisorio: boolean
+  confirmacao_id: number | null
+}
+
+function emptyAcompanhante(): AcompanhanteInput {
+  return { nome: '', cpf: '' }
 }
 
 type AtividadeResumo = Atividade & {
@@ -40,6 +48,7 @@ type AtividadeResumo = Atividade & {
 type PopupPessoa = AssociadoRow & {
   confirmado: boolean
   pago: boolean
+  confirmacao_id: number | null
 }
 
 type PopupMode = 'confirmados' | 'associados'
@@ -89,6 +98,15 @@ export function StaffAtividadesPanel({
   )
   const [transporteLoading, setTransporteLoading] = useState(false)
   const [transporteError, setTransporteError] = useState<string | null>(null)
+  const [familiaModal, setFamiliaModal] = useState<{
+    pessoa: PopupPessoa
+    mode: 'confirmar' | 'editar'
+  } | null>(null)
+  const [familiaRows, setFamiliaRows] = useState<AcompanhanteInput[]>([
+    emptyAcompanhante(),
+  ])
+  const [familiaBusy, setFamiliaBusy] = useState(false)
+  const [familiaError, setFamiliaError] = useState<string | null>(null)
   const didAutoOpen = useRef(false)
 
   const secaoFiltro =
@@ -132,7 +150,7 @@ export function StaffAtividadesPanel({
       ativQuery,
       supabase
         .from('atividade_confirmacao')
-        .select('atividade_id, associado_id')
+        .select('confirmacao_id, atividade_id, associado_id')
         .eq('empresa_id', empresaId),
       supabase
         .from('atividade_pagamento')
@@ -198,7 +216,11 @@ export function StaffAtividadesPanel({
       assocList.map((a) => [a.associado_id, a.registro_provisorio]),
     )
 
-    type ConfRow = { atividade_id: number; associado_id: number }
+    type ConfRow = {
+      confirmacao_id: number
+      atividade_id: number
+      associado_id: number
+    }
     type PagRow = { atividade_id: number; associado_id: number; valor: number }
 
     const confByAtiv = new Map<number, Pessoa[]>()
@@ -208,6 +230,7 @@ export function StaffAtividadesPanel({
         associado_id: row.associado_id,
         nome: nomeById.get(row.associado_id) ?? `Associado #${row.associado_id}`,
         registro_provisorio: provisorioById.get(row.associado_id) === true,
+        confirmacao_id: row.confirmacao_id,
       })
       confByAtiv.set(row.atividade_id, list)
     }
@@ -222,6 +245,7 @@ export function StaffAtividadesPanel({
         associado_id: row.associado_id,
         nome: nomeById.get(row.associado_id) ?? `Associado #${row.associado_id}`,
         registro_provisorio: provisorioById.get(row.associado_id) === true,
+        confirmacao_id: null,
       })
       cur.total += Number(row.valor ?? 0)
       pagByAtiv.set(row.atividade_id, cur)
@@ -283,6 +307,10 @@ export function StaffAtividadesPanel({
     const pagoIds = new Set(popupItem.pagantes.map((p) => p.associado_id))
     const confIds = new Set(popupItem.confirmados.map((p) => p.associado_id))
 
+    const confIdByAssoc = new Map(
+      popupItem.confirmados.map((p) => [p.associado_id, p.confirmacao_id]),
+    )
+
     if (popupMode === 'confirmados') {
       return popupItem.confirmados
         .map((p) => ({
@@ -294,6 +322,7 @@ export function StaffAtividadesPanel({
           registro_provisorio: p.registro_provisorio,
           confirmado: true,
           pago: pagoIds.has(p.associado_id),
+          confirmacao_id: p.confirmacao_id,
         }))
         .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
     }
@@ -304,6 +333,7 @@ export function StaffAtividadesPanel({
         ...a,
         confirmado: confIds.has(a.associado_id),
         pago: pagoIds.has(a.associado_id),
+        confirmacao_id: confIdByAssoc.get(a.associado_id) ?? null,
       }))
   }, [popupItem, popupMode, associados])
 
@@ -374,7 +404,37 @@ export function StaffAtividadesPanel({
     }
   }
 
-  async function confirmarPresenca(pessoa: PopupPessoa) {
+  function fecharFamiliaModal() {
+    if (familiaBusy) return
+    setFamiliaModal(null)
+    setFamiliaError(null)
+    setFamiliaRows([emptyAcompanhante()])
+  }
+
+  async function abrirFamiliaModal(
+    pessoa: PopupPessoa,
+    mode: 'confirmar' | 'editar',
+  ) {
+    setFamiliaError(null)
+    setFamiliaRows([emptyAcompanhante()])
+    setFamiliaModal({ pessoa, mode })
+
+    if (mode === 'editar' && pessoa.confirmacao_id != null) {
+      try {
+        const rows = await carregarAcompanhantesAtividade(
+          empresaId,
+          pessoa.confirmacao_id,
+        )
+        setFamiliaRows(rows.length > 0 ? rows : [emptyAcompanhante()])
+      } catch (err) {
+        setFamiliaError(
+          err instanceof Error ? err.message : 'Erro ao carregar familiares.',
+        )
+      }
+    }
+  }
+
+  async function confirmarPresencaSimples(pessoa: PopupPessoa) {
     if (!popupItem || pessoa.confirmado) return
     setBusyId(pessoa.associado_id)
     const { error: insertError } = await supabase
@@ -392,6 +452,75 @@ export function StaffAtividadesPanel({
     }
     toast.success('Presença confirmada', pessoa.nome)
     await load()
+  }
+
+  async function onClickConfirmarPresenca(pessoa: PopupPessoa) {
+    if (!popupItem || pessoa.confirmado) return
+    if (popupItem.tem_transporte) {
+      await abrirFamiliaModal(pessoa, 'confirmar')
+      return
+    }
+    await confirmarPresencaSimples(pessoa)
+  }
+
+  async function salvarFamiliaModal() {
+    if (!popupItem || !familiaModal) return
+    const { pessoa, mode } = familiaModal
+    setFamiliaBusy(true)
+    setFamiliaError(null)
+
+    let confirmacaoId = pessoa.confirmacao_id
+
+    if (mode === 'confirmar') {
+      const { data, error: insertError } = await supabase
+        .from('atividade_confirmacao')
+        .insert({
+          empresa_id: empresaId,
+          atividade_id: popupItem.atividade_id,
+          associado_id: pessoa.associado_id,
+        })
+        .select('confirmacao_id')
+        .single()
+
+      if (insertError) {
+        setFamiliaBusy(false)
+        setFamiliaError(insertError.message)
+        return
+      }
+      confirmacaoId = Number(data.confirmacao_id)
+    }
+
+    if (confirmacaoId == null) {
+      setFamiliaBusy(false)
+      setFamiliaError('Confirmação não encontrada.')
+      return
+    }
+
+    const result = await salvarAcompanhantesConfirmacao({
+      empresaId,
+      atividadeId: popupItem.atividade_id,
+      associadoId: pessoa.associado_id,
+      confirmacaoId,
+      acompanhantes: familiaRows,
+    })
+    setFamiliaBusy(false)
+
+    if (!result.ok) {
+      setFamiliaError(result.mensagem)
+      return
+    }
+
+    toast.success(
+      mode === 'editar' ? 'Familiares atualizados' : 'Presença confirmada',
+      pessoa.nome,
+    )
+    setFamiliaModal(null)
+    setFamiliaRows([emptyAcompanhante()])
+    await load()
+  }
+
+  async function confirmarPresenca(pessoa: PopupPessoa) {
+    await onClickConfirmarPresenca(pessoa)
   }
 
   async function baixarPix(pessoa: PopupPessoa) {
@@ -750,6 +879,15 @@ export function StaffAtividadesPanel({
                               : 'Confirmar presença'}
                           </button>
                         ) : null}
+                        {p.confirmado && popupItem.tem_transporte ? (
+                          <button
+                            type="button"
+                            className="btn btn-soft"
+                            onClick={() => void abrirFamiliaModal(p, 'editar')}
+                          >
+                            Familiares
+                          </button>
+                        ) : null}
                         {p.confirmado && !p.pago ? (
                           <button
                             type="button"
@@ -763,11 +901,167 @@ export function StaffAtividadesPanel({
                           </button>
                         ) : null}
                       </div>
+                    ) : popupItem.tem_transporte && p.confirmado ? (
+                      <div className="staff-pessoa-actions">
+                        <button
+                          type="button"
+                          className="btn btn-soft"
+                          onClick={() => void abrirFamiliaModal(p, 'editar')}
+                        >
+                          Familiares
+                        </button>
+                      </div>
                     ) : null}
                   </li>
                 ))}
               </ul>
             )}
+          </div>
+        </div>
+      ) : null}
+
+      {familiaModal && popupItem ? (
+        <div
+          className="confirm-overlay"
+          role="presentation"
+          onClick={fecharFamiliaModal}
+        >
+          <div
+            className="passagem-dialog atividade-transporte-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="staff-familia-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="passagem-dialog-header">
+              <div>
+                <h3 id="staff-familia-title">
+                  {familiaModal.mode === 'editar'
+                    ? 'Familiares no transporte'
+                    : 'Confirmar presença'}
+                </h3>
+                <p className="muted">
+                  {familiaModal.pessoa.nome}
+                  {' · '}
+                  {popupItem.descricao}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-soft"
+                onClick={fecharFamiliaModal}
+                disabled={familiaBusy}
+              >
+                Fechar
+              </button>
+            </header>
+
+            <p className="muted" style={{ marginTop: 0 }}>
+              O CPF do jovem sai do cadastro. Informe nome e CPF das pessoas
+              da família que vão no transporte, se houver.
+            </p>
+
+            <div className="atividade-acompanhantes-block">
+              <div className="atividade-acompanhantes-head">
+                <strong>Pessoas da família</strong>
+                <button
+                  type="button"
+                  className="btn btn-soft"
+                  disabled={familiaBusy}
+                  onClick={() =>
+                    setFamiliaRows((prev) => [...prev, emptyAcompanhante()])
+                  }
+                >
+                  Adicionar pessoa
+                </button>
+              </div>
+
+              {familiaRows.map((row, index) => (
+                <div key={index} className="atividade-acompanhante-row">
+                  <div className="field">
+                    <label htmlFor={`staff-acomp-nome-${index}`}>Nome</label>
+                    <input
+                      id={`staff-acomp-nome-${index}`}
+                      className="input"
+                      value={row.nome}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setFamiliaRows((prev) =>
+                          prev.map((item, i) =>
+                            i === index ? { ...item, nome: value } : item,
+                          ),
+                        )
+                      }}
+                      maxLength={120}
+                      disabled={familiaBusy}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor={`staff-acomp-cpf-${index}`}>CPF</label>
+                    <input
+                      id={`staff-acomp-cpf-${index}`}
+                      className="input"
+                      value={row.cpf}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setFamiliaRows((prev) =>
+                          prev.map((item, i) =>
+                            i === index ? { ...item, cpf: value } : item,
+                          ),
+                        )
+                      }}
+                      inputMode="numeric"
+                      maxLength={15}
+                      placeholder="000.000.000-00"
+                      disabled={familiaBusy}
+                    />
+                  </div>
+                  {familiaRows.length > 1 ? (
+                    <button
+                      type="button"
+                      className="btn btn-soft"
+                      disabled={familiaBusy}
+                      onClick={() =>
+                        setFamiliaRows((prev) =>
+                          prev.filter((_, i) => i !== index),
+                        )
+                      }
+                    >
+                      Remover
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+
+            {familiaError ? (
+              <p className="muted" style={{ color: 'var(--danger, #b42318)' }}>
+                {familiaError}
+              </p>
+            ) : null}
+
+            <div className="form-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={familiaBusy}
+                onClick={() => void salvarFamiliaModal()}
+              >
+                {familiaBusy
+                  ? 'Salvando…'
+                  : familiaModal.mode === 'editar'
+                    ? 'Salvar familiares'
+                    : 'Confirmar presença'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-soft"
+                disabled={familiaBusy}
+                onClick={fecharFamiliaModal}
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
