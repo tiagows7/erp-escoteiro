@@ -211,7 +211,7 @@ export function VendaEventoVendaPage() {
       supabase
         .from('venda_eventos')
         .select(
-          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, link_token, encerrado_em, created_at, aceita_cartao, cartao_max_parcelas, pedir_participacao',
+          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, local, endereco, imagem_url, link_token, encerrado_em, created_at, aceita_cartao, cartao_max_parcelas, pedir_participacao',
         )
         .eq('evento_id', eventoId)
         .eq('empresa_id', empresaId)
@@ -749,7 +749,13 @@ export function VendaEventoVendaPage() {
             {evento.data_evento
               ? ` · ${formatDateBr(evento.data_evento)}`
               : ''}
+            {evento.local ? ` · ${evento.local}` : ''}
           </p>
+          {evento.endereco ? (
+            <p className="muted" style={{ marginTop: 0 }}>
+              {evento.endereco}
+            </p>
+          ) : null}
           {tipos.length > 0 ? (
             <div className="evento-tipos-precos">
               {tipos.map((t) => (

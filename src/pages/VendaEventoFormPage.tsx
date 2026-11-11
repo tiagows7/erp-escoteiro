@@ -89,6 +89,8 @@ const emptyForm = {
   numero_inicial: '1',
   numero_final: '100',
   data_evento: '',
+  local: '',
+  endereco: '',
   valor_grupo: '0,00',
   valor_grupo_tipo: 'por_jovem' as ValorGrupoTipo,
   receita_tipo_id: '',
@@ -233,7 +235,7 @@ export function VendaEventoFormPage() {
       const { data, error: loadError } = await supabase
         .from('venda_eventos')
         .select(
-          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, receita_tipo_id, aceita_cartao, cartao_max_parcelas, pedir_participacao, atividade_id',
+          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, local, endereco, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, receita_tipo_id, aceita_cartao, cartao_max_parcelas, pedir_participacao, atividade_id',
         )
         .eq('evento_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -265,6 +267,8 @@ export function VendaEventoFormPage() {
         data_evento: data.data_evento
           ? String(data.data_evento).slice(0, 10)
           : '',
+        local: data.local ?? '',
+        endereco: data.endereco ?? '',
         valor_grupo: formatMoneyInput(Number(data.valor_grupo ?? 0)),
         valor_grupo_tipo: isValorGrupoTipo(data.valor_grupo_tipo)
           ? data.valor_grupo_tipo
@@ -641,6 +645,8 @@ export function VendaEventoFormPage() {
       numero_final: numeroFinal,
       valor_convite: valorPadrao,
       data_evento: form.data_evento || null,
+      local: form.local.trim() || null,
+      endereco: form.endereco.trim() || null,
       valor_grupo: parseMoneyInput(form.valor_grupo),
       valor_grupo_tipo: form.valor_grupo_tipo,
       receita_tipo_id: Number(tipoReceita),
@@ -681,7 +687,7 @@ export function VendaEventoFormPage() {
           ? Number(form.patrulha_matilha)
           : null,
         descricao: form.nome.trim().slice(0, 200),
-        local: null as string | null,
+        local: form.local.trim().slice(0, 120) || null,
         data_atividade: form.data_evento || null,
         valor: 0,
         receita_tipo_id: Number(tipoReceita),
@@ -964,10 +970,16 @@ export function VendaEventoFormPage() {
           </p>
           <p className="muted" style={{ marginBottom: 0 }}>
             Data: {formatDate(form.data_evento || null)}
+            {form.local ? ` · Local: ${form.local}` : null}
             {form.numero_inicial && form.numero_final
               ? ` · Convites ${form.numero_inicial}–${form.numero_final}`
               : null}
           </p>
+          {form.endereco ? (
+            <p className="muted" style={{ marginBottom: 0 }}>
+              Endereço: {form.endereco}
+            </p>
+          ) : null}
         </section>
       ) : (
       <form className="panel" onSubmit={(e) => void onSubmit(e)}>
@@ -1115,6 +1127,32 @@ export function VendaEventoFormPage() {
               value={form.data_evento}
               onChange={(e) => update('data_evento', e.target.value)}
               disabled={disabled}
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="local_evento">Local do evento</label>
+            <input
+              id="local_evento"
+              className="input"
+              value={form.local}
+              onChange={(e) => update('local', e.target.value)}
+              disabled={disabled}
+              maxLength={120}
+              placeholder="Ex.: Sede do grupo, ginásio"
+            />
+          </div>
+
+          <div className="field field-span-2">
+            <label htmlFor="endereco_evento">Endereço do evento</label>
+            <input
+              id="endereco_evento"
+              className="input"
+              value={form.endereco}
+              onChange={(e) => update('endereco', e.target.value)}
+              disabled={disabled}
+              maxLength={250}
+              placeholder="Rua, número, bairro, cidade"
             />
           </div>
 

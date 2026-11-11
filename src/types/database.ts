@@ -421,6 +421,8 @@ export type VendaEvento = {
   numero_final: number
   valor_convite: number
   data_evento: string | null
+  local?: string | null
+  endereco?: string | null
   imagem_url: string | null
   link_token: string
   encerrado_em: string | null

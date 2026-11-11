@@ -387,6 +387,16 @@ export function VendaEventoPublicPage() {
               {dataLabel}
             </p>
           ) : null}
+          {info.local ? (
+            <p className="muted" style={{ margin: '0.35rem 0 0' }}>
+              Local: {info.local}
+            </p>
+          ) : null}
+          {info.endereco ? (
+            <p className="muted" style={{ margin: '0.2rem 0 0' }}>
+              Endereço: {info.endereco}
+            </p>
+          ) : null}
         </div>
       </header>
 
