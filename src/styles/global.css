@@ -5576,13 +5576,25 @@ form.panel .muted,
 
   body.print-lista-transporte .lista-transporte-print {
     display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    z-index: 1;
   }
 
-  body.print-lista-transporte .confirm-overlay,
-  body.print-lista-transporte .staff-atividades-panel,
-  body.print-lista-transporte .page-header,
-  body.print-lista-transporte .alert-message {
-    display: none !important;
+  /* Esconde a tela da atividade/painel; só a lista de transporte fica visível. */
+  body.print-lista-transporte .app-shell,
+  body.print-lista-transporte .app-shell * {
+    visibility: hidden !important;
+  }
+
+  body.print-lista-transporte .lista-transporte-print,
+  body.print-lista-transporte .lista-transporte-print * {
+    visibility: visible !important;
   }
 
   .lista-assembleia-print h2,

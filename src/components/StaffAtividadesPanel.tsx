@@ -596,8 +596,58 @@ export function StaffAtividadesPanel({
 
   const singleAtividade = atividadeId != null && atividadeId > 0
 
+  const listaTransportePrint =
+    transporteItem &&
+    !transporteLoading &&
+    !transporteError &&
+    transporteLista.length > 0 ? (
+      <section className="print-only lista-transporte-print">
+        <h2>Lista de transporte</h2>
+        <p>
+          <strong>{transporteItem.descricao}</strong>
+          {transporteItem.local ? ` · Local: ${transporteItem.local}` : ''}
+        </p>
+        <p>
+          {transporteLista.length} pessoa(s)
+          {transporteItem.data_atividade
+            ? ` · ${String(transporteItem.data_atividade)
+                .slice(0, 10)
+                .split('-')
+                .reverse()
+                .join('/')}`
+            : ''}
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th style={{ width: '3.5rem' }}>Nº</th>
+              <th style={{ width: '7rem' }}>Tipo</th>
+              <th>Nome</th>
+              <th style={{ width: '10rem' }}>CPF</th>
+            </tr>
+          </thead>
+          <tbody>
+            {transporteLista.map((row, index) => (
+              <tr
+                key={`print-${row.tipo}-${row.confirmacao_id}-${row.cpf}-${index}`}
+              >
+                <td>{index + 1}</td>
+                <td>
+                  {row.tipo === 'acompanhante' ? 'Familiar' : 'Jovem'}
+                </td>
+                <td>{row.nome}</td>
+                <td>{formatCpfDisplay(row.cpf)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    ) : null
+
   return (
-    <section className="panel staff-atividades-panel">
+    <>
+      {listaTransportePrint}
+      <section className="panel staff-atividades-panel">
       <div className="passagem-header">
         <div>
           <h3>
@@ -697,55 +747,6 @@ export function StaffAtividadesPanel({
             </article>
           ))}
         </div>
-      ) : null}
-
-      {transporteItem &&
-      !transporteLoading &&
-      !transporteError &&
-      transporteLista.length > 0 ? (
-        <section className="print-only lista-transporte-print">
-          <h2>Lista de transporte</h2>
-          <p>
-            <strong>{transporteItem.descricao}</strong>
-            {transporteItem.local
-              ? ` · Local: ${transporteItem.local}`
-              : ''}
-          </p>
-          <p>
-            {transporteLista.length} pessoa(s)
-            {transporteItem.data_atividade
-              ? ` · ${String(transporteItem.data_atividade)
-                  .slice(0, 10)
-                  .split('-')
-                  .reverse()
-                  .join('/')}`
-              : ''}
-          </p>
-          <table>
-            <thead>
-              <tr>
-                <th style={{ width: '3.5rem' }}>Nº</th>
-                <th style={{ width: '7rem' }}>Tipo</th>
-                <th>Nome</th>
-                <th style={{ width: '10rem' }}>CPF</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transporteLista.map((row, index) => (
-                <tr
-                  key={`print-${row.tipo}-${row.confirmacao_id}-${row.cpf}-${index}`}
-                >
-                  <td>{index + 1}</td>
-                  <td>
-                    {row.tipo === 'acompanhante' ? 'Familiar' : 'Jovem'}
-                  </td>
-                  <td>{row.nome}</td>
-                  <td>{formatCpfDisplay(row.cpf)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
       ) : null}
 
       {transporteItem ? (
@@ -1133,5 +1134,6 @@ export function StaffAtividadesPanel({
         </div>
       ) : null}
     </section>
+    </>
   )
 }
