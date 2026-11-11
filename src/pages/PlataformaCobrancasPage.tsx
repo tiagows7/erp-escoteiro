@@ -33,6 +33,7 @@ export function PlataformaCobrancasPage() {
   const [competencia, setCompetencia] = useState(currentCompetenciaInput())
   const [filtro, setFiltro] = useState<FiltroSituacao>('abertos')
   const [baixandoId, setBaixandoId] = useState<number | null>(null)
+  const [excluindoId, setExcluindoId] = useState<number | null>(null)
   const [efiConfigured, setEfiConfigured] = useState(false)
   const [pixOpen, setPixOpen] = useState(false)
   const [pixTarget, setPixTarget] = useState<PlataformaCobranca | null>(null)
@@ -144,6 +145,43 @@ export function PlataformaCobrancasPage() {
     }
 
     toast.success('Pagamento registrado.')
+    void load()
+  }
+
+  async function excluirCobranca(row: PlataformaCobranca) {
+    if (!canWrite) return
+    const grupo = row.empresa?.nome ?? `grupo #${row.empresa_id}`
+    const competenciaLabel = formatCompetencia(row.competencia)
+    const paga = row.situacao === TITULO_SITUACAO.PAGO || row.saldo <= 0
+    const ok = await toast.confirm({
+      title: 'Excluir cobrança?',
+      message: paga
+        ? `A cobrança de ${competenciaLabel} de "${grupo}" já está paga. Excluir remove o título e os pagamentos vinculados. Esta ação não pode ser desfeita.`
+        : `Excluir a cobrança de ${competenciaLabel} de "${grupo}" (${formatMoney(row.valor)})? Esta ação não pode ser desfeita.`,
+      confirmLabel: 'Excluir',
+      cancelLabel: 'Cancelar',
+    })
+    if (!ok) return
+
+    setExcluindoId(row.cobranca_id)
+    setError(null)
+
+    const { error: delError } = await supabase
+      .from('plataforma_cobranca')
+      .delete()
+      .eq('cobranca_id', row.cobranca_id)
+
+    setExcluindoId(null)
+    if (delError) {
+      setError(delError.message)
+      return
+    }
+
+    toast.success('Cobrança excluída.')
+    if (pixTarget?.cobranca_id === row.cobranca_id) {
+      setPixOpen(false)
+      setPixTarget(null)
+    }
     void load()
   }
 
@@ -261,31 +299,54 @@ export function PlataformaCobrancasPage() {
                     <td>{formatMoney(row.saldo)}</td>
                     <td>{plataformaSituacaoLabel(row.situacao)}</td>
                     <td>
-                      {canWrite &&
-                      row.situacao !== TITULO_SITUACAO.PAGO &&
-                      row.saldo > 0 ? (
+                      {canWrite ? (
                         <div className="actions-pair">
-                          {efiConfigured ? (
-                            <button
-                              type="button"
-                              className="btn btn-primary"
-                              onClick={() => {
-                                setPixTarget(row)
-                                setPixOpen(true)
-                              }}
-                            >
-                              Gerar PIX
-                            </button>
+                          {row.situacao !== TITULO_SITUACAO.PAGO &&
+                          row.saldo > 0 ? (
+                            <>
+                              {efiConfigured ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-primary"
+                                  disabled={
+                                    excluindoId === row.cobranca_id ||
+                                    baixandoId === row.cobranca_id
+                                  }
+                                  onClick={() => {
+                                    setPixTarget(row)
+                                    setPixOpen(true)
+                                  }}
+                                >
+                                  Gerar PIX
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="btn btn-soft"
+                                disabled={
+                                  baixandoId === row.cobranca_id ||
+                                  excluindoId === row.cobranca_id
+                                }
+                                onClick={() => void marcarPago(row)}
+                              >
+                                {baixandoId === row.cobranca_id
+                                  ? 'Baixando…'
+                                  : 'Marcar pago'}
+                              </button>
+                            </>
                           ) : null}
                           <button
                             type="button"
-                            className="btn btn-soft"
-                            disabled={baixandoId === row.cobranca_id}
-                            onClick={() => void marcarPago(row)}
+                            className="btn btn-danger"
+                            disabled={
+                              excluindoId === row.cobranca_id ||
+                              baixandoId === row.cobranca_id
+                            }
+                            onClick={() => void excluirCobranca(row)}
                           >
-                            {baixandoId === row.cobranca_id
-                              ? 'Baixando…'
-                              : 'Marcar pago'}
+                            {excluindoId === row.cobranca_id
+                              ? 'Excluindo…'
+                              : 'Excluir'}
                           </button>
                         </div>
                       ) : null}
