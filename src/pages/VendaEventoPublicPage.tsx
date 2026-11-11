@@ -16,6 +16,7 @@ import {
 } from '@/lib/infinitePayCheckout'
 import type { PixPublicEventoInput } from '@/lib/pixSicrediPublic'
 import {
+  normalizeInfosExtra,
   normalizeRestricoesAlimentares,
   normalizeRamoStaffEnvio,
   parseRamoStaffChoice,
@@ -57,6 +58,8 @@ export function VendaEventoPublicPage() {
     false,
   ])
   const [ramoStaff, setRamoStaff] = useState<RamoStaffChoice[]>([''])
+  const [temInfoExtra, setTemInfoExtra] = useState<boolean[]>([false])
+  const [infosExtraTexto, setInfosExtraTexto] = useState<string[]>([''])
   const [telefone, setTelefone] = useState('')
   const [pixOpen, setPixOpen] = useState(false)
   const [pixInput, setPixInput] = useState<PixPublicEventoInput | null>(null)
@@ -133,6 +136,12 @@ export function VendaEventoPublicPage() {
         (_, i) => prev[i] ?? '',
       ),
     )
+    setTemInfoExtra((prev) =>
+      Array.from({ length: Math.max(1, quantidade) }, (_, i) => prev[i] ?? false),
+    )
+    setInfosExtraTexto((prev) =>
+      Array.from({ length: Math.max(1, quantidade) }, (_, i) => prev[i] ?? ''),
+    )
   }, [quantidade, tipoPadraoId])
 
   // Retorno do checkout InfinitePay
@@ -193,6 +202,7 @@ export function VendaEventoPublicPage() {
     participaEnvio: boolean[] | undefined,
     ramosEnvio: (number | null)[] | undefined,
     staffEnvio: boolean[] | undefined,
+    infosExtraEnvio: string[] | undefined,
     fone: string,
     valor: number,
     descricao: string,
@@ -207,6 +217,7 @@ export function VendaEventoPublicPage() {
       participa: participaEnvio,
       convidadoRamos: ramosEnvio,
       ehStaff: staffEnvio,
+      infosExtra: infosExtraEnvio,
       compradorTelefone: fone,
       valor,
       descricao,
@@ -240,6 +251,14 @@ export function VendaEventoPublicPage() {
           `Informe a restrição alimentar do convite ${i + 1} (ex.: vegano, vegetariano).`,
         )
         return
+      }
+    }
+    if (info.pedir_info_extra) {
+      for (let i = 0; i < quantidade; i += 1) {
+        if (temInfoExtra[i] && !infosExtraTexto[i]?.trim()) {
+          setError(`Informe o texto adicional do convite ${i + 1}.`)
+          return
+        }
       }
     }
     if (info.pedir_ramo) {
@@ -284,6 +303,9 @@ export function VendaEventoPublicPage() {
       : null
     const ramosEnvio = ramoStaffEnvio?.ramos
     const staffEnvio = ramoStaffEnvio?.staffs
+    const infosExtraEnvio = info.pedir_info_extra
+      ? normalizeInfosExtra(temInfoExtra, infosExtraTexto)
+      : undefined
     const descricao = `${info.evento_nome} · ${quantidade} convite(s)`
     const fone = telefone.trim()
 
@@ -320,6 +342,7 @@ export function VendaEventoPublicPage() {
         participa: participaEnvio,
         convidadoRamos: ramosEnvio,
         ehStaff: staffEnvio,
+        infosExtra: infosExtraEnvio,
         compradorTelefone: fone,
         valor,
         descricao,
@@ -338,6 +361,7 @@ export function VendaEventoPublicPage() {
           participaEnvio,
           ramosEnvio,
           staffEnvio,
+          infosExtraEnvio,
           fone,
           valor,
           descricao,
@@ -355,6 +379,7 @@ export function VendaEventoPublicPage() {
       participaEnvio,
       ramosEnvio,
       staffEnvio,
+      infosExtraEnvio,
       fone,
       valor,
       descricao,
@@ -671,6 +696,58 @@ export function VendaEventoPublicPage() {
                         />
                       ) : null}
                     </div>
+                    {info.pedir_info_extra ? (
+                      <div className="evento-convite-restricao">
+                        <label
+                          className="checkbox-label"
+                          htmlFor={`info_extra_chk_${index}`}
+                        >
+                          <input
+                            id={`info_extra_chk_${index}`}
+                            type="checkbox"
+                            checked={!!temInfoExtra[index]}
+                            onChange={(e) => {
+                              const checked = e.target.checked
+                              setTemInfoExtra((prev) =>
+                                prev.map((v, i) =>
+                                  i === index ? checked : v,
+                                ),
+                              )
+                              if (!checked) {
+                                setInfosExtraTexto((prev) =>
+                                  prev.map((v, i) =>
+                                    i === index ? '' : v,
+                                  ),
+                                )
+                              }
+                            }}
+                            disabled={pixOpen || paying}
+                          />
+                          <span>
+                            Mais alguma coisa que gostaria de informar
+                          </span>
+                        </label>
+                        {temInfoExtra[index] ? (
+                          <input
+                            id={`info_extra_${index}`}
+                            className="input"
+                            value={infosExtraTexto[index] ?? ''}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              setInfosExtraTexto((prev) =>
+                                prev.map((v, i) =>
+                                  i === index ? value : v,
+                                ),
+                              )
+                            }}
+                            disabled={pixOpen || paying}
+                            required
+                            placeholder="Digite aqui"
+                            maxLength={500}
+                          />
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
 

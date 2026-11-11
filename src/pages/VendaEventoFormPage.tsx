@@ -98,6 +98,7 @@ const emptyForm = {
   cartao_max_parcelas: '1',
   pedir_participacao: false,
   pedir_ramo: false,
+  pedir_info_extra: false,
 }
 
 type TipoFormRow = {
@@ -236,7 +237,7 @@ export function VendaEventoFormPage() {
       const { data, error: loadError } = await supabase
         .from('venda_eventos')
         .select(
-          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, local, endereco, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, receita_tipo_id, aceita_cartao, cartao_max_parcelas, pedir_participacao, pedir_ramo, atividade_id',
+          'evento_id, ramo, secao, patrulha_matilha, nome, numero_inicial, numero_final, valor_convite, data_evento, local, endereco, imagem_url, encerrado_em, valor_grupo, valor_grupo_tipo, repasse_grupo, repasse_jovens, repasse_base, repasse_despesa_id, receita_tipo_id, aceita_cartao, cartao_max_parcelas, pedir_participacao, pedir_ramo, pedir_info_extra, atividade_id',
         )
         .eq('evento_id', Number(id))
         .eq('empresa_id', empresaId)
@@ -283,6 +284,7 @@ export function VendaEventoFormPage() {
         ),
         pedir_participacao: data.pedir_participacao === true,
         pedir_ramo: data.pedir_ramo === true,
+        pedir_info_extra: data.pedir_info_extra === true,
       })
       setAtividadeIdVinculada(
         data.atividade_id != null ? Number(data.atividade_id) : null,
@@ -635,6 +637,7 @@ export function VendaEventoFormPage() {
 
     const pedirParticipacao = form.pedir_participacao === true
     const pedirRamo = form.pedir_ramo === true
+    const pedirInfoExtra = form.pedir_info_extra === true
 
     const payload = {
       empresa_id: empresaId,
@@ -657,6 +660,7 @@ export function VendaEventoFormPage() {
       cartao_max_parcelas: maxParcelas,
       pedir_participacao: pedirParticipacao,
       pedir_ramo: pedirRamo,
+      pedir_info_extra: pedirInfoExtra,
     }
 
     const result = isNew
@@ -1052,6 +1056,25 @@ export function VendaEventoFormPage() {
             <span className="field-hint">
               Na venda de cada convite, exige informar o ramo (Lobinho,
               Escoteiro, Sênior ou Pioneiro) ou Participante/Família.
+            </span>
+          </div>
+
+          <div className="field field-checks field-span-2">
+            <label htmlFor="pedir_info_extra">
+              <input
+                id="pedir_info_extra"
+                type="checkbox"
+                checked={form.pedir_info_extra === true}
+                onChange={(e) =>
+                  update('pedir_info_extra', e.target.checked)
+                }
+                disabled={disabled}
+              />
+              Mais alguma coisa que gostaria de informar
+            </label>
+            <span className="field-hint">
+              Na compra, mostra um campo opcional para o comprador
+              acrescentar informações em cada convite.
             </span>
           </div>
 

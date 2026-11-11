@@ -434,6 +434,8 @@ export type VendaEvento = {
   pedir_participacao?: boolean | null
   /** Na compra, pede ramo (1–4) ou participante/família por convite. */
   pedir_ramo?: boolean | null
+  /** Na compra, permite informar texto livre adicional. */
+  pedir_info_extra?: boolean | null
   /** Atividade usada para os jovens confirmarem participação. */
   atividade_id?: number | null
   valor_grupo?: number | null
@@ -502,6 +504,7 @@ export type VendaEventoConvite = {
   participa_atividade?: boolean | null
   convidado_ramo?: number | null
   eh_staff?: boolean | null
+  info_extra?: string | null
   ativo: boolean
   created_at: string | null
 }

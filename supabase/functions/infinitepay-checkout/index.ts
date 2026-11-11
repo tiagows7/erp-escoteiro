@@ -240,12 +240,18 @@ async function baixarPedidoEvento(
   const staffsRaw = Array.isArray(pedido.eh_staffs)
     ? (pedido.eh_staffs as unknown[])
     : []
+  const infosRaw = Array.isArray(pedido.infos_extra)
+    ? (pedido.infos_extra as unknown[])
+    : []
   const pares = nomesRaw
     .map((n, i) => {
       const nome = String(n ?? '').trim().slice(0, 200)
       const restricao = String(restricoesRaw[i] ?? '')
         .trim()
         .slice(0, 120)
+      const infoExtra = String(infosRaw[i] ?? '')
+        .trim()
+        .slice(0, 500)
       const staff = staffsRaw[i] === true
       const ramoNum = Number(ramosRaw[i])
       const ramo =
@@ -258,6 +264,7 @@ async function baixarPedidoEvento(
         participa: participaRaw[i] === true,
         ramo,
         staff,
+        infoExtra: infoExtra || null,
       }
     })
     .filter((p) => p.nome)
@@ -266,6 +273,7 @@ async function baixarPedidoEvento(
   const participaFlags = pares.map((p) => p.participa)
   const ramoFlags = pares.map((p) => p.ramo)
   const staffFlags = pares.map((p) => p.staff)
+  const infoFlags = pares.map((p) => p.infoExtra)
   const valorTotal = Number(pedido.valor)
 
   if (!eventoId || nomes.length === 0) {
@@ -399,6 +407,7 @@ async function baixarPedidoEvento(
       participa_atividade: participaFlags[i] === true,
       convidado_ramo: ramoFlags[i],
       eh_staff: staffFlags[i] === true,
+      info_extra: infoFlags[i],
     }
   })
 
@@ -713,12 +722,16 @@ Deno.serve(async (req) => {
         ? body.convidado_ramos
         : []
       const staffsRaw = Array.isArray(body.eh_staffs) ? body.eh_staffs : []
+      const infosRaw = Array.isArray(body.infos_extra) ? body.infos_extra : []
       const pares = nomesRaw
         .map((n: unknown, i: number) => {
           const nome = String(n ?? '').trim().slice(0, 200)
           const restricao = String(restricoesRaw[i] ?? '')
             .trim()
             .slice(0, 120)
+          const infoExtra = String(infosRaw[i] ?? '')
+            .trim()
+            .slice(0, 500)
           const staff = staffsRaw[i] === true
           const ramoNum = Number(ramosRaw[i])
           const ramo =
@@ -731,6 +744,7 @@ Deno.serve(async (req) => {
             participa: participaRaw[i] === true,
             ramo,
             staff,
+            infoExtra,
           }
         })
         .filter((p: { nome: string }) => p.nome)
@@ -745,6 +759,7 @@ Deno.serve(async (req) => {
         (p: { ramo: number | null }) => p.ramo,
       )
       const staffsOrdered = pares.map((p: { staff: boolean }) => p.staff)
+      const infosOrdered = pares.map((p: { infoExtra: string }) => p.infoExtra)
       const redirectUrl = String(body.redirect_url ?? '').trim()
       const siteOrigin = String(body.site_origin ?? '').trim()
 
@@ -911,6 +926,7 @@ Deno.serve(async (req) => {
           participa_atividades: participaOrdered,
           convidado_ramos: ramosOrdered,
           eh_staffs: staffsOrdered,
+          infos_extra: infosOrdered,
           comprador_telefone: fone.slice(0, 40),
           comprador_nome: nomesOrdered[0] ?? null,
           valor,

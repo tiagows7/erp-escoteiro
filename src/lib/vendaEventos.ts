@@ -25,6 +25,16 @@ export function normalizeRestricoesAlimentares(
   )
 }
 
+/** Paralelo a nomes: informação extra ou '' se não marcada. */
+export function normalizeInfosExtra(
+  temInfo: boolean[],
+  textos: string[],
+): string[] {
+  return textos.map((t, i) =>
+    temInfo[i] ? String(t ?? '').trim().slice(0, 500) : '',
+  )
+}
+
 /** Opções de ramo/staff pedidas na compra do convite. */
 export const RAMO_STAFF_OPCOES = [
   { value: '1', label: 'Lobinho' },
@@ -91,6 +101,7 @@ export async function comprarConvitesEvento(input: {
   participa?: boolean[]
   convidadoRamos?: (number | null)[]
   ehStaff?: boolean[]
+  infosExtra?: string[]
 }): Promise<{
   ok: boolean
   mensagem: string
@@ -107,6 +118,7 @@ export async function comprarConvitesEvento(input: {
     p_participa: input.participa ?? null,
     p_convidado_ramos: input.convidadoRamos ?? null,
     p_eh_staff: input.ehStaff ?? null,
+    p_infos_extra: input.infosExtra ?? null,
   })
 
   if (error) {

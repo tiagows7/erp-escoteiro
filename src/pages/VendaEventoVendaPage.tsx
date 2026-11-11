@@ -20,6 +20,7 @@ import {
   comprarConvitesEvento,
   ensureMeuLinkEvento,
   labelRamoStaffConvite,
+  normalizeInfosExtra,
   normalizeRestricoesAlimentares,
   normalizeRamoStaffEnvio,
   parseRamoStaffChoice,
@@ -76,6 +77,8 @@ export function VendaEventoVendaPage() {
     false,
   ])
   const [ramoStaff, setRamoStaff] = useState<RamoStaffChoice[]>([''])
+  const [temInfoExtra, setTemInfoExtra] = useState<boolean[]>([false])
+  const [infosExtraTexto, setInfosExtraTexto] = useState<string[]>([''])
   const [telefone, setTelefone] = useState('')
   const [formaPagamento, setFormaPagamento] =
     useState<VendaEventoFormaPagamento | null>(null)
@@ -217,7 +220,7 @@ export function VendaEventoVendaPage() {
       supabase
         .from('venda_eventos')
         .select(
-          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, local, endereco, imagem_url, link_token, encerrado_em, created_at, aceita_cartao, cartao_max_parcelas, pedir_participacao, pedir_ramo',
+          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, local, endereco, imagem_url, link_token, encerrado_em, created_at, aceita_cartao, cartao_max_parcelas, pedir_participacao, pedir_ramo, pedir_info_extra',
         )
         .eq('evento_id', eventoId)
         .eq('empresa_id', empresaId)
@@ -225,7 +228,7 @@ export function VendaEventoVendaPage() {
       supabase
         .from('venda_evento_convite')
         .select(
-          'convite_id, empresa_id, evento_id, compra_id, numero, nome, tipo_id, valor_unitario, tipo_label, restricao_alimentar, participa_atividade, convidado_ramo, eh_staff, ativo, created_at',
+          'convite_id, empresa_id, evento_id, compra_id, numero, nome, tipo_id, valor_unitario, tipo_label, restricao_alimentar, participa_atividade, convidado_ramo, eh_staff, info_extra, ativo, created_at',
         )
         .eq('evento_id', eventoId)
         .eq('empresa_id', empresaId)
@@ -332,6 +335,8 @@ export function VendaEventoVendaPage() {
         setRestricoesTexto([''])
         setParticipaAtividade([false])
         setRamoStaff([''])
+        setTemInfoExtra([false])
+        setInfosExtraTexto([''])
         setTelefone('')
         setFormaPagamento(null)
         await reload()
@@ -383,6 +388,12 @@ export function VendaEventoVendaPage() {
         (_, i) => prev[i] ?? '',
       ),
     )
+    setTemInfoExtra((prev) =>
+      Array.from({ length: Math.max(1, quantidade) }, (_, i) => prev[i] ?? false),
+    )
+    setInfosExtraTexto((prev) =>
+      Array.from({ length: Math.max(1, quantidade) }, (_, i) => prev[i] ?? ''),
+    )
   }, [quantidade, tipoPadraoId])
 
   function limparCompra() {
@@ -393,6 +404,8 @@ export function VendaEventoVendaPage() {
     setRestricoesTexto([''])
     setParticipaAtividade([false])
     setRamoStaff([''])
+    setTemInfoExtra([false])
+    setInfosExtraTexto([''])
     setTelefone('')
     setFormaPagamento(null)
     setUltimaNumeracao(null)
@@ -587,6 +600,16 @@ export function VendaEventoVendaPage() {
         return
       }
     }
+    if (evento.pedir_info_extra) {
+      for (let i = 0; i < quantidade; i += 1) {
+        if (temInfoExtra[i] && !infosExtraTexto[i]?.trim()) {
+          setError(
+            `Informe o texto adicional do convite ${i + 1}.`,
+          )
+          return
+        }
+      }
+    }
     if (evento.pedir_ramo) {
       for (let i = 0; i < quantidade; i += 1) {
         const parsed = parseRamoStaffChoice(ramoStaff[i] ?? '')
@@ -624,6 +647,9 @@ export function VendaEventoVendaPage() {
       : null
     const ramosEnvio = ramoStaffEnvio?.ramos
     const staffEnvio = ramoStaffEnvio?.staffs
+    const infosExtraEnvio = evento.pedir_info_extra
+      ? normalizeInfosExtra(temInfoExtra, infosExtraTexto)
+      : undefined
     const linkPagamento = meuLinkToken || evento.link_token
 
     if (formaPagamento === 'pix' || formaPagamento === 'infinitepay') {
@@ -658,6 +684,7 @@ export function VendaEventoVendaPage() {
           participa: participaEnvio,
           convidadoRamos: ramosEnvio,
           ehStaff: staffEnvio,
+          infosExtra: infosExtraEnvio,
           compradorTelefone: fone,
           valor,
           descricao,
@@ -682,6 +709,7 @@ export function VendaEventoVendaPage() {
         participa: participaEnvio,
         convidadoRamos: ramosEnvio,
         ehStaff: staffEnvio,
+        infosExtra: infosExtraEnvio,
         compradorTelefone: fone,
         valor,
         descricao,
@@ -701,6 +729,7 @@ export function VendaEventoVendaPage() {
       participa: participaEnvio,
       convidadoRamos: ramosEnvio,
       ehStaff: staffEnvio,
+      infosExtra: infosExtraEnvio,
       compradorTelefone: telefone,
       formaPagamento,
     })
@@ -735,6 +764,8 @@ export function VendaEventoVendaPage() {
     setRestricoesTexto([''])
     setParticipaAtividade([false])
     setRamoStaff([''])
+    setTemInfoExtra([false])
+    setInfosExtraTexto([''])
     setTelefone('')
     setFormaPagamento(null)
     await reload()
@@ -1091,6 +1122,58 @@ export function VendaEventoVendaPage() {
                           />
                         ) : null}
                       </div>
+                      {evento?.pedir_info_extra ? (
+                        <div className="evento-convite-restricao">
+                          <label
+                            className="checkbox-label"
+                            htmlFor={`info_extra_chk_${index}`}
+                          >
+                            <input
+                              id={`info_extra_chk_${index}`}
+                              type="checkbox"
+                              checked={!!temInfoExtra[index]}
+                              onChange={(e) => {
+                                const checked = e.target.checked
+                                setTemInfoExtra((prev) =>
+                                  prev.map((v, i) =>
+                                    i === index ? checked : v,
+                                  ),
+                                )
+                                if (!checked) {
+                                  setInfosExtraTexto((prev) =>
+                                    prev.map((v, i) =>
+                                      i === index ? '' : v,
+                                    ),
+                                  )
+                                }
+                              }}
+                              disabled={saving}
+                            />
+                            <span>
+                              Mais alguma coisa que gostaria de informar
+                            </span>
+                          </label>
+                          {temInfoExtra[index] ? (
+                            <input
+                              id={`info_extra_${index}`}
+                              className="input"
+                              value={infosExtraTexto[index] ?? ''}
+                              onChange={(e) => {
+                                const value = e.target.value
+                                setInfosExtraTexto((prev) =>
+                                  prev.map((v, i) =>
+                                    i === index ? value : v,
+                                  ),
+                                )
+                              }}
+                              disabled={saving}
+                              required
+                              placeholder="Digite aqui"
+                              maxLength={500}
+                            />
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   ))
                 : null}
@@ -1278,6 +1361,8 @@ export function VendaEventoVendaPage() {
           setRestricoesTexto([''])
           setParticipaAtividade([false])
           setRamoStaff([''])
+          setTemInfoExtra([false])
+          setInfosExtraTexto([''])
           setTelefone('')
           setFormaPagamento(null)
           void (async () => {
@@ -1470,6 +1555,7 @@ export function VendaEventoVendaPage() {
                     {evento?.pedir_ramo ? (
                       <th>Ramo / Participante</th>
                     ) : null}
+                    {evento?.pedir_info_extra ? <th>Info extra</th> : null}
                     <th>Situação</th>
                     {canStaffEdit ? (
                       <th className="no-print">Ações</th>
@@ -1547,6 +1633,9 @@ export function VendaEventoVendaPage() {
                         ) : null}
                         {evento?.pedir_ramo ? (
                           <td>{labelRamoStaffConvite(c)}</td>
+                        ) : null}
+                        {evento?.pedir_info_extra ? (
+                          <td>{(c.info_extra ?? '').trim() || '—'}</td>
                         ) : null}
                         <td>
                           {inativo ? (

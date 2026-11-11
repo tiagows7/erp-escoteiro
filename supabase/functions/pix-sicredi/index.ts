@@ -62,6 +62,7 @@ type CreatePublicEventoBody = {
   participa_atividades?: boolean[] | null
   convidado_ramos?: (number | null)[] | null
   eh_staffs?: boolean[] | null
+  infos_extra?: string[] | null
   comprador_telefone: string
   descricao?: string
 }
@@ -1759,12 +1760,18 @@ async function baixarVendaEvento(
   const staffsRaw = Array.isArray(cob.eh_staffs)
     ? (cob.eh_staffs as unknown[])
     : []
+  const infosRaw = Array.isArray(cob.infos_extra)
+    ? (cob.infos_extra as unknown[])
+    : []
   const pares = nomesRaw
     .map((n, i) => {
       const nome = String(n ?? '').trim().slice(0, 200)
       const restricao = String(restricoesRaw[i] ?? '')
         .trim()
         .slice(0, 120)
+      const infoExtra = String(infosRaw[i] ?? '')
+        .trim()
+        .slice(0, 500)
       const staff = staffsRaw[i] === true
       const ramoNum = Number(ramosRaw[i])
       const ramo =
@@ -1777,6 +1784,7 @@ async function baixarVendaEvento(
         participa: participaRaw[i] === true,
         ramo,
         staff,
+        infoExtra: infoExtra || null,
       }
     })
     .filter((p) => p.nome)
@@ -1785,6 +1793,7 @@ async function baixarVendaEvento(
   const participaFlags = pares.map((p) => p.participa)
   const ramoFlags = pares.map((p) => p.ramo)
   const staffFlags = pares.map((p) => p.staff)
+  const infoFlags = pares.map((p) => p.infoExtra)
   const valorTotal = Number(cob.valor)
 
   if (!eventoId || nomes.length === 0) {
@@ -1926,6 +1935,7 @@ async function baixarVendaEvento(
       participa_atividade: participaFlags[i] === true,
       convidado_ramo: ramoFlags[i],
       eh_staff: staffFlags[i] === true,
+      info_extra: infoFlags[i],
       ativo: true,
     }
   })
@@ -2642,12 +2652,16 @@ Deno.serve(async (req) => {
           ? body.convidado_ramos
           : []
         const staffsRaw = Array.isArray(body.eh_staffs) ? body.eh_staffs : []
+        const infosRaw = Array.isArray(body.infos_extra) ? body.infos_extra : []
         const pares = nomesRaw
           .map((n, i) => {
             const nome = String(n ?? '').trim().slice(0, 200)
             const restricao = String(restricoesRaw[i] ?? '')
               .trim()
               .slice(0, 120)
+            const infoExtra = String(infosRaw[i] ?? '')
+              .trim()
+              .slice(0, 500)
             const staff = staffsRaw[i] === true
             const ramoNum = Number(ramosRaw[i])
             const ramo =
@@ -2660,6 +2674,7 @@ Deno.serve(async (req) => {
               participa: participaRaw[i] === true,
               ramo,
               staff,
+              infoExtra,
             }
           })
           .filter((p) => p.nome)
@@ -2668,6 +2683,7 @@ Deno.serve(async (req) => {
         const participaOrdered = pares.map((p) => p.participa)
         const ramosOrdered = pares.map((p) => p.ramo)
         const staffsOrdered = pares.map((p) => p.staff)
+        const infosOrdered = pares.map((p) => p.infoExtra)
 
         if (!token) return json({ error: 'Link inválido.' }, 400)
         if (!fone) {
@@ -2829,6 +2845,7 @@ Deno.serve(async (req) => {
             participa_atividades: participaOrdered,
             convidado_ramos: ramosOrdered,
             eh_staffs: staffsOrdered,
+            infos_extra: infosOrdered,
             comprador_telefone: fone.slice(0, 40),
             comprador_nome: nomesOrdered[0] ?? null,
             valor,
