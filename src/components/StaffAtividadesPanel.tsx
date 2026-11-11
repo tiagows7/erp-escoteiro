@@ -125,7 +125,7 @@ export function StaffAtividadesPanel({
     let ativQuery = supabase
       .from('atividades')
       .select(
-        'atividade_id, empresa_id, ramo, secao, patrulha_matilha, descricao, local, valor, tem_transporte, created_at',
+        'atividade_id, empresa_id, ramo, secao, patrulha_matilha, descricao, local, valor, data_atividade, tem_transporte, created_at',
       )
       .eq('empresa_id', empresaId)
       .order('created_at', { ascending: false })
@@ -402,6 +402,17 @@ export function StaffAtividadesPanel({
     } catch {
       toast.error('Não foi possível copiar a lista')
     }
+  }
+
+  function imprimirListaTransporte() {
+    if (transporteLista.length === 0) return
+    document.body.classList.add('print-lista-transporte')
+    const cleanup = () => {
+      document.body.classList.remove('print-lista-transporte')
+      window.removeEventListener('afterprint', cleanup)
+    }
+    window.addEventListener('afterprint', cleanup)
+    window.print()
   }
 
   function fecharFamiliaModal() {
@@ -688,9 +699,58 @@ export function StaffAtividadesPanel({
         </div>
       ) : null}
 
+      {transporteItem &&
+      !transporteLoading &&
+      !transporteError &&
+      transporteLista.length > 0 ? (
+        <section className="print-only lista-transporte-print">
+          <h2>Lista de transporte</h2>
+          <p>
+            <strong>{transporteItem.descricao}</strong>
+            {transporteItem.local
+              ? ` · Local: ${transporteItem.local}`
+              : ''}
+          </p>
+          <p>
+            {transporteLista.length} pessoa(s)
+            {transporteItem.data_atividade
+              ? ` · ${String(transporteItem.data_atividade)
+                  .slice(0, 10)
+                  .split('-')
+                  .reverse()
+                  .join('/')}`
+              : ''}
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: '3.5rem' }}>Nº</th>
+                <th style={{ width: '7rem' }}>Tipo</th>
+                <th>Nome</th>
+                <th style={{ width: '10rem' }}>CPF</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transporteLista.map((row, index) => (
+                <tr
+                  key={`print-${row.tipo}-${row.confirmacao_id}-${row.cpf}-${index}`}
+                >
+                  <td>{index + 1}</td>
+                  <td>
+                    {row.tipo === 'acompanhante' ? 'Familiar' : 'Jovem'}
+                  </td>
+                  <td>{row.nome}</td>
+                  <td>{formatCpfDisplay(row.cpf)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
+
       {transporteItem ? (
         <div
-          className="confirm-overlay"
+          className="confirm-overlay no-print"
           role="presentation"
           onClick={fecharListaTransporte}
         >
@@ -732,6 +792,13 @@ export function StaffAtividadesPanel({
                     onClick={() => void copiarListaTransporte()}
                   >
                     Copiar lista
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={imprimirListaTransporte}
+                  >
+                    Imprimir lista
                   </button>
                   <span className="muted">
                     {transporteLista.length} pessoa(s)

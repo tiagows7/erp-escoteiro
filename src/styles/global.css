@@ -5574,9 +5574,22 @@ form.panel .muted,
     display: block !important;
   }
 
+  body.print-lista-transporte .lista-transporte-print {
+    display: block !important;
+  }
+
+  body.print-lista-transporte .confirm-overlay,
+  body.print-lista-transporte .staff-atividades-panel,
+  body.print-lista-transporte .page-header,
+  body.print-lista-transporte .alert-message {
+    display: none !important;
+  }
+
   .lista-assembleia-print h2,
   .lista-assembleia-print h3,
-  .lista-assembleia-print p {
+  .lista-assembleia-print p,
+  .lista-transporte-print h2,
+  .lista-transporte-print p {
     margin: 0 0 0.35rem;
     color: #111;
   }
@@ -5585,14 +5598,17 @@ form.panel .muted,
     margin-top: 1rem;
   }
 
-  .lista-assembleia-print table {
+  .lista-assembleia-print table,
+  .lista-transporte-print table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 0.35rem;
   }
 
   .lista-assembleia-print th,
-  .lista-assembleia-print td {
+  .lista-assembleia-print td,
+  .lista-transporte-print th,
+  .lista-transporte-print td {
     border-bottom: 1px solid #ccc;
     padding: 0.28rem 0.35rem;
     text-align: left;
