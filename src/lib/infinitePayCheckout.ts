@@ -67,6 +67,7 @@ export async function createInfinitePayEventoCheckout(input: {
   nomes: string[]
   tipoIds?: number[]
   restricoes?: string[]
+  participa?: boolean[]
   compradorTelefone: string
   valor: number
   descricao: string
@@ -87,6 +88,7 @@ export async function createInfinitePayEventoCheckout(input: {
         nomes: input.nomes,
         tipo_ids: input.tipoIds ?? null,
         restricoes_alimentares: input.restricoes ?? null,
+        participa_atividades: input.participa ?? null,
         comprador_telefone: input.compradorTelefone,
         descricao: input.descricao,
         redirect_url: input.redirectUrl,

@@ -32,6 +32,7 @@ export async function comprarConvitesEvento(input: {
   formaPagamento: VendaEventoFormaPagamento
   tipoIds?: number[]
   restricoes?: string[]
+  participa?: boolean[]
 }): Promise<{
   ok: boolean
   mensagem: string
@@ -45,6 +46,7 @@ export async function comprarConvitesEvento(input: {
     p_forma_pagamento: input.formaPagamento,
     p_tipo_ids: input.tipoIds ?? null,
     p_restricoes: input.restricoes ?? null,
+    p_participa: input.participa ?? null,
   })
 
   if (error) {

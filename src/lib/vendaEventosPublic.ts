@@ -22,6 +22,7 @@ export type EventoPublicInfo = {
   tipos: EventoPublicTipo[]
   vendedor_nome: string | null
   associado_vendedor_id: number | null
+  pedir_participacao: boolean
 }
 
 export function linkPublicoVendaEvento(token: string): string {
@@ -91,6 +92,7 @@ export async function fetchEventoPublicInfo(
         row.associado_vendedor_id != null
           ? Number(row.associado_vendedor_id)
           : null,
+      pedir_participacao: row.pedir_participacao === true,
     },
     error: null,
   }

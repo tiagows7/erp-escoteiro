@@ -47,6 +47,9 @@ export function VendaEventoPublicPage() {
   const [tipoIds, setTipoIds] = useState<number[]>([0])
   const [temRestricao, setTemRestricao] = useState<boolean[]>([false])
   const [restricoesTexto, setRestricoesTexto] = useState<string[]>([''])
+  const [participaAtividade, setParticipaAtividade] = useState<boolean[]>([
+    false,
+  ])
   const [telefone, setTelefone] = useState('')
   const [pixOpen, setPixOpen] = useState(false)
   const [pixInput, setPixInput] = useState<PixPublicEventoInput | null>(null)
@@ -114,6 +117,9 @@ export function VendaEventoPublicPage() {
     setRestricoesTexto((prev) =>
       Array.from({ length: Math.max(1, quantidade) }, (_, i) => prev[i] ?? ''),
     )
+    setParticipaAtividade((prev) =>
+      Array.from({ length: Math.max(1, quantidade) }, (_, i) => prev[i] ?? false),
+    )
   }, [quantidade, tipoPadraoId])
 
   // Retorno do checkout InfinitePay
@@ -171,6 +177,7 @@ export function VendaEventoPublicPage() {
     nomesLimpos: string[],
     tipoIdsEnvio: number[] | undefined,
     restricoesEnvio: string[],
+    participaEnvio: boolean[] | undefined,
     fone: string,
     valor: number,
     descricao: string,
@@ -182,6 +189,7 @@ export function VendaEventoPublicPage() {
       nomes: nomesLimpos,
       tipoIds: tipoIdsEnvio,
       restricoes: restricoesEnvio,
+      participa: participaEnvio,
       compradorTelefone: fone,
       valor,
       descricao,
@@ -238,6 +246,9 @@ export function VendaEventoPublicPage() {
       temRestricao,
       restricoesTexto,
     )
+    const participaEnvio = info.pedir_participacao
+      ? Array.from({ length: quantidade }, (_, i) => !!participaAtividade[i])
+      : undefined
     const descricao = `${info.evento_nome} · ${quantidade} convite(s)`
     const fone = telefone.trim()
 
@@ -271,6 +282,7 @@ export function VendaEventoPublicPage() {
         nomes: nomesLimpos,
         tipoIds: tipoIdsEnvio,
         restricoes: restricoesEnvio,
+        participa: participaEnvio,
         compradorTelefone: fone,
         valor,
         descricao,
@@ -286,6 +298,7 @@ export function VendaEventoPublicPage() {
           nomesLimpos,
           tipoIdsEnvio,
           restricoesEnvio,
+          participaEnvio,
           fone,
           valor,
           descricao,
@@ -300,6 +313,7 @@ export function VendaEventoPublicPage() {
       nomesLimpos,
       tipoIdsEnvio,
       restricoesEnvio,
+      participaEnvio,
       fone,
       valor,
       descricao,
@@ -507,6 +521,30 @@ export function VendaEventoPublicPage() {
                         </select>
                       </div>
                     </div>
+                    {info.pedir_participacao ? (
+                      <div className="evento-convite-restricao">
+                        <label
+                          className="checkbox-label"
+                          htmlFor={`participa_chk_${index}`}
+                        >
+                          <input
+                            id={`participa_chk_${index}`}
+                            type="checkbox"
+                            checked={!!participaAtividade[index]}
+                            onChange={(e) => {
+                              const checked = e.target.checked
+                              setParticipaAtividade((prev) =>
+                                prev.map((v, i) =>
+                                  i === index ? checked : v,
+                                ),
+                              )
+                            }}
+                            disabled={pixOpen || paying}
+                          />
+                          <span>Quer participar das atividades</span>
+                        </label>
+                      </div>
+                    ) : null}
                     <div className="evento-convite-restricao">
                       <label
                         className="checkbox-label"

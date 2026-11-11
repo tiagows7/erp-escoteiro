@@ -67,6 +67,9 @@ export function VendaEventoVendaPage() {
   const [tipoIds, setTipoIds] = useState<number[]>([0])
   const [temRestricao, setTemRestricao] = useState<boolean[]>([false])
   const [restricoesTexto, setRestricoesTexto] = useState<string[]>([''])
+  const [participaAtividade, setParticipaAtividade] = useState<boolean[]>([
+    false,
+  ])
   const [telefone, setTelefone] = useState('')
   const [formaPagamento, setFormaPagamento] =
     useState<VendaEventoFormaPagamento | null>(null)
@@ -208,7 +211,7 @@ export function VendaEventoVendaPage() {
       supabase
         .from('venda_eventos')
         .select(
-          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, link_token, encerrado_em, created_at, aceita_cartao, cartao_max_parcelas',
+          'evento_id, empresa_id, nome, numero_inicial, numero_final, valor_convite, data_evento, imagem_url, link_token, encerrado_em, created_at, aceita_cartao, cartao_max_parcelas, pedir_participacao',
         )
         .eq('evento_id', eventoId)
         .eq('empresa_id', empresaId)
@@ -216,7 +219,7 @@ export function VendaEventoVendaPage() {
       supabase
         .from('venda_evento_convite')
         .select(
-          'convite_id, empresa_id, evento_id, compra_id, numero, nome, tipo_id, valor_unitario, tipo_label, restricao_alimentar, ativo, created_at',
+          'convite_id, empresa_id, evento_id, compra_id, numero, nome, tipo_id, valor_unitario, tipo_label, restricao_alimentar, participa_atividade, ativo, created_at',
         )
         .eq('evento_id', eventoId)
         .eq('empresa_id', empresaId)
@@ -321,6 +324,7 @@ export function VendaEventoVendaPage() {
         setNomes([''])
         setTemRestricao([false])
         setRestricoesTexto([''])
+        setParticipaAtividade([false])
         setTelefone('')
         setFormaPagamento(null)
         await reload()
@@ -363,6 +367,9 @@ export function VendaEventoVendaPage() {
     setRestricoesTexto((prev) =>
       Array.from({ length: Math.max(1, quantidade) }, (_, i) => prev[i] ?? ''),
     )
+    setParticipaAtividade((prev) =>
+      Array.from({ length: Math.max(1, quantidade) }, (_, i) => prev[i] ?? false),
+    )
   }, [quantidade, tipoPadraoId])
 
   function limparCompra() {
@@ -371,6 +378,7 @@ export function VendaEventoVendaPage() {
     setTipoIds([tipoPadraoId])
     setTemRestricao([false])
     setRestricoesTexto([''])
+    setParticipaAtividade([false])
     setTelefone('')
     setFormaPagamento(null)
     setUltimaNumeracao(null)
@@ -581,6 +589,9 @@ export function VendaEventoVendaPage() {
       temRestricao,
       restricoesTexto,
     )
+    const participaEnvio = evento.pedir_participacao
+      ? Array.from({ length: quantidade }, (_, i) => !!participaAtividade[i])
+      : undefined
     const linkPagamento = meuLinkToken || evento.link_token
 
     if (formaPagamento === 'pix' || formaPagamento === 'infinitepay') {
@@ -612,6 +623,7 @@ export function VendaEventoVendaPage() {
           nomes: nomesLimpos,
           tipoIds: tipoIdsEnvio,
           restricoes: restricoesEnvio,
+          participa: participaEnvio,
           compradorTelefone: fone,
           valor,
           descricao,
@@ -633,6 +645,7 @@ export function VendaEventoVendaPage() {
         nomes: nomesLimpos,
         tipoIds: tipoIdsEnvio,
         restricoes: restricoesEnvio,
+        participa: participaEnvio,
         compradorTelefone: fone,
         valor,
         descricao,
@@ -649,6 +662,7 @@ export function VendaEventoVendaPage() {
       nomes: nomesLimpos,
       tipoIds: tipoIdsEnvio,
       restricoes: restricoesEnvio,
+      participa: participaEnvio,
       compradorTelefone: telefone,
       formaPagamento,
     })
@@ -681,6 +695,7 @@ export function VendaEventoVendaPage() {
     setTipoIds([tipoPadraoId])
     setTemRestricao([false])
     setRestricoesTexto([''])
+    setParticipaAtividade([false])
     setTelefone('')
     setFormaPagamento(null)
     await reload()
@@ -930,6 +945,30 @@ export function VendaEventoVendaPage() {
                           </select>
                         </div>
                       </div>
+                      {evento?.pedir_participacao ? (
+                        <div className="evento-convite-restricao">
+                          <label
+                            className="checkbox-label"
+                            htmlFor={`participa_chk_${index}`}
+                          >
+                            <input
+                              id={`participa_chk_${index}`}
+                              type="checkbox"
+                              checked={!!participaAtividade[index]}
+                              onChange={(e) => {
+                                const checked = e.target.checked
+                                setParticipaAtividade((prev) =>
+                                  prev.map((v, i) =>
+                                    i === index ? checked : v,
+                                  ),
+                                )
+                              }}
+                              disabled={saving}
+                            />
+                            <span>Quer participar das atividades</span>
+                          </label>
+                        </div>
+                      ) : null}
                       <div className="evento-convite-restricao">
                         <label
                           className="checkbox-label"
@@ -1163,6 +1202,7 @@ export function VendaEventoVendaPage() {
           setNomes([''])
           setTemRestricao([false])
           setRestricoesTexto([''])
+          setParticipaAtividade([false])
           setTelefone('')
           setFormaPagamento(null)
           void (async () => {
@@ -1349,6 +1389,9 @@ export function VendaEventoVendaPage() {
                     <th>Nome</th>
                     <th>Tipo</th>
                     <th>Restrição</th>
+                    {evento?.pedir_participacao ? (
+                      <th>Atividades</th>
+                    ) : null}
                     <th>Situação</th>
                     {canStaffEdit ? (
                       <th className="no-print">Ações</th>
@@ -1419,6 +1462,11 @@ export function VendaEventoVendaPage() {
                         <td>
                           {(c.restricao_alimentar ?? '').trim() || '—'}
                         </td>
+                        {evento?.pedir_participacao ? (
+                          <td>
+                            {c.participa_atividade ? 'Sim' : 'Não'}
+                          </td>
+                        ) : null}
                         <td>
                           {inativo ? (
                             <span className="badge badge-danger">Inativo</span>

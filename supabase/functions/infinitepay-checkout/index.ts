@@ -231,17 +231,25 @@ async function baixarPedidoEvento(
   const restricoesRaw = Array.isArray(pedido.restricoes_alimentares)
     ? (pedido.restricoes_alimentares as unknown[])
     : []
+  const participaRaw = Array.isArray(pedido.participa_atividades)
+    ? (pedido.participa_atividades as unknown[])
+    : []
   const pares = nomesRaw
     .map((n, i) => {
       const nome = String(n ?? '').trim().slice(0, 200)
       const restricao = String(restricoesRaw[i] ?? '')
         .trim()
         .slice(0, 120)
-      return { nome, restricao: restricao || null }
+      return {
+        nome,
+        restricao: restricao || null,
+        participa: participaRaw[i] === true,
+      }
     })
     .filter((p) => p.nome)
   const nomes = pares.map((p) => p.nome)
   const restricoes = pares.map((p) => p.restricao)
+  const participaFlags = pares.map((p) => p.participa)
   const valorTotal = Number(pedido.valor)
 
   if (!eventoId || nomes.length === 0) {
@@ -372,6 +380,7 @@ async function baixarPedidoEvento(
       valor_unitario: linha?.valor ?? 0,
       tipo_label: linha?.label ?? null,
       restricao_alimentar: restricoes[i] ?? null,
+      participa_atividade: participaFlags[i] === true,
     }
   })
 
@@ -679,18 +688,28 @@ Deno.serve(async (req) => {
       const restricoesRaw = Array.isArray(body.restricoes_alimentares)
         ? body.restricoes_alimentares
         : []
+      const participaRaw = Array.isArray(body.participa_atividades)
+        ? body.participa_atividades
+        : []
       const pares = nomesRaw
         .map((n: unknown, i: number) => {
           const nome = String(n ?? '').trim().slice(0, 200)
           const restricao = String(restricoesRaw[i] ?? '')
             .trim()
             .slice(0, 120)
-          return { nome, restricao }
+          return {
+            nome,
+            restricao,
+            participa: participaRaw[i] === true,
+          }
         })
         .filter((p: { nome: string }) => p.nome)
       const nomesOrdered = pares.map((p: { nome: string }) => p.nome)
       const restricoesOrdered = pares.map(
         (p: { restricao: string }) => p.restricao,
+      )
+      const participaOrdered = pares.map(
+        (p: { participa: boolean }) => p.participa,
       )
       const redirectUrl = String(body.redirect_url ?? '').trim()
       const siteOrigin = String(body.site_origin ?? '').trim()
@@ -855,6 +874,7 @@ Deno.serve(async (req) => {
           nomes: nomesOrdered,
           tipo_ids: resolvedTipos.tipoIds,
           restricoes_alimentares: restricoesOrdered,
+          participa_atividades: participaOrdered,
           comprador_telefone: fone.slice(0, 40),
           comprador_nome: nomesOrdered[0] ?? null,
           valor,

@@ -18,6 +18,8 @@ export type PixPublicEventoInput = {
   tipoIds?: number[]
   /** Paralelo a nomes; '' = sem restrição */
   restricoes?: string[]
+  /** Paralelo a nomes: quer participar das atividades */
+  participa?: boolean[]
   compradorTelefone: string
   valor: number
   descricao: string
@@ -67,6 +69,7 @@ export function pixPublicPaymentKey(input: PixPublicInput): string {
       input.nomes.join('|'),
       (input.tipoIds ?? []).join(','),
       (input.restricoes ?? []).join('|'),
+      (input.participa ?? []).map((v) => (v ? '1' : '0')).join(''),
       input.compradorTelefone.trim(),
     ].join('|')
   }
@@ -106,6 +109,7 @@ export async function createPixSicrediPublic(
         nomes: input.nomes,
         tipo_ids: input.tipoIds ?? null,
         restricoes_alimentares: input.restricoes ?? null,
+        participa_atividades: input.participa ?? null,
         comprador_telefone: input.compradorTelefone,
         descricao: input.descricao,
       }
