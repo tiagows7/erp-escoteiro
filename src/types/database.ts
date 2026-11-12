@@ -428,7 +428,7 @@ export type VendaEvento = {
   encerrado_em: string | null
   /** Cartão via InfinitePay no link público / venda. */
   aceita_cartao?: boolean | null
-  /** Parcelas sem juros (1–12) no checkout InfinitePay. */
+  /** Máximo de parcelas (1–12) no checkout InfinitePay. */
   cartao_max_parcelas?: number | null
   /** Na compra, pergunta se o convite participa das atividades do evento. */
   pedir_participacao?: boolean | null

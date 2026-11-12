@@ -809,7 +809,7 @@ export function VendaEventoPublicPage() {
                         Você será redirecionado ao checkout InfinitePay para
                         pagar com cartão
                         {maxParcelas > 1
-                          ? ` em até ${maxParcelas}x sem juros`
+                          ? ` em até ${maxParcelas}x`
                           : ''}
                         .
                       </p>

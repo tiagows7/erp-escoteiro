@@ -326,9 +326,9 @@ export function ContaBancariaFieldsForm({
             />
             <span className="field-hint">
               Necessária para eventos com “Aceitar pagamento com cartão”. O
-              checkout InfinitePay recebe o cartão (e parcelas sem juros
-              definidas no evento). PIX online continua pela aba PIX API (
-              {provedorLabel}).
+              checkout InfinitePay recebe o cartão (parcelas definidas no
+              evento; juros cobrados pelo aplicativo parceiro). PIX online
+              continua pela aba PIX API ({provedorLabel}).
             </span>
           </div>
         </div>

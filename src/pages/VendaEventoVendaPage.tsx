@@ -1286,7 +1286,7 @@ export function VendaEventoVendaPage() {
                   <p className="field-hint" style={{ marginBottom: 0 }}>
                     Abre o checkout InfinitePay para pagamento com cartão
                     {Number(evento.cartao_max_parcelas ?? 1) > 1
-                      ? ` em até ${Number(evento.cartao_max_parcelas)}x sem juros`
+                      ? ` em até ${Number(evento.cartao_max_parcelas)}x`
                       : ''}
                     . Cadastre a InfiniteTag na conta bancária do ramo/grupo.
                   </p>

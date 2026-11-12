@@ -1156,7 +1156,7 @@ export function VendaEventoFormPage() {
             {form.aceita_cartao ? (
               <div className="field" style={{ marginTop: '0.75rem', maxWidth: 220 }}>
                 <label htmlFor="cartao_max_parcelas">
-                  Parcelas sem juros (até)
+                  Parcelas (até)
                 </label>
                 <select
                   id="cartao_max_parcelas"
@@ -1173,6 +1173,10 @@ export function VendaEventoFormPage() {
                     </option>
                   ))}
                 </select>
+                <span className="field-hint">
+                  Eventuais juros são cobrados pelo aplicativo parceiro
+                  (InfinitePay).
+                </span>
               </div>
             ) : null}
           </div>

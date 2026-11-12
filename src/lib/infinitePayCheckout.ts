@@ -6,7 +6,7 @@ export type EventoPagamentoConfig = {
   pix_sicredi: boolean
   /** Evento marcado para aceitar cartão e InfiniteTag disponível. */
   aceita_cartao: boolean
-  /** Parcelas sem juros no checkout (1–12). */
+  /** Máximo de parcelas no checkout (1–12). */
   cartao_max_parcelas: number
   prefer: 'infinitepay' | 'pix_sicredi' | 'nenhum'
 }
