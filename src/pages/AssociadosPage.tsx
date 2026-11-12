@@ -139,7 +139,8 @@ export function AssociadosPage() {
   const [filtroAtivo, setFiltroAtivo] = useState<'todos' | 'ativos' | 'inativos'>(
     'ativos',
   )
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [consultou, setConsultou] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportAssociadosResult | null>(
@@ -186,6 +187,15 @@ export function AssociadosPage() {
     return list
   }, [patrulhas, filtroRamo, filtroSecao])
 
+  const temConsulta = useMemo(() => {
+    return (
+      q.trim().length > 0 ||
+      Boolean(filtroRamo) ||
+      Boolean(filtroSecao) ||
+      Boolean(filtroPatrulha)
+    )
+  }, [q, filtroRamo, filtroSecao, filtroPatrulha])
+
   useEffect(() => {
     setPage(1)
   }, [q, filtroRamo, filtroSecao, filtroPatrulha, filtroAtivo])
@@ -193,7 +203,17 @@ export function AssociadosPage() {
   useEffect(() => {
     if (!empresaId) {
       setRows([])
+      setConsultou(false)
       setLoading(false)
+      return
+    }
+
+    // Sem busca/filtro: não traz a lista (evita tráfego ao abrir o cadastro).
+    if (!temConsulta) {
+      setRows([])
+      setConsultou(false)
+      setLoading(false)
+      setError(null)
       return
     }
 
@@ -232,9 +252,11 @@ export function AssociadosPage() {
         if (queryError) {
           setError(queryError.message)
           setRows([])
+          setConsultou(false)
         } else {
           setError(null)
           setRows((data as Associado[]) ?? [])
+          setConsultou(true)
         }
         setLoading(false)
       })()
@@ -252,6 +274,7 @@ export function AssociadosPage() {
     filtroPatrulha,
     filtroAtivo,
     reloadToken,
+    temConsulta,
   ])
 
   async function handleImportFile(file: File | null) {
@@ -693,17 +716,28 @@ export function AssociadosPage() {
         <p className="field-hint" style={{ marginBottom: '0.75rem' }}>
           {loading
             ? 'Carregando…'
-            : `${rows.length} associado(s) encontrado(s)${
-                rows.length > pageSize
-                  ? ` · página ${pageSafe} de ${totalPages}`
-                  : ''
-              }`}
+            : !temConsulta
+              ? 'Informe nome, registro ou um filtro (ramo/seção/patrulha) para consultar.'
+              : `${rows.length} associado(s) encontrado(s)${
+                  rows.length > pageSize
+                    ? ` · página ${pageSafe} de ${totalPages}`
+                    : ''
+                }`}
         </p>
 
         {loading ? (
           <div className="loading">Carregando associados…</div>
+        ) : !temConsulta ? (
+          <div className="empty">
+            A lista não é carregada ao abrir a tela. Busque por nome ou registro,
+            ou escolha ramo, seção ou patrulha para consultar.
+          </div>
         ) : rows.length === 0 ? (
-          <div className="empty">Nenhum associado encontrado neste grupo.</div>
+          <div className="empty">
+            {consultou
+              ? 'Nenhum associado encontrado com esses critérios.'
+              : 'Nenhum associado encontrado neste grupo.'}
+          </div>
         ) : (
           <>
             <div className="table-wrap">
