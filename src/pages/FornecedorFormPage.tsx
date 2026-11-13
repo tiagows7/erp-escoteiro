@@ -10,6 +10,7 @@ import {
   usePersistedFormState,
 } from '@/hooks/usePersistedFormState'
 import { loadCidades, loadEstados } from '@/lib/brasilLocalidades'
+import { cepDigits, maskCepInput } from '@/lib/masks'
 
 type Lookup = { id: number; nome: string }
 
@@ -145,7 +146,7 @@ export function FornecedorFormPage() {
         fordespesa_bairro: data.fordespesa_bairro ?? '',
         fordespesa_uf: data.fordespesa_uf ?? '',
         fordespesa_cidade: data.fordespesa_cidade?.toString() ?? '',
-        fordespesa_cep: data.fordespesa_cep ?? '',
+        fordespesa_cep: maskCepInput(data.fordespesa_cep ?? ''),
         plano_conta_id: data.plano_conta_id?.toString() ?? '',
       })
       setLoading(false)
@@ -181,7 +182,7 @@ export function FornecedorFormPage() {
       fordespesa_bairro: strOrNull(form.fordespesa_bairro),
       fordespesa_uf: strOrNull(form.fordespesa_uf.toUpperCase()),
       fordespesa_cidade: numOrNull(form.fordespesa_cidade),
-      fordespesa_cep: strOrNull(form.fordespesa_cep),
+      fordespesa_cep: strOrNull(cepDigits(form.fordespesa_cep)),
       plano_conta_id: numOrNull(form.plano_conta_id ?? ''),
     }
   }
@@ -530,9 +531,14 @@ export function FornecedorFormPage() {
               id="fordespesa_cep"
               className="input"
               value={form.fordespesa_cep}
-              onChange={(e) => update('fordespesa_cep', e.target.value)}
+              onChange={(e) =>
+                update('fordespesa_cep', maskCepInput(e.target.value))
+              }
               disabled={disabled}
-              maxLength={8}
+              inputMode="numeric"
+              maxLength={9}
+              placeholder="00000-000"
+              autoComplete="postal-code"
             />
           </div>
 

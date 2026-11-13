@@ -25,6 +25,7 @@ import {
   removerAssociadoFoto,
   uploadAssociadoFoto,
 } from '@/lib/uploadAssociadoFoto'
+import { cepDigits, maskCepInput } from '@/lib/masks'
 import type { Ramo } from '@/types/database'
 
 type Lookup = { id: number; nome: string }
@@ -318,7 +319,7 @@ export function AssociadoFormPage() {
           data.conquista_insignia_bp_data?.slice(0, 10) ?? '',
         conquista_insignia_madeira_data:
           data.conquista_insignia_madeira_data?.slice(0, 10) ?? '',
-        endereco_cep: data.endereco_cep ?? '',
+        endereco_cep: maskCepInput(data.endereco_cep ?? ''),
         endereco: data.endereco ?? '',
         endereco_numero: data.endereco_numero ?? '',
         endereco_complemento: data.endereco_complemento ?? '',
@@ -467,7 +468,7 @@ export function AssociadoFormPage() {
       conquista_insignia_madeira_data: form.conquista_insignia_madeira
         ? strOrNull(form.conquista_insignia_madeira_data)
         : null,
-      endereco_cep: strOrNull(form.endereco_cep),
+      endereco_cep: strOrNull(cepDigits(form.endereco_cep)),
       endereco: strOrNull(form.endereco)?.toUpperCase() ?? null,
       endereco_numero: strOrNull(form.endereco_numero),
       endereco_complemento: strOrNull(form.endereco_complemento)?.toUpperCase() ?? null,
@@ -1107,8 +1108,14 @@ export function AssociadoFormPage() {
                 id="endereco_cep"
                 className="input"
                 value={form.endereco_cep}
-                onChange={(e) => update('endereco_cep', e.target.value)}
+                onChange={(e) =>
+                  update('endereco_cep', maskCepInput(e.target.value))
+                }
                 disabled={disabled}
+                inputMode="numeric"
+                maxLength={9}
+                placeholder="00000-000"
+                autoComplete="postal-code"
               />
             </div>
             <div className="field field-span-2">
