@@ -94,7 +94,8 @@ export function DespesasRelatorioPage() {
   const [filtroVisao, setFiltroVisao] = useState<VisaoRelatorio>('todas')
   const [filtroRamo, setFiltroRamo] = useState('')
   const [q, setQ] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [consultaTick, setConsultaTick] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -116,6 +117,12 @@ export function DespesasRelatorioPage() {
     if (!empresaId) {
       setRows([])
       setLoading(false)
+      return
+    }
+    if (consultaTick <= 0) {
+      setRows([])
+      setLoading(false)
+      setError(null)
       return
     }
 
@@ -187,7 +194,7 @@ export function DespesasRelatorioPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, filtroRamo, filtroVisao, dataDe, dataAte, scope])
+  }, [empresaId, filtroRamo, filtroVisao, dataDe, dataAte, scope, consultaTick])
 
   const ramoMap = useMemo(
     () => new Map(ramos.map((r) => [r.id, r.nome])),
@@ -334,6 +341,14 @@ export function DespesasRelatorioPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={loading}
+            onClick={() => setConsultaTick((n) => n + 1)}
+          >
+            Consultar
+          </button>
         </div>
         {filtroVisao === 'todas' ? (
           <p className="field-hint" style={{ marginTop: '0.65rem' }}>
@@ -365,6 +380,11 @@ export function DespesasRelatorioPage() {
 
         {loading ? (
           <div className="loading">Carregando relatório…</div>
+        ) : consultaTick <= 0 ? (
+          <div className="empty">
+            O relatório não é carregado ao abrir a tela. Ajuste o período e
+            clique em Consultar.
+          </div>
         ) : (
           <>
             <div className="despesas-relatorio-resumo-grid">
@@ -413,7 +433,7 @@ export function DespesasRelatorioPage() {
         )}
       </section>
 
-      {!loading && !error ? (
+      {!loading && !error && consultaTick > 0 ? (
         <>
           {mostraAbertos ? (
             <section className="panel despesas-relatorio-print">

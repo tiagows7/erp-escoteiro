@@ -46,7 +46,8 @@ export function DespesasPagamentoPage() {
   const [ramos, setRamos] = useState<Lookup[]>([])
   const [q, setQ] = useState('')
   const [filtroRamo, setFiltroRamo] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [consultaTick, setConsultaTick] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -68,6 +69,12 @@ export function DespesasPagamentoPage() {
     if (!empresaId) {
       setRows([])
       setLoading(false)
+      return
+    }
+    if (consultaTick <= 0) {
+      setRows([])
+      setLoading(false)
+      setError(null)
       return
     }
 
@@ -109,7 +116,7 @@ export function DespesasPagamentoPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, filtroRamo, flashTick, scope])
+  }, [empresaId, filtroRamo, flashTick, scope, consultaTick])
 
   const ramoMap = useMemo(
     () => new Map(ramos.map((r) => [r.id, r.nome])),
@@ -179,6 +186,14 @@ export function DespesasPagamentoPage() {
               ))}
             </select>
           ) : null}
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={loading}
+            onClick={() => setConsultaTick((n) => n + 1)}
+          >
+            Consultar
+          </button>
         </div>
 
         {error ? (
@@ -190,11 +205,18 @@ export function DespesasPagamentoPage() {
         <p className="field-hint" style={{ marginBottom: '0.75rem' }}>
           {loading
             ? 'Carregando…'
-            : `${filtered.length} despesa(s) em aberto`}
+            : consultaTick <= 0
+              ? 'Clique em Consultar para carregar o movimento.'
+              : `${filtered.length} despesa(s) em aberto`}
         </p>
 
         {loading ? (
           <div className="loading">Carregando despesas…</div>
+        ) : consultaTick <= 0 ? (
+          <div className="empty">
+            O movimento não é carregado ao abrir a tela. Use Consultar para
+            buscar as despesas em aberto.
+          </div>
         ) : filtered.length === 0 ? (
           <div className="empty">Nenhuma despesa em aberto.</div>
         ) : (

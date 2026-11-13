@@ -62,7 +62,8 @@ export function ReceitasInclusaoPage() {
   const [filtroSituacao, setFiltroSituacao] = useState<'abertos' | 'todos' | 'pagos'>(
     'abertos',
   )
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [consultaTick, setConsultaTick] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -84,6 +85,12 @@ export function ReceitasInclusaoPage() {
     if (!empresaId) {
       setRows([])
       setLoading(false)
+      return
+    }
+    if (consultaTick <= 0) {
+      setRows([])
+      setLoading(false)
+      setError(null)
       return
     }
 
@@ -129,7 +136,7 @@ export function ReceitasInclusaoPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, filtroRamo, filtroSituacao, flashTick, scope])
+  }, [empresaId, filtroRamo, filtroSituacao, flashTick, scope, consultaTick])
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
@@ -208,6 +215,14 @@ export function ReceitasInclusaoPage() {
             <option value="pagos">Recebidas</option>
             <option value="todos">Todas</option>
           </select>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={loading}
+            onClick={() => setConsultaTick((n) => n + 1)}
+          >
+            Consultar
+          </button>
         </div>
 
         {error ? (
@@ -219,11 +234,18 @@ export function ReceitasInclusaoPage() {
         <p className="field-hint" style={{ marginBottom: '0.75rem' }}>
           {loading
             ? 'Carregando…'
-            : `${filtered.length} receita(s) encontrada(s)`}
+            : consultaTick <= 0
+              ? 'Clique em Consultar para carregar o movimento.'
+              : `${filtered.length} receita(s) encontrada(s)`}
         </p>
 
         {loading ? (
           <div className="loading">Carregando receitas…</div>
+        ) : consultaTick <= 0 ? (
+          <div className="empty">
+            O movimento não é carregado ao abrir a tela. Use Consultar para
+            buscar as receitas.
+          </div>
         ) : filtered.length === 0 ? (
           <div className="empty">Nenhuma receita encontrada.</div>
         ) : (
