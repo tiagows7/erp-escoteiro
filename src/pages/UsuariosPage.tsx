@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -28,7 +28,8 @@ export function UsuariosPage() {
   const [filtroAtivo, setFiltroAtivo] = useState<'todos' | 'ativos' | 'inativos'>(
     'ativos',
   )
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [consultaTick, setConsultaTick] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -37,23 +38,48 @@ export function UsuariosPage() {
       setLoading(false)
       return
     }
+    if (consultaTick <= 0) {
+      setRows([])
+      setLoading(false)
+      setError(null)
+      return
+    }
 
     let mounted = true
     void (async () => {
       setLoading(true)
-      const { data, error: queryError } = await supabase
+      let query = supabase
         .from('profiles')
         .select('id, nome, email, username, registro, role, ativo')
         .eq('empresa_id', empresaId)
         .order('nome')
+        .limit(500)
 
+      if (filtroAtivo === 'ativos') query = query.eq('ativo', true)
+      if (filtroAtivo === 'inativos') query = query.eq('ativo', false)
+
+      const { data, error: queryError } = await query
       if (!mounted) return
       if (queryError) {
         setError(queryError.message)
         setRows([])
       } else {
+        const term = q.trim().toLowerCase()
+        let list = (data as UsuarioRow[]) ?? []
+        if (term) {
+          list = list.filter((r) => {
+            const papel = String(ROLE_LABELS[r.role] ?? r.role ?? '').toLowerCase()
+            return (
+              (r.nome ?? '').toLowerCase().includes(term) ||
+              (r.email ?? '').toLowerCase().includes(term) ||
+              (r.username ?? '').toLowerCase().includes(term) ||
+              (r.registro ?? '').includes(term) ||
+              papel.includes(term)
+            )
+          })
+        }
         setError(null)
-        setRows((data as UsuarioRow[]) ?? [])
+        setRows(list)
       }
       setLoading(false)
     })()
@@ -61,26 +87,9 @@ export function UsuariosPage() {
     return () => {
       mounted = false
     }
-  }, [empresaId, flashTick])
-
-  const filtered = useMemo(() => {
-    let list = rows
-    if (filtroAtivo === 'ativos') list = list.filter((r) => r.ativo !== false)
-    if (filtroAtivo === 'inativos') list = list.filter((r) => r.ativo === false)
-
-    const term = q.trim().toLowerCase()
-    if (!term) return list
-    return list.filter((r) => {
-      const papel = String(ROLE_LABELS[r.role] ?? r.role ?? '').toLowerCase()
-      return (
-        (r.nome ?? '').toLowerCase().includes(term) ||
-        (r.email ?? '').toLowerCase().includes(term) ||
-        (r.username ?? '').toLowerCase().includes(term) ||
-        (r.registro ?? '').includes(term) ||
-        papel.includes(term)
-      )
-    })
-  }, [rows, q, filtroAtivo])
+    // Critérios lidos no clique; flashTick recarrega após salvar se já consultou.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- consultaTick
+  }, [empresaId, consultaTick, flashTick])
 
   if (!empresaId) {
     return (
@@ -121,6 +130,12 @@ export function UsuariosPage() {
             placeholder="Buscar por nome, e-mail ou papel…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                setConsultaTick((n) => n + 1)
+              }
+            }}
           />
           <select
             className="select"
@@ -133,6 +148,14 @@ export function UsuariosPage() {
             <option value="inativos">Somente inativos</option>
             <option value="todos">Todos</option>
           </select>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={loading}
+            onClick={() => setConsultaTick((n) => n + 1)}
+          >
+            Consultar
+          </button>
         </div>
 
         {error ? (
@@ -144,13 +167,22 @@ export function UsuariosPage() {
         <p className="field-hint" style={{ marginBottom: '0.75rem' }}>
           {loading
             ? 'Carregando…'
-            : `${filtered.length} usuário(s) encontrado(s)`}
+            : consultaTick <= 0
+              ? 'Informe os filtros e clique em Consultar.'
+              : `${rows.length} usuário(s) encontrado(s)`}
         </p>
 
         {loading ? (
           <div className="loading">Carregando usuários…</div>
-        ) : filtered.length === 0 ? (
-          <div className="empty">Nenhum usuário encontrado neste grupo.</div>
+        ) : consultaTick <= 0 ? (
+          <div className="empty">
+            A lista não é carregada ao abrir a tela. Informe os filtros e clique
+            em Consultar.
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="empty">
+            Nenhum usuário encontrado com esses critérios.
+          </div>
         ) : (
           <div className="table-wrap">
             <table className="data">
@@ -165,7 +197,7 @@ export function UsuariosPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => (
+                {rows.map((row) => (
                   <tr key={row.id}>
                     <td>
                       <Link

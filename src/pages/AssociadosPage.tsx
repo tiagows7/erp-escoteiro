@@ -140,7 +140,7 @@ export function AssociadosPage() {
     'ativos',
   )
   const [loading, setLoading] = useState(false)
-  const [consultou, setConsultou] = useState(false)
+  const [consultaTick, setConsultaTick] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportAssociadosResult | null>(
@@ -187,95 +187,68 @@ export function AssociadosPage() {
     return list
   }, [patrulhas, filtroRamo, filtroSecao])
 
-  const temConsulta = useMemo(() => {
-    return (
-      q.trim().length > 0 ||
-      Boolean(filtroRamo) ||
-      Boolean(filtroSecao) ||
-      Boolean(filtroPatrulha)
-    )
-  }, [q, filtroRamo, filtroSecao, filtroPatrulha])
-
-  useEffect(() => {
-    setPage(1)
-  }, [q, filtroRamo, filtroSecao, filtroPatrulha, filtroAtivo])
-
   useEffect(() => {
     if (!empresaId) {
       setRows([])
-      setConsultou(false)
       setLoading(false)
       return
     }
-
-    // Sem busca/filtro: não traz a lista (evita tráfego ao abrir o cadastro).
-    if (!temConsulta) {
+    // Só consulta após clicar em Consultar (evita tráfego ao abrir / ao digitar).
+    if (consultaTick <= 0) {
       setRows([])
-      setConsultou(false)
       setLoading(false)
       setError(null)
       return
     }
 
     let mounted = true
-    const handle = window.setTimeout(() => {
-      void (async () => {
-        setLoading(true)
-        let query = supabase
-          .from('associados')
-          .select(
-            'associado_id, registro, registro_identificador, nome, data_nascimento, celular, responsavel_fonecelular, email, ativo, registro_provisorio, ramo, secao, patrulha_matilha, empresa_id',
-          )
-          .eq('empresa_id', empresaId)
-          .order('nome')
-          .limit(500)
+    void (async () => {
+      setLoading(true)
+      setPage(1)
+      let query = supabase
+        .from('associados')
+        .select(
+          'associado_id, registro, registro_identificador, nome, data_nascimento, celular, responsavel_fonecelular, email, ativo, registro_provisorio, ramo, secao, patrulha_matilha, empresa_id',
+        )
+        .eq('empresa_id', empresaId)
+        .order('nome')
+        .limit(500)
 
-        const term = q.trim()
-        if (term) {
-          if (/^\d+$/.test(term)) {
-            query = query.eq('registro', Number(term))
-          } else {
-            query = query.ilike('nome', `%${term}%`)
-          }
-        }
-        if (filtroRamo) query = query.eq('ramo', Number(filtroRamo))
-        if (filtroSecao) query = query.eq('secao', Number(filtroSecao))
-        if (filtroPatrulha) {
-          query = query.eq('patrulha_matilha', Number(filtroPatrulha))
-        }
-        if (filtroAtivo === 'ativos') query = query.eq('ativo', true)
-        if (filtroAtivo === 'inativos') query = query.eq('ativo', false)
-
-        const { data, error: queryError } = await query
-        if (!mounted) return
-
-        if (queryError) {
-          setError(queryError.message)
-          setRows([])
-          setConsultou(false)
+      const term = q.trim()
+      if (term) {
+        if (/^\d+$/.test(term)) {
+          query = query.eq('registro', Number(term))
         } else {
-          setError(null)
-          setRows((data as Associado[]) ?? [])
-          setConsultou(true)
+          query = query.ilike('nome', `%${term}%`)
         }
-        setLoading(false)
-      })()
-    }, 250)
+      }
+      if (filtroRamo) query = query.eq('ramo', Number(filtroRamo))
+      if (filtroSecao) query = query.eq('secao', Number(filtroSecao))
+      if (filtroPatrulha) {
+        query = query.eq('patrulha_matilha', Number(filtroPatrulha))
+      }
+      if (filtroAtivo === 'ativos') query = query.eq('ativo', true)
+      if (filtroAtivo === 'inativos') query = query.eq('ativo', false)
+
+      const { data, error: queryError } = await query
+      if (!mounted) return
+
+      if (queryError) {
+        setError(queryError.message)
+        setRows([])
+      } else {
+        setError(null)
+        setRows((data as Associado[]) ?? [])
+      }
+      setLoading(false)
+    })()
 
     return () => {
       mounted = false
-      window.clearTimeout(handle)
     }
-  }, [
-    q,
-    empresaId,
-    filtroRamo,
-    filtroSecao,
-    filtroPatrulha,
-    filtroAtivo,
-    reloadToken,
-    temConsulta,
-  ])
+    // Critérios lidos no clique; não reconsultar a cada tecla/filtro.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- consultaTick/reloadToken
+  }, [empresaId, consultaTick, reloadToken])
 
   async function handleImportFile(file: File | null) {
     if (!file || !empresaId) return
@@ -592,6 +565,12 @@ export function AssociadosPage() {
             placeholder="Buscar por nome ou registro…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                setConsultaTick((n) => n + 1)
+              }
+            }}
           />
           <select
             className="select"
@@ -647,6 +626,14 @@ export function AssociadosPage() {
             <option value="inativos">Somente inativos</option>
             <option value="todos">Todos</option>
           </select>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={loading}
+            onClick={() => setConsultaTick((n) => n + 1)}
+          >
+            Consultar
+          </button>
         </div>
 
         {error ? (
@@ -716,8 +703,8 @@ export function AssociadosPage() {
         <p className="field-hint" style={{ marginBottom: '0.75rem' }}>
           {loading
             ? 'Carregando…'
-            : !temConsulta
-              ? 'Informe nome, registro ou um filtro (ramo/seção/patrulha) para consultar.'
+            : consultaTick <= 0
+              ? 'Informe os filtros e clique em Consultar.'
               : `${rows.length} associado(s) encontrado(s)${
                   rows.length > pageSize
                     ? ` · página ${pageSafe} de ${totalPages}`
@@ -727,16 +714,14 @@ export function AssociadosPage() {
 
         {loading ? (
           <div className="loading">Carregando associados…</div>
-        ) : !temConsulta ? (
+        ) : consultaTick <= 0 ? (
           <div className="empty">
-            A lista não é carregada ao abrir a tela. Busque por nome ou registro,
-            ou escolha ramo, seção ou patrulha para consultar.
+            A lista não é carregada ao abrir a tela. Informe nome, registro ou
+            filtros e clique em Consultar.
           </div>
         ) : rows.length === 0 ? (
           <div className="empty">
-            {consultou
-              ? 'Nenhum associado encontrado com esses critérios.'
-              : 'Nenhum associado encontrado neste grupo.'}
+            Nenhum associado encontrado com esses critérios.
           </div>
         ) : (
           <>
