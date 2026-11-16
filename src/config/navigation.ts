@@ -268,6 +268,12 @@ export const NAV_ITEMS: NavItem[] = [
         label: 'Conciliação bancária',
         permission: 'financeiro.view',
       },
+      {
+        type: 'link',
+        to: '/financeiro/acerto-saldo-portal',
+        label: 'Acerto de saldo do portal',
+        permission: 'financeiro.view',
+      },
     ],
   },
   {

@@ -82,6 +82,7 @@ import { GeraMensalidadePage } from '@/pages/GeraMensalidadePage'
 import { ReceitasRecebimentoPage } from '@/pages/ReceitasRecebimentoPage'
 import { ReceitaRecebimentoFormPage } from '@/pages/ReceitaRecebimentoFormPage'
 import { ConciliacaoBancariaPage } from '@/pages/ConciliacaoBancariaPage'
+import { PortalAcertoSaldoPage } from '@/pages/PortalAcertoSaldoPage'
 import { PortalTransparenciaPage } from '@/pages/PortalTransparenciaPage'
 import { PortalRedirectPage } from '@/pages/PortalRedirectPage'
 import { AtividadesPage } from '@/pages/AtividadesPage'
@@ -439,6 +440,14 @@ export default function App() {
               element={
                 <RequirePermission permission="financeiro.view">
                   <ConciliacaoBancariaPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="financeiro/acerto-saldo-portal"
+              element={
+                <RequirePermission permission="financeiro.view">
+                  <PortalAcertoSaldoPage />
                 </RequirePermission>
               }
             />
