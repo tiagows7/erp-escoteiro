@@ -243,7 +243,7 @@ export function PortalAcertoSaldoPage() {
 
   return (
     <>
-      <WaitingOverlay show={saving} label="Salvando…" />
+      <WaitingOverlay open={saving} title="Salvando…" message="Gravando o acerto de saldo." />
       <header className="page-header">
         <div>
           <h2>Acerto de saldo do portal</h2>
